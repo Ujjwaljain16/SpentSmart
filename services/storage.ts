@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { format } from 'date-fns';
-import { v4 as uuidv4 } from 'uuid';
+import * as Crypto from 'expo-crypto';
 import { Transaction, MonthlyStats, CategoryType, UPIPaymentData } from '@/types/transaction';
 
 const TRANSACTIONS_KEY = '@upitracker_transactions';
@@ -36,7 +36,7 @@ export const saveTransaction = async (
     const timestamp = Date.now();
     
     const newTransaction: Transaction = {
-      id: uuidv4(),
+      id: Crypto.randomUUID(),
       amount: amount || paymentData.amount || 0,
       upiId: paymentData.upiId,
       payeeName: paymentData.payeeName,

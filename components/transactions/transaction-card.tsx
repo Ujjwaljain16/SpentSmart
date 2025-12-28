@@ -61,7 +61,7 @@ export function TransactionCard({
       {/* Transaction Details */}
       <View style={styles.details}>
         <Text style={[styles.reason, { color: colors.text }]} numberOfLines={1}>
-          {transaction.reason}
+          {transaction.reason || transaction.payeeName}
         </Text>
         <Text
           style={[styles.payee, { color: colors.textSecondary }]}

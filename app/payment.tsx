@@ -37,7 +37,6 @@ export default function PaymentScreen() {
   const [amount, setAmount] = useState(params.amount || '');
   const [category, setCategory] = useState<CategoryType | null>(null);
   const [reason, setReason] = useState(params.transactionNote || '');
-  const [description, setDescription] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const paymentData: UPIPaymentData = {
@@ -50,8 +49,7 @@ export default function PaymentScreen() {
     paymentData.upiId &&
     amount &&
     parseFloat(amount) > 0 &&
-    category &&
-    reason.trim();
+    category;
 
   const handlePay = async () => {
     if (!canPay) {
@@ -64,33 +62,34 @@ export default function PaymentScreen() {
     try {
       const amountNum = parseFloat(amount);
 
-      // Save the transaction first
-      await saveTransaction(
-        paymentData,
-        category!,
-        reason.trim(),
-        description.trim() || undefined,
-        amountNum
-      );
-
-      // Launch payment
+      // Try to launch payment first
       const launched = await launchPayment({
         upiId: paymentData.upiId,
         payeeName: paymentData.payeeName,
         amount: amountNum,
-        transactionNote: reason.trim(),
+        transactionNote: reason.trim() || undefined,
       });
 
       if (!launched) {
+        // Don't save transaction if no UPI app was found
         Alert.alert(
           'No UPI App Found',
-          'Could not find a UPI app on your device. The transaction has been saved.',
-          [{ text: 'OK', onPress: () => router.replace('/(tabs)') }]
+          'Could not find a UPI app on your device. Please install a UPI app to make payments.',
+          [{ text: 'OK' }]
         );
-      } else {
-        // Navigate back to home after launching payment
-        router.replace('/(tabs)');
+        return;
       }
+
+      // Only save transaction if payment was successfully launched
+      await saveTransaction(
+        paymentData,
+        category!,
+        reason.trim() || undefined,
+        amountNum
+      );
+
+      // Navigate back to home after launching payment
+      router.replace('/(tabs)');
     } catch (error) {
       console.error('Payment error:', error);
       Alert.alert('Error', 'Failed to process payment. Please try again.');
@@ -202,7 +201,7 @@ export default function PaymentScreen() {
           {/* Reason Input */}
           <View style={styles.inputGroup}>
             <Text style={[styles.label, { color: colors.textSecondary }]}>
-              Reason *
+              Reason (optional)
             </Text>
             <TextInput
               style={[
@@ -218,33 +217,7 @@ export default function PaymentScreen() {
               placeholder="e.g., Groceries, Lunch, etc."
               placeholderTextColor={colors.textSecondary}
               maxLength={50}
-              returnKeyType="next"
-            />
-          </View>
-
-          {/* Description Input */}
-          <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>
-              Description (optional)
-            </Text>
-            <TextInput
-              style={[
-                styles.textInput,
-                styles.textArea,
-                {
-                  backgroundColor: colors.card,
-                  borderColor: colors.border,
-                  color: colors.text,
-                },
-              ]}
-              value={description}
-              onChangeText={setDescription}
-              placeholder="Add any extra notes..."
-              placeholderTextColor={colors.textSecondary}
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-              maxLength={200}
+              returnKeyType="done"
             />
           </View>
         </ScrollView>
@@ -371,10 +344,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.md,
     fontSize: FontSizes.md,
-  },
-  textArea: {
-    minHeight: 80,
-    paddingTop: Spacing.md,
   },
   footer: {
     paddingHorizontal: Spacing.lg,

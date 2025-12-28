@@ -27,8 +27,7 @@ export const getAllTransactions = async (): Promise<Transaction[]> => {
 export const saveTransaction = async (
   paymentData: UPIPaymentData,
   category: CategoryType,
-  reason: string,
-  description?: string,
+  reason?: string,
   amount?: number
 ): Promise<Transaction> => {
   try {
@@ -41,8 +40,7 @@ export const saveTransaction = async (
       upiId: paymentData.upiId,
       payeeName: paymentData.payeeName,
       category,
-      reason,
-      description,
+      reason: reason || undefined,
       timestamp,
       monthKey: format(new Date(timestamp), 'yyyy-MM'),
     };
@@ -163,7 +161,7 @@ export const getAvailableMonths = async (): Promise<string[]> => {
 };
 
 /**
- * Search transactions by reason, description, or category
+ * Search transactions by reason or category
  */
 export const searchTransactions = async (query: string): Promise<Transaction[]> => {
   try {
@@ -174,8 +172,7 @@ export const searchTransactions = async (query: string): Promise<Transaction[]> 
 
     return transactions.filter((tx) => {
       return (
-        tx.reason.toLowerCase().includes(lowerQuery) ||
-        tx.description?.toLowerCase().includes(lowerQuery) ||
+        tx.reason?.toLowerCase().includes(lowerQuery) ||
         tx.category.toLowerCase().includes(lowerQuery) ||
         tx.payeeName.toLowerCase().includes(lowerQuery) ||
         tx.upiId.toLowerCase().includes(lowerQuery)

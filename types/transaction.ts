@@ -6,8 +6,7 @@ export interface Transaction {
   upiId: string;
   payeeName: string;
   category: CategoryType;
-  reason: string;
-  description?: string;
+  reason?: string;
   timestamp: number;
   monthKey: string; // 'YYYY-MM' format for quick filtering
 }

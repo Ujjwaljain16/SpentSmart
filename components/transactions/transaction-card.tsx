@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -8,8 +8,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 
-import { Transaction } from '@/types/transaction';
-import { CATEGORIES } from '@/constants/categories';
+import { Transaction, CategoryInfo } from '@/types/transaction';
+import { DEFAULT_CATEGORIES } from '@/constants/categories';
+import { getCategories, AVAILABLE_ICONS } from '@/services/category-storage';
 import { Colors, BorderRadius, FontSizes, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -26,17 +27,31 @@ export function TransactionCard({
 }: TransactionCardProps) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'dark'];
-  const category = CATEGORIES[transaction.category];
+  const [categoryInfo, setCategoryInfo] = useState<CategoryInfo>(
+    DEFAULT_CATEGORIES[transaction.category] || DEFAULT_CATEGORIES.other
+  );
+
+  useEffect(() => {
+    loadCategory();
+  }, [transaction.category]);
+
+  const loadCategory = async () => {
+    try {
+      const categories = await getCategories();
+      const found = categories.find(c => c.key === transaction.category);
+      if (found) {
+        setCategoryInfo(found);
+      }
+    } catch (error) {
+      // Use default category on error
+    }
+  };
 
   const getIconName = (icon: string): keyof typeof Ionicons.glyphMap => {
-    const iconMap: Record<string, keyof typeof Ionicons.glyphMap> = {
-      restaurant: 'restaurant',
-      flash: 'flash',
-      school: 'school',
-      home: 'home',
-      pricetag: 'pricetag',
-    };
-    return iconMap[icon] || 'pricetag';
+    if (AVAILABLE_ICONS.includes(icon)) {
+      return icon as keyof typeof Ionicons.glyphMap;
+    }
+    return 'pricetag';
   };
 
   const formattedDate = format(new Date(transaction.timestamp), 'MMM d, yyyy');
@@ -48,13 +63,13 @@ export function TransactionCard({
       <View
         style={[
           styles.iconContainer,
-          { backgroundColor: `${category.color}20` },
+          { backgroundColor: `${categoryInfo.color}20` },
         ]}
       >
         <Ionicons
-          name={getIconName(category.icon)}
+          name={getIconName(categoryInfo.icon)}
           size={20}
-          color={category.color}
+          color={categoryInfo.color}
         />
       </View>
 

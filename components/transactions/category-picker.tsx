@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
@@ -12,7 +13,8 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { CategoryType, CategoryInfo } from '@/types/transaction';
-import { CATEGORY_LIST } from '@/constants/categories';
+import { DEFAULT_CATEGORY_LIST } from '@/constants/categories';
+import { getCategories, AVAILABLE_ICONS } from '@/services/category-storage';
 import { Colors, BorderRadius, FontSizes, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -49,14 +51,11 @@ function CategoryButton({
   }, [isSelected]);
 
   const getIconName = (icon: string): keyof typeof Ionicons.glyphMap => {
-    const iconMap: Record<string, keyof typeof Ionicons.glyphMap> = {
-      restaurant: 'restaurant',
-      flash: 'flash',
-      school: 'school',
-      home: 'home',
-      pricetag: 'pricetag',
-    };
-    return iconMap[icon] || 'pricetag';
+    // Check if it's a valid Ionicons icon
+    if (AVAILABLE_ICONS.includes(icon)) {
+      return icon as keyof typeof Ionicons.glyphMap;
+    }
+    return 'pricetag';
   };
 
   return (
@@ -109,6 +108,34 @@ export function CategoryPicker({
 }: CategoryPickerProps) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'dark'];
+  const [categories, setCategories] = useState<CategoryInfo[]>(DEFAULT_CATEGORY_LIST);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    loadCategories();
+  }, []);
+
+  const loadCategories = async () => {
+    try {
+      const loaded = await getCategories();
+      setCategories(loaded);
+    } catch (error) {
+      console.error('Error loading categories:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <View style={styles.container}>
+        <Text style={[styles.label, { color: colors.textSecondary }]}>
+          Category
+        </Text>
+        <ActivityIndicator size="small" color={colors.tint} />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -116,7 +143,7 @@ export function CategoryPicker({
         Category
       </Text>
       <View style={styles.categoriesContainer}>
-        {CATEGORY_LIST.map((category) => (
+        {categories.map((category) => (
           <CategoryButton
             key={category.key}
             category={category}

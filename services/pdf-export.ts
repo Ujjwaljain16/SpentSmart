@@ -3,9 +3,9 @@ import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
 import { format } from 'date-fns';
 
-import { Transaction, CategoryType, MonthlyStats } from '@/types/transaction';
-import { CATEGORIES } from '@/constants/categories';
-import { CategoryColors } from '@/constants/theme';
+import { Transaction, CategoryType, MonthlyStats, CategoryInfo } from '@/types/transaction';
+import { categoryListToRecord } from '@/constants/categories';
+import { getCategories } from './category-storage';
 import { getAllTransactions, getMonthlyStats, getAvailableMonths } from './storage';
 
 /**
@@ -14,28 +14,26 @@ import { getAllTransactions, getMonthlyStats, getAvailableMonths } from './stora
 const generateHTML = (
   transactions: Transaction[],
   monthlyStats: MonthlyStats[],
-  title: string
+  title: string,
+  categoryRecord: Record<string, CategoryInfo>
 ): string => {
   const now = format(new Date(), 'MMMM d, yyyy');
   
   const totalAmount = transactions.reduce((sum, tx) => sum + tx.amount, 0);
   
-  // Category totals
-  const categoryTotals: Record<CategoryType, number> = {
-    food: 0,
-    utility: 0,
-    college: 0,
-    rent: 0,
-    other: 0,
-  };
+  // Category totals - dynamic based on transactions
+  const categoryTotals: Record<string, number> = {};
   
   transactions.forEach((tx) => {
+    if (!categoryTotals[tx.category]) {
+      categoryTotals[tx.category] = 0;
+    }
     categoryTotals[tx.category] += tx.amount;
   });
 
   const transactionRows = transactions
     .map((tx) => {
-      const category = CATEGORIES[tx.category];
+      const category = categoryRecord[tx.category] || { label: tx.category, color: '#6B7280' };
       const dateStr = format(new Date(tx.timestamp), 'MMM d, yyyy');
       return `
         <tr>
@@ -45,7 +43,7 @@ const generateHTML = (
               ${category.label}
             </span>
           </td>
-          <td>${tx.reason}</td>
+          <td>${tx.reason || '-'}</td>
           <td>${tx.payeeName}</td>
           <td class="amount">₹${tx.amount.toLocaleString('en-IN')}</td>
         </tr>
@@ -56,7 +54,7 @@ const generateHTML = (
   const categoryRows = Object.entries(categoryTotals)
     .filter(([_, amount]) => amount > 0)
     .map(([key, amount]) => {
-      const category = CATEGORIES[key as CategoryType];
+      const category = categoryRecord[key] || { label: key, color: '#6B7280' };
       const percentage = totalAmount > 0 ? ((amount / totalAmount) * 100).toFixed(1) : '0';
       return `
         <tr>
@@ -291,7 +289,11 @@ export const exportToPDF = async (monthKey?: string): Promise<void> => {
     const monthlyStatsPromises = months.map((month) => getMonthlyStats(month));
     const monthlyStats = await Promise.all(monthlyStatsPromises);
 
-    const html = generateHTML(transactions, monthlyStats, title);
+    // Load categories
+    const categories = await getCategories();
+    const categoryRecord = categoryListToRecord(categories);
+
+    const html = generateHTML(transactions, monthlyStats, title, categoryRecord);
 
     // Generate PDF
     const { uri } = await Print.printToFileAsync({

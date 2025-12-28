@@ -108,18 +108,16 @@ export const getMonthlyStats = async (monthKey: string): Promise<MonthlyStats> =
   try {
     const transactions = await getTransactionsByMonth(monthKey);
     
-    const categoryBreakdown: Record<CategoryType, number> = {
-      food: 0,
-      utility: 0,
-      college: 0,
-      rent: 0,
-      other: 0,
-    };
+    // Dynamic category breakdown based on actual transactions
+    const categoryBreakdown: Record<CategoryType, number> = {};
 
     let total = 0;
 
     transactions.forEach((tx) => {
       total += tx.amount;
+      if (!categoryBreakdown[tx.category]) {
+        categoryBreakdown[tx.category] = 0;
+      }
       categoryBreakdown[tx.category] += tx.amount;
     });
 
@@ -134,13 +132,7 @@ export const getMonthlyStats = async (monthKey: string): Promise<MonthlyStats> =
     return {
       monthKey,
       total: 0,
-      categoryBreakdown: {
-        food: 0,
-        utility: 0,
-        college: 0,
-        rent: 0,
-        other: 0,
-      },
+      categoryBreakdown: {},
       transactionCount: 0,
     };
   }

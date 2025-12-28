@@ -7,7 +7,7 @@ import {
   Alert,
   ScrollView,
 } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -16,6 +16,7 @@ import Constants from 'expo-constants';
 import { Colors, BorderRadius, FontSizes, Spacing } from '@/constants/theme';
 import { clearAllData, getAllTransactions } from '@/services/storage';
 import { exportToPDF } from '@/services/pdf-export';
+import { getCategories } from '@/services/category-storage';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function SettingsScreen() {
@@ -24,12 +25,17 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
 
   const [transactionCount, setTransactionCount] = useState(0);
+  const [categoryCount, setCategoryCount] = useState(0);
   const [isExporting, setIsExporting] = useState(false);
 
   const loadStats = useCallback(async () => {
     try {
-      const transactions = await getAllTransactions();
+      const [transactions, categories] = await Promise.all([
+        getAllTransactions(),
+        getCategories(),
+      ]);
       setTransactionCount(transactions.length);
+      setCategoryCount(categories.length);
     } catch (error) {
       console.error('Error loading stats:', error);
     }
@@ -104,6 +110,54 @@ export default function SettingsScreen() {
       >
         {/* Header */}
         <Text style={[styles.title, { color: colors.text }]}>Settings</Text>
+
+        {/* Categories Section */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
+            CATEGORIES
+          </Text>
+
+          <View style={[styles.card, { backgroundColor: colors.card }]}>
+            {/* Manage Categories */}
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => router.push('/category-manager')}
+            >
+              <View style={styles.menuItemLeft}>
+                <View
+                  style={[
+                    styles.iconContainer,
+                    { backgroundColor: `${colors.tint}20` },
+                  ]}
+                >
+                  <Ionicons
+                    name="pricetags-outline"
+                    size={20}
+                    color={colors.tint}
+                  />
+                </View>
+                <View style={styles.menuItemText}>
+                  <Text style={[styles.menuItemLabel, { color: colors.text }]}>
+                    Manage Categories
+                  </Text>
+                  <Text
+                    style={[
+                      styles.menuItemDescription,
+                      { color: colors.textSecondary },
+                    ]}
+                  >
+                    {categoryCount} categor{categoryCount !== 1 ? 'ies' : 'y'} configured
+                  </Text>
+                </View>
+              </View>
+              <Ionicons
+                name="chevron-forward"
+                size={20}
+                color={colors.textSecondary}
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
 
         {/* Data Section */}
         <View style={styles.section}>

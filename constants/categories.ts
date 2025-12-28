@@ -1,6 +1,7 @@
 import { CategoryInfo, CategoryType } from '@/types/transaction';
 
-export const CATEGORIES: Record<CategoryType, CategoryInfo> = {
+// Default categories as a static fallback (used for synchronous access)
+export const DEFAULT_CATEGORIES: Record<string, CategoryInfo> = {
   food: {
     key: 'food',
     label: 'Food',
@@ -33,17 +34,48 @@ export const CATEGORIES: Record<CategoryType, CategoryInfo> = {
   },
 };
 
-export const CATEGORY_LIST: CategoryInfo[] = Object.values(CATEGORIES);
+// Keep CATEGORIES for backwards compatibility with existing code
+export const CATEGORIES = DEFAULT_CATEGORIES;
 
-export const getCategoryColor = (category: CategoryType): string => {
-  return CATEGORIES[category]?.color || CATEGORIES.other.color;
+export const DEFAULT_CATEGORY_LIST: CategoryInfo[] = Object.values(DEFAULT_CATEGORIES);
+
+// Keep CATEGORY_LIST for backwards compatibility
+export const CATEGORY_LIST = DEFAULT_CATEGORY_LIST;
+
+/**
+ * Get category color with fallback
+ */
+export const getCategoryColor = (category: CategoryType, categoryList?: CategoryInfo[]): string => {
+  const list = categoryList || DEFAULT_CATEGORY_LIST;
+  const found = list.find(c => c.key === category);
+  return found?.color || DEFAULT_CATEGORIES.other.color;
 };
 
-export const getCategoryIcon = (category: CategoryType): string => {
-  return CATEGORIES[category]?.icon || CATEGORIES.other.icon;
+/**
+ * Get category icon with fallback
+ */
+export const getCategoryIcon = (category: CategoryType, categoryList?: CategoryInfo[]): string => {
+  const list = categoryList || DEFAULT_CATEGORY_LIST;
+  const found = list.find(c => c.key === category);
+  return found?.icon || DEFAULT_CATEGORIES.other.icon;
 };
 
-export const getCategoryLabel = (category: CategoryType): string => {
-  return CATEGORIES[category]?.label || CATEGORIES.other.label;
+/**
+ * Get category label with fallback
+ */
+export const getCategoryLabel = (category: CategoryType, categoryList?: CategoryInfo[]): string => {
+  const list = categoryList || DEFAULT_CATEGORY_LIST;
+  const found = list.find(c => c.key === category);
+  return found?.label || DEFAULT_CATEGORIES.other.label;
+};
+
+/**
+ * Convert category list to record format
+ */
+export const categoryListToRecord = (list: CategoryInfo[]): Record<string, CategoryInfo> => {
+  return list.reduce((acc, cat) => {
+    acc[cat.key] = cat;
+    return acc;
+  }, {} as Record<string, CategoryInfo>);
 };
 

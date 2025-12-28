@@ -1,4 +1,5 @@
-export type CategoryType = 'food' | 'utility' | 'college' | 'rent' | 'other';
+// CategoryType is now a string to support dynamic user-created categories
+export type CategoryType = string;
 
 export interface Transaction {
   id: string;
@@ -26,7 +27,7 @@ export interface MonthlyStats {
 }
 
 export interface CategoryInfo {
-  key: CategoryType;
+  key: string;
   label: string;
   icon: string;
   color: string;

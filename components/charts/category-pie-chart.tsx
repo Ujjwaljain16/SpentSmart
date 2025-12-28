@@ -1,9 +1,10 @@
-import React from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, Dimensions, ActivityIndicator } from 'react-native';
 import { PieChart } from 'react-native-chart-kit';
 
-import { CategoryType } from '@/types/transaction';
-import { CATEGORIES, CATEGORY_LIST } from '@/constants/categories';
+import { CategoryType, CategoryInfo } from '@/types/transaction';
+import { DEFAULT_CATEGORY_LIST, categoryListToRecord } from '@/constants/categories';
+import { getCategories } from '@/services/category-storage';
 import { Colors, FontSizes, Spacing, BorderRadius } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -20,17 +21,48 @@ export function CategoryPieChart({
 }: CategoryPieChartProps) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'dark'];
+  const [categories, setCategories] = useState<CategoryInfo[]>(DEFAULT_CATEGORY_LIST);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    loadCategories();
+  }, []);
+
+  const loadCategories = async () => {
+    try {
+      const loaded = await getCategories();
+      setCategories(loaded);
+    } catch (error) {
+      console.error('Error loading categories:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const categoryRecord = categoryListToRecord(categories);
 
   // Prepare data for pie chart - only include categories with values > 0
-  const chartData = CATEGORY_LIST
-    .filter((cat) => categoryBreakdown[cat.key] > 0)
-    .map((cat) => ({
-      name: cat.label,
-      amount: categoryBreakdown[cat.key],
-      color: cat.color,
-      legendFontColor: colors.textSecondary,
-      legendFontSize: 12,
-    }));
+  const chartData = Object.entries(categoryBreakdown)
+    .filter(([_, amount]) => amount > 0)
+    .map(([key, amount]) => {
+      const cat = categoryRecord[key] || { label: key, color: '#6B7280' };
+      return {
+        name: cat.label,
+        amount,
+        color: cat.color,
+        legendFontColor: colors.textSecondary,
+        legendFontSize: 12,
+      };
+    });
+
+  // If loading, show spinner
+  if (isLoading) {
+    return (
+      <View style={[styles.emptyContainer, { backgroundColor: colors.card }]}>
+        <ActivityIndicator size="small" color={colors.tint} />
+      </View>
+    );
+  }
 
   // If no data, show empty state
   if (chartData.length === 0 || total === 0) {

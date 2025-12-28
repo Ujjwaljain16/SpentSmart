@@ -1,12 +1,87 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system';
+import { documentDirectory, moveAsync } from 'expo-file-system/legacy';
 import { format } from 'date-fns';
 
 import { Transaction, CategoryType, MonthlyStats, CategoryInfo } from '@/types/transaction';
 import { categoryListToRecord } from '@/constants/categories';
 import { getCategories } from './category-storage';
 import { getAllTransactions, getMonthlyStats, getAvailableMonths } from './storage';
+
+/**
+ * Generate SVG pie chart for category breakdown
+ */
+const generatePieChartSVG = (
+  categoryTotals: Record<string, number>,
+  categoryRecord: Record<string, CategoryInfo>,
+  total: number
+): string => {
+  const radius = 80;
+  const centerX = 100;
+  const centerY = 100;
+
+  if (Object.keys(categoryTotals).length === 0 || total === 0) {
+    return '';
+  }
+
+  // Prepare data for pie chart
+  const data = Object.entries(categoryTotals)
+    .filter(([_, amount]) => amount > 0)
+    .map(([key, amount]) => ({
+      category: key,
+      amount,
+      percentage: (amount / total) * 100,
+      color: categoryRecord[key]?.color || '#6B7280',
+      label: categoryRecord[key]?.label || key,
+    }))
+    .sort((a, b) => b.amount - a.amount); // Sort by amount descending
+
+  let currentAngle = -90; // Start from top
+  const paths: string[] = [];
+  const legendItems: string[] = [];
+
+  data.forEach((item, index) => {
+    const angle = (item.percentage / 100) * 360;
+    const startAngle = currentAngle;
+    const endAngle = currentAngle + angle;
+
+    // Convert angles to radians
+    const startRad = (startAngle * Math.PI) / 180;
+    const endRad = (endAngle * Math.PI) / 180;
+
+    // Calculate path coordinates
+    const x1 = centerX + radius * Math.cos(startRad);
+    const y1 = centerY + radius * Math.sin(startRad);
+    const x2 = centerX + radius * Math.cos(endRad);
+    const y2 = centerY + radius * Math.sin(endRad);
+
+    const largeArcFlag = angle > 180 ? 1 : 0;
+
+    const pathData = `M ${centerX} ${centerY} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2} Z`;
+
+    paths.push(`<path d="${pathData}" fill="${item.color}" />`);
+
+    // Legend item
+    const legendY = 20 + (index * 25);
+    legendItems.push(`
+      <rect x="220" y="${legendY - 10}" width="12" height="12" fill="${item.color}" />
+      <text x="240" y="${legendY}" font-size="12" fill="#666">${item.label}</text>
+      <text x="350" y="${legendY}" font-size="12" fill="#333" text-anchor="end">₹${item.amount.toLocaleString('en-IN')}</text>
+      <text x="380" y="${legendY}" font-size="12" fill="#666">${item.percentage.toFixed(1)}%</text>
+    `);
+
+    currentAngle = endAngle;
+  });
+
+  return `
+    <svg width="400" height="${Math.max(200, 20 + data.length * 25)}" viewBox="0 0 400 ${Math.max(200, 20 + data.length * 25)}">
+      <g>
+        ${paths.join('')}
+        ${legendItems.join('')}
+      </g>
+    </svg>
+  `;
+};
 
 /**
  * Generate HTML content for PDF
@@ -18,12 +93,12 @@ const generateHTML = (
   categoryRecord: Record<string, CategoryInfo>
 ): string => {
   const now = format(new Date(), 'MMMM d, yyyy');
-  
+
   const totalAmount = transactions.reduce((sum, tx) => sum + tx.amount, 0);
-  
+
   // Category totals - dynamic based on transactions
   const categoryTotals: Record<string, number> = {};
-  
+
   transactions.forEach((tx) => {
     if (!categoryTotals[tx.category]) {
       categoryTotals[tx.category] = 0;
@@ -69,6 +144,8 @@ const generateHTML = (
       `;
     })
     .join('');
+
+  const pieChartSVG = generatePieChartSVG(categoryTotals, categoryRecord, totalAmount);
 
   return `
     <!DOCTYPE html>
@@ -188,7 +265,16 @@ const generateHTML = (
           font-size: 11px;
           font-weight: 500;
         }
-        
+
+        .chart-container {
+          display: flex;
+          justify-content: center;
+          margin-bottom: 20px;
+          background: #f8f9fa;
+          border-radius: 8px;
+          padding: 20px;
+        }
+
         .footer {
           margin-top: 40px;
           padding-top: 20px;
@@ -225,6 +311,7 @@ const generateHTML = (
       ${categoryRows ? `
       <div class="section">
         <h2>Category Breakdown</h2>
+        ${pieChartSVG ? `<div class="chart-container">${pieChartSVG}</div>` : ''}
         <table>
           <thead>
             <tr>
@@ -307,10 +394,10 @@ export const exportToPDF = async (monthKey?: string): Promise<void> => {
       ? `UPI_Tracker_${monthKey}.pdf`
       : `UPI_Tracker_All_${timestamp}.pdf`;
     
-    const newUri = `${FileSystem.documentDirectory}${newFileName}`;
+    const newUri = `${documentDirectory}${newFileName}`;
 
     // Move the file to a better location
-    await FileSystem.moveAsync({
+    await moveAsync({
       from: uri,
       to: newUri,
     });

@@ -76,13 +76,13 @@ export function TransactionCard({
       {/* Transaction Details */}
       <View style={styles.details}>
         <Text style={[styles.reason, { color: colors.text }]} numberOfLines={1}>
-          {transaction.reason || transaction.payeeName}
+          {transaction.reason || transaction.category}
         </Text>
         <Text
           style={[styles.payee, { color: colors.textSecondary }]}
           numberOfLines={1}
         >
-          {transaction.payeeName}
+          {transaction.upiId}
         </Text>
         <View style={styles.metaRow}>
           <Text style={[styles.date, { color: colors.textSecondary }]}>

@@ -109,9 +109,9 @@ export default function ManualEntryScreen() {
           <Text style={[styles.title, { color: colors.text }]}>
             Enter UPI ID
           </Text>
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-            Enter the UPI ID in the format: firstname@lastname
-          </Text>
+          {/* <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+            Enter the UPI ID in the format: username@bankname 
+          </Text> */}
 
           {/* Input Container */}
           <View style={styles.inputContainer}>
@@ -126,14 +126,14 @@ export default function ManualEntryScreen() {
                 },
               ]}
             >
-              <Text style={[styles.atSymbol, { color: colors.textSecondary }]}>
+              {/* <Text style={[styles.atSymbol, { color: colors.textSecondary }]}>
                 @
-              </Text>
+              </Text> */}
               <TextInput
                 style={[styles.input, { color: colors.text }]}
                 value={upiId}
                 onChangeText={handleUpiIdChange}
-                placeholder="firstname@lastname"
+                placeholder="username@bankname"
                 placeholderTextColor={colors.textSecondary}
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -160,7 +160,7 @@ export default function ManualEntryScreen() {
                 color={colors.textSecondary}
               />
               <Text style={[styles.helperText, { color: colors.textSecondary }]}>
-                Example: john@paytm, rahul@ybl, priya@phonepe
+                Example: aditi@oksbi, rahul@ybl
               </Text>
             </View>
           </View>
@@ -230,7 +230,7 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.xxl,
     fontWeight: '700',
     textAlign: 'center',
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.xl,
   },
   subtitle: {
     fontSize: FontSizes.md,

@@ -17,13 +17,17 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 interface TransactionCardProps {
   transaction: Transaction;
   onDelete?: (id: string) => void;
+  onEdit?: (transaction: Transaction) => void;
   showDeleteButton?: boolean;
+  showEditButton?: boolean;
 }
 
 export function TransactionCard({
   transaction,
   onDelete,
+  onEdit,
   showDeleteButton = true,
+  showEditButton = true,
 }: TransactionCardProps) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'dark'];
@@ -99,15 +103,26 @@ export function TransactionCard({
             maximumFractionDigits: 2,
           })}
         </Text>
-        {showDeleteButton && onDelete && (
-          <TouchableOpacity
-            style={styles.deleteButton}
-            onPress={() => onDelete(transaction.id)}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Ionicons name="trash-outline" size={18} color={colors.error} />
-          </TouchableOpacity>
-        )}
+        <View style={styles.actionButtons}>
+          {showEditButton && onEdit && (
+            <TouchableOpacity
+              style={styles.editButton}
+              onPress={() => onEdit(transaction)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="pencil" size={18} color={colors.tint} />
+            </TouchableOpacity>
+          )}
+          {showDeleteButton && onDelete && (
+            <TouchableOpacity
+              style={styles.deleteButton}
+              onPress={() => onDelete(transaction.id)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="trash-outline" size={18} color={colors.error} />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
     </View>
   );
@@ -156,8 +171,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: Spacing.xs,
   },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: Spacing.xs,
+  },
+  editButton: {
+    padding: Spacing.xs,
+  },
   deleteButton: {
     padding: Spacing.xs,
   },
 });
-

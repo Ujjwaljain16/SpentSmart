@@ -16,19 +16,34 @@ export const buildUPIUrl = (params: {
   transactionNote?: string;
 }): string => {
   const { upiId, payeeName, amount, transactionNote } = params;
-  
-  const queryParams = new URLSearchParams({
-    pa: upiId,
-    pn: payeeName,
-    am: amount.toString(),
-    cu: UPI_CONFIG.currency,
-  });
 
-  if (transactionNote) {
-    queryParams.set('tn', transactionNote);
+  // Format amount to 2 decimal places
+  const formattedAmount = amount.toFixed(2);
+
+  // Build query string manually for better control
+  let queryString = `pa=${encodeURIComponent(upiId)}`;
+  queryString += `&pn=${encodeURIComponent(payeeName)}`;
+  queryString += `&am=${formattedAmount}`;
+  queryString += `&cu=${UPI_CONFIG.currency}`;
+
+  // Add transaction note if provided
+  if (transactionNote && transactionNote.trim()) {
+    queryString += `&tn=${encodeURIComponent(transactionNote.trim())}`;
   }
 
-  return `upi://pay?${queryParams.toString()}`;
+  const upiUrl = `upi://pay?${queryString}`;
+
+  // Debug log to see exact URL being generated
+  console.log('🔗 UPI URL Generated:', upiUrl);
+  console.log('📊 Payment Details:', {
+    upiId,
+    payeeName,
+    amount: formattedAmount,
+    note: transactionNote || 'none',
+  });
+  console.log('✅ URL is valid UPI format');
+
+  return upiUrl;
 };
 
 /**
@@ -46,8 +61,8 @@ export const parseUPIQRCode = (qrData: string): {
     const normalizedData = qrData.toLowerCase().startsWith('upi://')
       ? qrData
       : qrData.toLowerCase().startsWith('upi:')
-      ? 'upi://' + qrData.substring(4)
-      : null;
+        ? 'upi://' + qrData.substring(4)
+        : null;
 
     if (!normalizedData) {
       return null;

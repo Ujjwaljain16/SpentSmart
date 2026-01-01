@@ -1,7 +1,14 @@
 {
-  "name": "upitracker",
+  "name": "expensetracker",
   "main": "expo-router/entry",
   "version": "1.0.0",
+  "description": "Privacy-first UPI expense tracking app for India",
+  "author": "Ujjwal Jain",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Ujjwaljain16/ExpenseTracker.git"
+  },
   "scripts": {
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",

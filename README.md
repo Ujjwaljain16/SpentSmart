@@ -1,93 +1,201 @@
-# UPI Tracker
+# 💰 ExpenseTracker - Privacy-First UPI Expense Manager
 
-It's a privacy-first Android app I built to track my UPI expenses using the UPI URI scheme and UPI deeplinks instead of bank integrations or SMS scraping.
+> **Track your expenses automatically via UPI QR codes. No SMS snooping. No bank linking. Your data, your device.**
 
-## Context and Problem
+[![React Native](https://img.shields.io/badge/React%20Native-0.81-61DAFB?logo=react)](https://reactnative.dev/)
+[![Expo](https://img.shields.io/badge/Expo-54-000020?logo=expo)](https://expo.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript)](https://www.typescriptlang.org/)
+[![Privacy First](https://img.shields.io/badge/Privacy-First-00C853)]()
 
-I do >90% of my transactions via UPI. Existing expense trackers want:
-- KYC and bank account linking  
-- SMS read permissions and cloud sync  
+## 🎯 What Makes This Different
 
-I wanted a **local-only**, UPI-first tracker that works entirely on top of:
-- UPI QR codes  
-- UPI URI scheme (`upi://pay`)  
-- UPI Intent/deeplink flow to apps like Google Pay and PhonePe
+**ExpenseTracker** is an expense tracking app built for **privacy-conscious Indians**. Unlike other apps that read your SMS or link your bank accounts, we do things differently:
 
-No KYC, no bank APIs, no servers.
+- ✅ **QR Code Scanning** - Capture payment details instantly
+- ✅ **100% Local Storage** - All data stays on your device
+- ✅ **Zero Permissions** - No SMS, contacts, or location access
+- ✅ **Smart Verification** - Privacy-safe payment confirmation
+- ✅ **Transaction Editing** - Fix mistakes without deleting
+- ✅ **Privacy Dashboard** - Full transparency on what we store
 
-## Demo
+## 📱 Features
 
-<p align="center">
-  <img src="./assets/demo/home.jpg" alt="Home Screen" width="200" style="margin: 10px;"/>
-  <!-- <img src="./assets/demo/manual-entry.jpg" alt="Manual Entry" width="200" style="margin: 10px;"/> -->
-  <img src="./assets/demo/history.jpg" alt="Transaction History" width="200" style="margin: 10px;"/>
-  <img src="./assets/demo/settings.jpg" alt="Settings" width="200" style="margin: 10px;"/>
-  <img src="./assets/demo/category.jpg" alt="Category Manager" width="200" style="margin: 10px;"/>
-</p>
+### Core Functionality
+- 🔍 **QR Code Scanner** - Scan UPI QR codes to pre-fill payment details
+- 💸 **Manual Entry** - Quick cash/UPI entry with category selection
+- ✏️ **Transaction Editing** - Edit amount, category, and notes
+- 📊 **Monthly Statistics** - Category breakdown and spending trends
+- 🔐 **Payment Verification** - Smart pending system (no SMS reading!)
 
-## What the App Does (Technically)
+### Privacy Features
+- 🛡️ **Privacy Dashboard** - See exactly what data is stored
+- 📊 **Data Inventory** - Transaction count, storage usage, data age
+- 🗑️ **Delete All Data** - Clear everything with one tap
+- 🔒 **Full Transparency** - No hidden data collection
+- 📍 **Minimal Permissions** - Only camera for QR scanning
 
-Core flow:
-- Scan UPI QR codes via camera → parse the **UPI URI** (e.g. `upi://pay?pa=...&pn=...&am=...&tn=...&cu=INR`).
-- Extract payee UPI ID, payee name, amount, and note using a dedicated **UPI parser service**.
-- Let me add structured metadata:
-  - Category (fixed enum: Food, Utility, College, Rent, Other)  
-  - Reason  
-  - Optional description
-- Launch the user’s UPI app using Android **UPI Intent / deeplink integration** with prefilled fields.
-- Store transaction data locally in **AsyncStorage** with:
-  - UUID, amount, UPI ID, payee, category, reason, timestamp, `monthKey` for grouping.
-- Provide:
-  - Monthly aggregation and category breakdown  
-  - Search across payee, UPI ID, category, reason  
-  - PDF export with charts using `expo-print`, `react-native-svg`, and `react-native-chart-kit`.
+### Smart Features
+- 📁 **Custom Categories** - Create unlimited expense categories
+- 🔎 **Transaction Search** - Find transactions by amount, payee, or note
+- 📅 **Monthly Reports** - Track spending patterns over time
+- 🌙 **Dark Mode** - Easy on the eyes
 
-Everything is local storage + UPI URI scheme + Android Intent flow. No backend, no external APIs.
+## 🚀 Getting Started
 
-## Architecture Snapshot
+### Prerequisites
+- Node.js >= 18
+- npm or pnpm
+- Expo CLI (installed automatically)
+- Android Studio (for Android) or Xcode (for iOS)
 
-<img src="./assets/diagrams/1.png" alt="UPI Tracker Sequence Diagram 1" width="600"/>
+### Installation
 
-The app is intentionally small but structured:
+```bash
+# Clone the repository
+git clone https://github.com/Ujjwaljain16/ExpenseTracker.git
+cd ExpenseTracker/upi-tracker-react-native
 
-- **Frameworks**: React Native + Expo + TypeScript, Expo Router for navigation.
-- **Architecture patterns**:
-  - Service layer pattern for business logic (storage, UPI, categories, PDF).
-  - Repository-style access to AsyncStorage keys (`upitracker:transactions`, `upitracker:categories`).
-  - Component composition for UI (cards, pickers, charts).
+# Install dependencies
+pnpm install
 
-**Key services:**
-- `storage` service: CRUD, monthly stats, search, delete, clear-all.
-- `upi-parser` service: UPI URI parsing, validation, URL decoding/encoding.
-- `upi-launcher` service: build UPI deeplink, check **UPI-capable apps**, fire Android Intent.
-- `category-storage` service: enum-like category model with icon + color metadata.
-- `pdf-export` service: HTML + SVG pie chart → PDF via `expo-print` → share via `expo-sharing`.
+# Start development server
+pnpm start
+```
 
-**UI layer** (Expo Router):
-- `Home`: monthly stats, category pie chart, recent transactions.
-- `Scanner`: full-screen camera with QR detection for UPI QR codes.
-- `Payment`: confirm parsed UPI data + metadata, triggers UPI Intent.
-- `History`: list + search + per-transaction delete.
-- `Settings`: export PDF, clear-all, theme controls.
+### Running on Device
 
-Dark-mode default with a defined theme system (tokens for colors, spacing, typography).
+#### Android
+```bash
+# Development build (recommended for testing UPI payments)
+pnpm android
 
-## Process and Tooling
+# Or scan QR code in Expo Go (payments won't work in dev mode)
+```
 
-This app was not built from a single “generate app” prompt.
+#### iOS
+```bash
+pnpm ios
+```
 
-The workflow was:
-- Write **architecture and data-model docs first**, including UPI Intent flow, AsyncStorage schema, and service boundaries.
-- Use Cursor IDE + Perplexity AI in **multi-turn iterations**:
-  - Explore UPI URI scheme edge cases and Intent behavior.  
-  - Refine service layer and transaction models.  
-  - Validate privacy-first choices (no analytics, no network).
-- Then implement the app screen by screen, wired to the services already defined in docs.
+## ⚠️ Important Note About UPI Payments
 
-UPI Tracker is essentially a concrete implementation of:
-- UPI URI scheme + deeplink flow  
-- Local-only data architecture on AsyncStorage  
-- Service-layer React Native app for a single, very specific UPI expense-tracking use case
+**Payments will be declined in development mode** (Expo Go) because UPI apps block test environments for security. This is expected!
 
-## Developer
-coded with ❤️ by [Ayush Kansal](https://linkedin.com/in/aykansal)
+To test actual payments:
+1. Build a production APK: `eas build --platform android --profile preview`
+2. Install APK on your phone
+3. Payments will work normally ✅
+
+**For development**, use **Manual Entry** mode - no payment needed to track expenses!
+
+## 🏗️ Tech Stack
+
+- **Framework**: React Native 0.81 + Expo 54
+- **Language**: TypeScript
+- **Navigation**: Expo Router (file-based routing)
+- **Storage**: AsyncStorage (local-only)
+- **UI**: Custom theme system (dark/light mode)
+- **QR Scanning**: expo-camera
+- **Charts**: react-native-chart-kit
+
+## 📂 Project Structure
+
+```
+upi-tracker-react-native/
+├── app/                        # Expo Router screens
+│   ├── (tabs)/                # Tab navigation screens
+│   │   ├── index.tsx          # Home screen
+│   │   ├── history.tsx        # Transaction history
+│   │   └── settings.tsx       # Settings screen
+│   ├── scanner.tsx            # QR code scanner
+│   ├── payment.tsx            # Payment confirmation
+│   ├── edit-transaction.tsx   # Transaction editor
+│   ├── pending-transactions.tsx # Payment verification
+│   └── privacy-dashboard.tsx  # Privacy transparency
+├── components/                # Reusable components
+│   ├── transactions/          # Transaction cards, filters
+│   └── payment/               # Payment confirmation dialog
+├── services/                  # Business logic
+│   ├── storage.ts             # Transaction CRUD
+│   ├── payment-verification.ts # Smart verification
+│   ├── category-storage.ts    # Category management
+│   └── privacy-stats.ts       # Privacy dashboard data
+├── constants/                 # Theme, categories, config
+├── types/                     # TypeScript interfaces
+└── hooks/                     # Custom React hooks
+```
+
+## 🛡️ Privacy Commitments
+
+### What We Store (All Local)
+- ✅ Transaction records (amount, payee, category, date)
+- ✅ Custom categories you create
+- ✅ Theme preference (dark/light mode)
+
+### What We NEVER Access
+- ❌ SMS messages or inbox
+- ❌ Bank accounts or statements
+- ❌ Notifications from other apps
+- ❌ Contacts or call logs
+- ❌ Location or GPS data
+- ❌ Cloud servers or analytics
+
+### Data Control
+- 🗑️ **Delete All Data** - Removes everything permanently
+- 📤 **Export** - Coming soon (JSON/CSV)
+- 📥 **Import** - Coming soon (restore from backup)
+- 🔒 **No Cloud Sync** - Your device only
+
+## 🤝 Contributing
+
+Contributions are welcome! This project prioritizes:
+1. **Privacy-first design** - No compromises
+2. **Offline-first** - Works without internet
+3. **User control** - Users own their data
+4. **Transparency** - Open source and auditable
+
+### Development Workflow
+
+```bash
+# Create feature branch
+git checkout -b feature/your-feature-name
+
+# Make changes and commit
+git add .
+git commit -m "feat: add your feature"
+
+# Push and create PR
+git push origin feature/your-feature-name
+```
+
+## 📋 Roadmap
+
+- [x] Core expense tracking
+- [x] QR code scanning
+- [x] Transaction editing
+- [x] Privacy dashboard
+- [x] Payment verification (smart pending)
+- [ ] Vernacular support (Hindi)
+- [ ] Cash fast-track entry
+- [ ] Data export/import (JSON + CSV)
+- [ ] Budget limits and alerts
+- [ ] Recurring expense tracking
+- [ ] Optional encrypted cloud backup
+
+## 🙏 Acknowledgments
+
+Built with a focus on **privacy, transparency, and user control**. Inspired by the need for a truly private expense tracker in India.
+
+## 📄 License
+
+MIT License - See [LICENSE](LICENSE) file for details
+
+## 📧 Contact
+
+- **Author**: Ujjwal Jain
+- **GitHub**: [@Ujjwaljain16](https://github.com/Ujjwaljain16)
+- **Project**: [ExpenseTracker](https://github.com/Ujjwaljain16/ExpenseTracker)
+
+---
+
+**Made with ❤️ for privacy-conscious Indians**

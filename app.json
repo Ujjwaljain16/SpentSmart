@@ -1,17 +1,18 @@
 {
   "expo": {
-    "name": "UPI Tracker",
-    "slug": "upitracker",
+    "name": "ExpenseTracker",
+    "slug": "expensetracker",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "upitracker",
+    "scheme": "expensetracker",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.ujjwaljain.expensetracker",
       "infoPlist": {
-        "NSCameraUsageDescription": "UPI Tracker needs camera access to scan UPI QR codes for payments."
+        "NSCameraUsageDescription": "ExpenseTracker needs camera access to scan UPI QR codes for payment tracking."
       }
     },
     "android": {
@@ -26,7 +27,7 @@
       "permissions": [
         "android.permission.CAMERA"
       ],
-      "package": "com.upitracker.app"
+      "package": "com.ujjwaljain.expensetracker"
     },
     "web": {
       "output": "static",
@@ -49,7 +50,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "UPI Tracker needs camera access to scan UPI QR codes for payments."
+          "cameraPermission": "ExpenseTracker needs camera access to scan UPI QR codes for payment tracking."
         }
       ]
     ],
@@ -63,6 +64,6 @@
         "projectId": "a06efa5f-b141-4545-be62-ad2562ba0381"
       }
     },
-    "owner": "aykansal"
+    "owner": "ujjwaljain16"
   }
 }

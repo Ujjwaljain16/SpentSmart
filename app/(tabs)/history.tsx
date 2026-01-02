@@ -81,6 +81,22 @@ export default function HistoryScreen() {
     );
   };
 
+  const handleEdit = (transaction: Transaction) => {
+    // Navigate to edit screen with transaction data
+    const { router } = require('expo-router');
+    router.push({
+      pathname: '/edit-transaction',
+      params: {
+        id: transaction.id,
+        amount: transaction.amount.toString(),
+        category: transaction.category,
+        reason: transaction.reason || '',
+        payeeName: transaction.payeeName,
+        upiId: transaction.upiId,
+      },
+    });
+  };
+
   const clearSearch = () => {
     setSearchQuery('');
   };
@@ -89,7 +105,9 @@ export default function HistoryScreen() {
     <TransactionCard
       transaction={item}
       onDelete={handleDelete}
+      onEdit={handleEdit}
       showDeleteButton
+      showEditButton
     />
   );
 

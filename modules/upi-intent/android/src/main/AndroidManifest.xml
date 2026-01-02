@@ -1,0 +1,27 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="expo.modules.upiintent">
+    <queries>
+        <!-- Generic UPI detection -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="upi" />
+        </intent>
+
+        <!-- Explicit package visibility for common Indian UPI apps -->
+        <!-- This is the most reliable way to fix "App not installed" errors on Android 11+ -->
+        <package android:name="com.phonepe.app" />
+        <package android:name="com.google.android.apps.nbu.paisa.user" />
+        <package android:name="net.one97.paytm" />
+        <package android:name="com.naviapp" />
+        <package android:name="in.org.npci.upiapp" /> <!-- BHIM -->
+        <package android:name="com.dreamplug.androidapp" /> <!-- CRED -->
+        <package android:name="money.jupiter" />
+        <package android:name="indwin.c3.shareapp" /> <!-- Slice -->
+        <package android:name="com.csam.icici.bank.imobile" />
+        <package android:name="com.snapwork.hdfc" />
+        <package android:name="com.upi.axispay" />
+        <package android:name="com.sbi.upi" />
+        <package android:name="com.olive.kotak.upi" />
+        <package android:name="in.amazon.mShop.android.shopping" />
+    </queries>
+</manifest>

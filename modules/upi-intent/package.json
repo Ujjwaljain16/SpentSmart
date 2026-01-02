@@ -1,0 +1,15 @@
+{
+    "name": "upi-intent",
+    "version": "1.0.0",
+    "main": "index.ts",
+    "scripts": {},
+    "dependencies": {},
+    "devDependencies": {},
+    "expo": {
+        "autolinking": {
+            "android": {
+                "package": "expo.modules.upiintent"
+            }
+        }
+    }
+}

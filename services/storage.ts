@@ -12,7 +12,7 @@ export const getAllTransactions = async (): Promise<Transaction[]> => {
   try {
     const data = await AsyncStorage.getItem(TRANSACTIONS_KEY);
     if (!data) return [];
-    
+
     const transactions: Transaction[] = JSON.parse(data);
     return transactions.sort((a, b) => b.timestamp - a.timestamp);
   } catch (error) {
@@ -28,12 +28,13 @@ export const saveTransaction = async (
   paymentData: UPIPaymentData,
   category: CategoryType,
   reason?: string,
-  amount?: number
+  amount?: number,
+  launchedAt?: number
 ): Promise<Transaction> => {
   try {
     const transactions = await getAllTransactions();
     const timestamp = Date.now();
-    
+
     const newTransaction: Transaction = {
       id: Crypto.randomUUID(),
       amount: amount || paymentData.amount || 0,
@@ -43,11 +44,18 @@ export const saveTransaction = async (
       reason: reason || undefined,
       timestamp,
       monthKey: format(new Date(timestamp), 'yyyy-MM'),
+
+      // Payment verification fields
+      status: 'pending', // Always start as pending
+      confidence: 50, // Neutral until calculated
+      verifiedBy: 'user', // Default to user verification
+      launchedAt: launchedAt, // Track when payment was launched
+      returnedAt: timestamp, // Track when app returned
     };
 
     transactions.unshift(newTransaction);
     await AsyncStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(transactions));
-    
+
     return newTransaction;
   } catch (error) {
     console.error('Error saving transaction:', error);
@@ -75,15 +83,84 @@ export const deleteTransaction = async (id: string): Promise<boolean> => {
   try {
     const transactions = await getAllTransactions();
     const filtered = transactions.filter((tx) => tx.id !== id);
-    
+
     if (filtered.length === transactions.length) {
       return false; // Transaction not found
     }
-    
+
     await AsyncStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(filtered));
     return true;
   } catch (error) {
     console.error('Error deleting transaction:', error);
+    return false;
+  }
+};
+
+/**
+ * Update an existing transaction
+ */
+export const updateTransaction = async (
+  id: string,
+  updates: Partial<Omit<Transaction, 'id' | 'timestamp'>>
+): Promise<boolean> => {
+  try {
+    const transactions = await getAllTransactions();
+    const index = transactions.findIndex((tx) => tx.id === id);
+
+    if (index === -1) {
+      return false; // Transaction not found
+    }
+
+    // Update the transaction while preserving id and timestamp
+    transactions[index] = {
+      ...transactions[index],
+      ...updates,
+      // Recalculate monthKey if timestamp changed, otherwise keep original
+      monthKey: format(new Date(transactions[index].timestamp), 'yyyy-MM'),
+    };
+
+    await AsyncStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(transactions));
+    return true;
+  } catch (error) {
+    console.error('Error updating transaction:', error);
+    return false;
+  }
+};
+
+/**
+ * Update transaction verification status
+ */
+export const updateTransactionStatus = async (
+  id: string,
+  status: 'pending' | 'confirmed' | 'failed' | 'unknown',
+  verifiedBy: 'user' | 'intent' | 'auto' | 'manual',
+  confidence?: number,
+  upiTransactionId?: string,
+  notes?: string
+): Promise<boolean> => {
+  try {
+    const transactions = await getAllTransactions();
+    const index = transactions.findIndex((tx) => tx.id === id);
+
+    if (index === -1) {
+      return false; // Transaction not found
+    }
+
+    // Update verification fields
+    transactions[index] = {
+      ...transactions[index],
+      status,
+      verifiedBy,
+      verifiedAt: Date.now(),
+      confidence: confidence ?? transactions[index].confidence,
+      upiTransactionId: upiTransactionId ?? transactions[index].upiTransactionId,
+      verificationNotes: notes ?? transactions[index].verificationNotes,
+    };
+
+    await AsyncStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(transactions));
+    return true;
+  } catch (error) {
+    console.error('Error updating transaction status:', error);
     return false;
   }
 };
@@ -107,7 +184,7 @@ export const clearAllData = async (): Promise<boolean> => {
 export const getMonthlyStats = async (monthKey: string): Promise<MonthlyStats> => {
   try {
     const transactions = await getTransactionsByMonth(monthKey);
-    
+
     // Dynamic category breakdown based on actual transactions
     const categoryBreakdown: Record<CategoryType, number> = {};
 
@@ -159,7 +236,7 @@ export const searchTransactions = async (query: string): Promise<Transaction[]> 
   try {
     const transactions = await getAllTransactions();
     const lowerQuery = query.toLowerCase().trim();
-    
+
     if (!lowerQuery) return transactions;
 
     return transactions.filter((tx) => {

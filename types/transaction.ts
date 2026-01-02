@@ -20,8 +20,11 @@ export interface Transaction {
   verificationNotes?: string; // Optional user notes
 
   // Payment Flow Tracking (for confidence scoring)
+  paymentAttemptId?: string; // Unique ID for this payment attempt
   launchedAt?: number; // When UPI app was launched
   returnedAt?: number; // When app resumed from UPI
+  rawQr?: string; // Original scanned QR (for debugging/disputes)
+  sanitizedUpiUri?: string; // Final URI sent to UPI app
 }
 
 export interface UPIPaymentData {
@@ -29,6 +32,10 @@ export interface UPIPaymentData {
   payeeName: string;
   amount?: number;
   transactionNote?: string;
+  // Store ALL original QR parameters for merchant verification
+  rawParams?: Record<string, string>;
+  rawQuery?: string; // Exact original query string for signature preservation
+  rawQr?: string; // Original scanned QR data
 }
 
 export interface MonthlyStats {

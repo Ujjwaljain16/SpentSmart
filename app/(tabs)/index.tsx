@@ -11,7 +11,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { format } from 'date-fns';  
+import { format } from 'date-fns';
 
 import { Colors, BorderRadius, FontSizes, Spacing } from '@/constants/theme';
 import { Transaction, MonthlyStats } from '@/types/transaction';
@@ -24,6 +24,7 @@ import {
   deleteTransaction,
 } from '@/services/storage';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { PendingManager } from '@/services/pending-manager';
 
 export default function HomeScreen() {
   const colorScheme = useColorScheme();
@@ -39,6 +40,14 @@ export default function HomeScreen() {
 
   const loadData = useCallback(async () => {
     try {
+      // 🛡️ Pre-emptive check for abandoned (killed) payment attempts
+      const activePendings = await PendingManager.getPendings();
+      if (activePendings.length > 0) {
+        console.log(`⚠️ Found ${activePendings.length} abandoned payments. Routing to recovery...`);
+        router.push('/recover-pending');
+        return;
+      }
+
       const [transactions, stats] = await Promise.all([
         getRecentTransactions(5),
         getMonthlyStats(currentMonthKey),
@@ -73,6 +82,20 @@ export default function HomeScreen() {
 
   const handleManualEntry = () => {
     router.push('/manual-entry');
+  };
+
+  const handleEdit = (transaction: Transaction) => {
+    router.push({
+      pathname: '/edit-transaction',
+      params: {
+        id: transaction.id,
+        amount: transaction.amount.toString(),
+        category: transaction.category,
+        reason: transaction.reason || '',
+        payeeName: transaction.payeeName,
+        upiId: transaction.upiId,
+      },
+    });
   };
 
   return (
@@ -171,6 +194,7 @@ export default function HomeScreen() {
                 key={transaction.id}
                 transaction={transaction}
                 onDelete={handleDelete}
+                onEdit={handleEdit}
               />
             ))
           )}

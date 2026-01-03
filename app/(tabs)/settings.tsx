@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Alert,
   ScrollView,
+  TextInput,
 } from "react-native";
 import { useFocusEffect, router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -16,19 +17,24 @@ import Constants from "expo-constants";
 import { Colors, BorderRadius, FontSizes, Spacing } from "@/constants/theme";
 import { clearAllData, getAllTransactions } from "@/services/storage";
 import { exportToPDF } from "@/services/pdf-export";
-import { getCategories } from "@/services/category-storage";
+import { getCategories, DEFAULT_CATEGORIES } from "@/services/category-storage";
 import { useTheme } from "@/contexts/theme-context";
+import { useSecurity } from "@/contexts/security-context";
+import { setBudget, getBudget } from "@/services/storage";
 
 type ThemeMode = "light" | "dark" | "system";
 
 export default function SettingsScreen() {
   const { colorScheme, themeMode, setThemeMode } = useTheme();
+  const { isBioLockEnabled, setBioLockEnabled, isPrivacyModeEnabled, setPrivacyModeEnabled, hasHardware } = useSecurity();
   const colors = Colors[colorScheme ?? "dark"];
   const insets = useSafeAreaInsets();
 
   const [transactionCount, setTransactionCount] = useState(0);
   const [categoryCount, setCategoryCount] = useState(0);
   const [isExporting, setIsExporting] = useState(false);
+  const [budgetInput, setBudgetInput] = useState("");
+  const [isSavingBudget, setIsSavingBudget] = useState(false);
 
   const handleThemeChange = async (mode: ThemeMode) => {
     await setThemeMode(mode);
@@ -36,12 +42,14 @@ export default function SettingsScreen() {
 
   const loadStats = useCallback(async () => {
     try {
-      const [transactions, categories] = await Promise.all([
+      const [transactions, categories, currentBudget] = await Promise.all([
         getAllTransactions(),
         getCategories(),
+        getBudget(),
       ]);
       setTransactionCount(transactions.length);
       setCategoryCount(categories.length);
+      if (currentBudget) setBudgetInput(currentBudget.toString());
     } catch (error) {
       console.error("Error loading stats:", error);
     }
@@ -61,8 +69,7 @@ export default function SettingsScreen() {
 
     Alert.alert(
       "Clear All Data",
-      `This will permanently delete all ${transactionCount} transaction${
-        transactionCount !== 1 ? "s" : ""
+      `This will permanently delete all ${transactionCount} transaction${transactionCount !== 1 ? "s" : ""
       }. This action cannot be undone.`,
       [
         { text: "Cancel", style: "cancel" },
@@ -100,11 +107,37 @@ export default function SettingsScreen() {
     }
   };
 
+  const handleSaveBudget = async () => {
+    const amount = parseFloat(budgetInput);
+    if (isNaN(amount) || amount < 0) {
+      Alert.alert("Invalid Amount", "Please enter a valid budget amount.");
+      return;
+    }
+
+    setIsSavingBudget(true);
+    try {
+      const success = await setBudget(amount);
+      if (success) {
+        Alert.alert("Success", "Monthly budget updated successfully.");
+      } else {
+        Alert.alert("Error", "Failed to save budget.");
+      }
+    } catch (error) {
+      console.error("Save budget error:", error);
+      Alert.alert("Error", "An unexpected error occurred.");
+    } finally {
+      setIsSavingBudget(false);
+    }
+  };
+
   const appVersion = Constants.expoConfig?.version || "1.0.0";
 
+  // Match home/charts background
+  const backgroundColor = colorScheme === 'dark' ? '#1E3A8A' : '#3B82F6';
+
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
+    <View style={[styles.container, { backgroundColor }]}>
+      <StatusBar style="light" />
 
       <ScrollView
         style={styles.scrollView}
@@ -115,15 +148,162 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <Text style={[styles.title, { color: colors.text }]}>Settings</Text>
+        <Text style={[styles.title, { color: '#FFF' }]}>Settings</Text>
+
+        {/* Privacy Section */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: 'rgba(255, 255, 255, 0.7)' }]}>
+            PRIVACY
+          </Text>
+
+          <View style={[styles.card, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1 }]}>
+            {/* Privacy Dashboard */}
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => router.push('/privacy-dashboard')}
+            >
+              <View style={styles.menuItemLeft}>
+                <View
+                  style={[
+                    styles.iconContainer,
+                    { backgroundColor: 'rgba(255, 255, 255, 0.1)' },
+                  ]}
+                >
+                  <Ionicons
+                    name="shield-checkmark"
+                    size={20}
+                    color="#FFF"
+                  />
+                </View>
+                <View style={styles.menuItemText}>
+                  <Text style={[styles.menuItemLabel, { color: '#FFF' }]}>
+                    Privacy Dashboard
+                  </Text>
+                  <Text
+                    style={[
+                      styles.menuItemDescription,
+                      { color: 'rgba(255, 255, 255, 0.6)' },
+                    ]}
+                  >
+                    See what we store & control your data
+                  </Text>
+                </View>
+              </View>
+              <Ionicons
+                name="chevron-forward"
+                size={20}
+                color="rgba(255, 255, 255, 0.5)"
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Security Section */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: 'rgba(255, 255, 255, 0.7)' }]}>
+            SECURITY & PRIVACY
+          </Text>
+
+          <View style={[styles.card, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1 }]}>
+            {/* Biometric Lock */}
+            {hasHardware && (
+              <>
+                <View style={styles.menuItem}>
+                  <View style={styles.menuItemLeft}>
+                    <View style={[styles.iconContainer, { backgroundColor: 'rgba(255, 255, 255, 0.1)' }]}>
+                      <Ionicons name="finger-print" size={20} color="#FFF" />
+                    </View>
+                    <View style={styles.menuItemText}>
+                      <Text style={[styles.menuItemLabel, { color: '#FFF' }]}>
+                        Biometric Lock
+                      </Text>
+                      <Text style={[styles.menuItemDescription, { color: 'rgba(255, 255, 255, 0.6)' }]}>
+                        Require authentication to open app
+                      </Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setBioLockEnabled(!isBioLockEnabled)}
+                    style={[styles.toggleWrap, { backgroundColor: isBioLockEnabled ? '#EC4899' : 'rgba(255,255,255,0.1)' }]}
+                  >
+                    <View style={[styles.toggleHandle, { marginLeft: isBioLockEnabled ? 22 : 2 }]} />
+                  </TouchableOpacity>
+                </View>
+                <View style={[styles.divider, { backgroundColor: 'rgba(255, 255, 255, 0.1)' }]} />
+              </>
+            )}
+
+            {/* Privacy Mode */}
+            <View style={styles.menuItem}>
+              <View style={styles.menuItemLeft}>
+                <View style={[styles.iconContainer, { backgroundColor: 'rgba(255, 255, 255, 0.1)' }]}>
+                  <Ionicons name="eye-off-outline" size={20} color="#FFF" />
+                </View>
+                <View style={styles.menuItemText}>
+                  <Text style={[styles.menuItemLabel, { color: '#FFF' }]}>
+                    Privacy Mode
+                  </Text>
+                  <Text style={[styles.menuItemDescription, { color: 'rgba(255, 255, 255, 0.6)' }]}>
+                    Mask amounts on home screen
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                onPress={() => setPrivacyModeEnabled(!isPrivacyModeEnabled)}
+                style={[styles.toggleWrap, { backgroundColor: isPrivacyModeEnabled ? '#EC4899' : 'rgba(255,255,255,0.1)' }]}
+              >
+                <View style={[styles.toggleHandle, { marginLeft: isPrivacyModeEnabled ? 22 : 2 }]} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+
+        {/* Budget Section */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: 'rgba(255, 255, 255, 0.7)' }]}>
+            BUDGETING
+          </Text>
+
+          <View style={[styles.card, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1 }]}>
+            <View style={styles.budgetSetting}>
+              <View style={styles.budgetInputRow}>
+                <View style={[styles.iconContainer, { backgroundColor: 'rgba(255, 255, 255, 0.1)' }]}>
+                  <Ionicons name="wallet-outline" size={20} color="#FFF" />
+                </View>
+                <View style={styles.inputWrap}>
+                  <Text style={[styles.menuItemLabel, { color: '#FFF' }]}>
+                    Monthly Limit
+                  </Text>
+                  <TextInput
+                    style={[styles.budgetInput, { color: '#FFF' }]}
+                    value={budgetInput}
+                    onChangeText={setBudgetInput}
+                    placeholder="Enter limit (e.g. 15000)"
+                    placeholderTextColor="rgba(255, 255, 255, 0.4)"
+                    keyboardType="numeric"
+                  />
+                </View>
+              </View>
+              <TouchableOpacity
+                style={[styles.saveBudgetButton, { opacity: isSavingBudget ? 0.7 : 1 }]}
+                onPress={handleSaveBudget}
+                disabled={isSavingBudget}
+              >
+                <Text style={styles.saveBudgetText}>
+                  {isSavingBudget ? "Saving..." : "Save"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
 
         {/* Categories Section */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
+          <Text style={[styles.sectionTitle, { color: 'rgba(255, 255, 255, 0.7)' }]}>
             CATEGORIES
           </Text>
 
-          <View style={[styles.card, { backgroundColor: colors.card }]}>
+          <View style={[styles.card, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1 }]}>
             {/* Manage Categories */}
             <TouchableOpacity
               style={styles.menuItem}
@@ -133,23 +313,23 @@ export default function SettingsScreen() {
                 <View
                   style={[
                     styles.iconContainer,
-                    { backgroundColor: `${colors.tint}20` },
+                    { backgroundColor: 'rgba(255, 255, 255, 0.1)' },
                   ]}
                 >
                   <Ionicons
                     name="pricetags-outline"
                     size={20}
-                    color={colors.tint}
+                    color="#FFF"
                   />
                 </View>
                 <View style={styles.menuItemText}>
-                  <Text style={[styles.menuItemLabel, { color: colors.text }]}>
+                  <Text style={[styles.menuItemLabel, { color: '#FFF' }]}>
                     Manage Categories
                   </Text>
                   <Text
                     style={[
                       styles.menuItemDescription,
-                      { color: colors.textSecondary },
+                      { color: 'rgba(255, 255, 255, 0.6)' },
                     ]}
                   >
                     {categoryCount} categor{categoryCount !== 1 ? "ies" : "y"}{" "}
@@ -160,7 +340,7 @@ export default function SettingsScreen() {
               <Ionicons
                 name="chevron-forward"
                 size={20}
-                color={colors.textSecondary}
+                color="rgba(255, 255, 255, 0.5)"
               />
             </TouchableOpacity>
           </View>
@@ -168,11 +348,11 @@ export default function SettingsScreen() {
 
         {/* Data Section */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
+          <Text style={[styles.sectionTitle, { color: 'rgba(255, 255, 255, 0.7)' }]}>
             DATA
           </Text>
 
-          <View style={[styles.card, { backgroundColor: colors.card }]}>
+          <View style={[styles.card, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1 }]}>
             {/* Export PDF */}
             <TouchableOpacity
               style={styles.menuItem}
@@ -183,23 +363,23 @@ export default function SettingsScreen() {
                 <View
                   style={[
                     styles.iconContainer,
-                    { backgroundColor: `${colors.tint}20` },
+                    { backgroundColor: 'rgba(255, 255, 255, 0.1)' },
                   ]}
                 >
                   <Ionicons
                     name="download-outline"
                     size={20}
-                    color={colors.tint}
+                    color="#FFF"
                   />
                 </View>
                 <View style={styles.menuItemText}>
-                  <Text style={[styles.menuItemLabel, { color: colors.text }]}>
+                  <Text style={[styles.menuItemLabel, { color: '#FFF' }]}>
                     {isExporting ? "Exporting..." : "Export Transactions"}
                   </Text>
                   <Text
                     style={[
                       styles.menuItemDescription,
-                      { color: colors.textSecondary },
+                      { color: 'rgba(255, 255, 255, 0.6)' },
                     ]}
                   >
                     Get PDF report of all transactions
@@ -209,12 +389,12 @@ export default function SettingsScreen() {
               <Ionicons
                 name="chevron-forward"
                 size={20}
-                color={colors.textSecondary}
+                color="rgba(255, 255, 255, 0.5)"
               />
             </TouchableOpacity>
 
             <View
-              style={[styles.divider, { backgroundColor: colors.border }]}
+              style={[styles.divider, { backgroundColor: 'rgba(255, 255, 255, 0.1)' }]}
             />
 
             {/* Clear Data */}
@@ -223,23 +403,23 @@ export default function SettingsScreen() {
                 <View
                   style={[
                     styles.iconContainer,
-                    { backgroundColor: `${colors.error}20` },
+                    { backgroundColor: 'rgba(239, 68, 68, 0.2)' },
                   ]}
                 >
                   <Ionicons
                     name="trash-outline"
                     size={20}
-                    color={colors.error}
+                    color="#EF4444"
                   />
                 </View>
                 <View style={styles.menuItemText}>
-                  <Text style={[styles.menuItemLabel, { color: colors.error }]}>
+                  <Text style={[styles.menuItemLabel, { color: '#EF4444' }]}>
                     Clear All Data
                   </Text>
                   <Text
                     style={[
                       styles.menuItemDescription,
-                      { color: colors.textSecondary },
+                      { color: 'rgba(255, 255, 255, 0.6)' },
                     ]}
                   >
                     {transactionCount} transaction
@@ -250,7 +430,7 @@ export default function SettingsScreen() {
               <Ionicons
                 name="chevron-forward"
                 size={20}
-                color={colors.textSecondary}
+                color="rgba(255, 255, 255, 0.5)"
               />
             </TouchableOpacity>
           </View>
@@ -258,20 +438,20 @@ export default function SettingsScreen() {
 
         {/* Appearance Section */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
+          <Text style={[styles.sectionTitle, { color: 'rgba(255, 255, 255, 0.7)' }]}>
             APPEARANCE
           </Text>
 
-          <View style={[styles.card]}>
+          <View style={[styles.card, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1 }]}>
             <View style={styles.themeSelector}>
               <TouchableOpacity
                 style={[
                   styles.themeOption,
                   {
                     backgroundColor:
-                      themeMode === "light" ? colors.tint : "transparent",
+                      themeMode === "light" ? 'rgba(255, 255, 255, 0.2)' : "transparent",
                     borderColor:
-                      themeMode === "light" ? colors.tint : colors.border,
+                      themeMode === "light" ? '#FFF' : 'rgba(255, 255, 255, 0.2)',
                   },
                 ]}
                 onPress={() => handleThemeChange("light")}
@@ -279,7 +459,7 @@ export default function SettingsScreen() {
                 <Ionicons
                   name="sunny"
                   size={20}
-                  color={themeMode === "light" ? "#fff" : colors.textSecondary}
+                  color={themeMode === "light" ? "#fff" : "rgba(255, 255, 255, 0.5)"}
                 />
               </TouchableOpacity>
 
@@ -288,9 +468,9 @@ export default function SettingsScreen() {
                   styles.themeOption,
                   {
                     backgroundColor:
-                      themeMode === "dark" ? colors.tint : "transparent",
+                      themeMode === "dark" ? 'rgba(255, 255, 255, 0.2)' : "transparent",
                     borderColor:
-                      themeMode === "dark" ? colors.tint : colors.border,
+                      themeMode === "dark" ? '#FFF' : 'rgba(255, 255, 255, 0.2)',
                   },
                 ]}
                 onPress={() => handleThemeChange("dark")}
@@ -298,7 +478,7 @@ export default function SettingsScreen() {
                 <Ionicons
                   name="moon"
                   size={20}
-                  color={themeMode === "dark" ? "#fff" : colors.textSecondary}
+                  color={themeMode === "dark" ? "#fff" : "rgba(255, 255, 255, 0.5)"}
                 />
               </TouchableOpacity>
 
@@ -307,9 +487,9 @@ export default function SettingsScreen() {
                   styles.themeOption,
                   {
                     backgroundColor:
-                      themeMode === "system" ? colors.tint : "transparent",
+                      themeMode === "system" ? 'rgba(255, 255, 255, 0.2)' : "transparent",
                     borderColor:
-                      themeMode === "system" ? colors.tint : colors.border,
+                      themeMode === "system" ? '#FFF' : 'rgba(255, 255, 255, 0.2)',
                   },
                 ]}
                 onPress={() => handleThemeChange("system")}
@@ -317,7 +497,7 @@ export default function SettingsScreen() {
                 <Ionicons
                   name="phone-portrait"
                   size={20}
-                  color={themeMode === "system" ? "#fff" : colors.textSecondary}
+                  color={themeMode === "system" ? "#fff" : "rgba(255, 255, 255, 0.5)"}
                 />
               </TouchableOpacity>
             </View>
@@ -326,32 +506,32 @@ export default function SettingsScreen() {
 
         {/* About Section */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
+          <Text style={[styles.sectionTitle, { color: 'rgba(255, 255, 255, 0.7)' }]}>
             ABOUT
           </Text>
 
-          <View style={[styles.card, { backgroundColor: colors.card }]}>
+          <View style={[styles.card, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1 }]}>
             <View style={styles.aboutItem}>
-              <Text style={[styles.aboutLabel, { color: colors.text }]}>
+              <Text style={[styles.aboutLabel, { color: '#FFF' }]}>
                 App Version
               </Text>
               <Text
-                style={[styles.aboutValue, { color: colors.textSecondary }]}
+                style={[styles.aboutValue, { color: 'rgba(255, 255, 255, 0.6)' }]}
               >
                 {appVersion}
               </Text>
             </View>
 
             <View
-              style={[styles.divider, { backgroundColor: colors.border }]}
+              style={[styles.divider, { backgroundColor: 'rgba(255, 255, 255, 0.1)' }]}
             />
 
             <View style={styles.aboutItem}>
-              <Text style={[styles.aboutLabel, { color: colors.text }]}>
+              <Text style={[styles.aboutLabel, { color: '#FFF' }]}>
                 Privacy
               </Text>
               <Text
-                style={[styles.aboutValue, { color: colors.textSecondary }]}
+                style={[styles.aboutValue, { color: 'rgba(255, 255, 255, 0.6)' }]}
               >
                 All data stored locally
               </Text>
@@ -471,5 +651,47 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: FontSizes.sm,
     lineHeight: 20,
+  },
+  toggleWrap: {
+    width: 44,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    paddingHorizontal: 2,
+  },
+  toggleHandle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#FFF',
+  },
+  budgetSetting: {
+    padding: Spacing.md,
+  },
+  budgetInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+  inputWrap: {
+    flex: 1,
+  },
+  budgetInput: {
+    fontSize: FontSizes.lg,
+    fontWeight: '600',
+    paddingVertical: Spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  saveBudgetButton: {
+    backgroundColor: '#3B82F6',
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+  },
+  saveBudgetText: {
+    color: '#FFF',
+    fontSize: FontSizes.md,
+    fontWeight: '600',
   },
 });

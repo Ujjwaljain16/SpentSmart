@@ -133,16 +133,7 @@ export function PaymentConfirmationDialog({
                         </TouchableOpacity>
                     </View>
 
-                    {/* Confidence hint */}
-                    {confidence !== 50 && (
-                        <Text style={[styles.hint, { color: colors.textSecondary }]}>
-                            {confidence >= 70
-                                ? 'Based on typical payment patterns'
-                                : confidence <= 30
-                                    ? 'Quick exit detected'
-                                    : 'Not sure - please confirm'}
-                        </Text>
-                    )}
+
                 </View>
             </View>
         </Modal>
@@ -162,6 +153,11 @@ const styles = StyleSheet.create({
         maxWidth: 400,
         borderRadius: BorderRadius.xl,
         padding: Spacing.xl,
+        backgroundColor: 'rgba(30, 58, 138, 0.95)', // Deep blue modal
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.2)',
+        boxShadow: '0px 10px 20px rgba(0, 0, 0, 0.3)',
+        elevation: 10,
     },
     confidenceBar: {
         height: 4,

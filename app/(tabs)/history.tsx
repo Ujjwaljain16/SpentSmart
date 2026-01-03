@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 
 import { Colors, BorderRadius, FontSizes, Spacing } from '@/constants/theme';
-import { Transaction } from '@/types/transaction';
+import { Transaction, CategoryType } from '@/types/transaction';
 import { TransactionCard } from '@/components/transactions/transaction-card';
 import {
   getAllTransactions,
@@ -23,29 +23,69 @@ import {
   deleteTransaction,
 } from '@/services/storage';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { DEFAULT_CATEGORIES } from '@/services/category-storage';
+import { useSecurity } from '@/contexts/security-context';
+
+type DateFilter = 'all' | 'today' | 'week' | 'month' | 'year';
 
 export default function HistoryScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'dark'];
+  const { isPrivacyModeEnabled } = useSecurity();
   const insets = useSafeAreaInsets();
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<CategoryType | 'all'>('all');
+  const [selectedDateRange, setSelectedDateRange] = useState<DateFilter>('all');
+  const [showCategoryFilter, setShowCategoryFilter] = useState(false);
+  const [showDateFilter, setShowDateFilter] = useState(false);
 
   const loadTransactions = useCallback(async () => {
     try {
+      let results: Transaction[];
+
       if (searchQuery.trim()) {
-        const results = await searchTransactions(searchQuery);
-        setTransactions(results);
+        results = await searchTransactions(searchQuery);
       } else {
-        const all = await getAllTransactions();
-        setTransactions(all);
+        results = await getAllTransactions();
       }
+
+      // Apply category filter
+      if (selectedCategory !== 'all') {
+        results = results.filter(tx => tx.category === selectedCategory);
+      }
+
+      // Apply date range filter
+      if (selectedDateRange !== 'all') {
+        const now = new Date();
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay()).getTime();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+        const startOfYear = new Date(now.getFullYear(), 0, 1).getTime();
+
+        results = results.filter(tx => {
+          switch (selectedDateRange) {
+            case 'today':
+              return tx.timestamp >= startOfToday;
+            case 'week':
+              return tx.timestamp >= startOfWeek;
+            case 'month':
+              return tx.timestamp >= startOfMonth;
+            case 'year':
+              return tx.timestamp >= startOfYear;
+            default:
+              return true;
+          }
+        });
+      }
+
+      setTransactions(results);
     } catch (error) {
       console.error('Error loading transactions:', error);
     }
-  }, [searchQuery]);
+  }, [searchQuery, selectedCategory, selectedDateRange]);
 
   useFocusEffect(
     useCallback(() => {
@@ -93,6 +133,8 @@ export default function HistoryScreen() {
         reason: transaction.reason || '',
         payeeName: transaction.payeeName,
         upiId: transaction.upiId,
+        type: transaction.type,
+        paymentMethod: transaction.paymentMethod,
       },
     });
   };
@@ -112,16 +154,16 @@ export default function HistoryScreen() {
   );
 
   const renderEmptyState = () => (
-    <View style={[styles.emptyState, { backgroundColor: colors.card }]}>
+    <View style={[styles.emptyState, { backgroundColor: 'transparent' }]}>
       <Ionicons
         name={searchQuery ? 'search-outline' : 'receipt-outline'}
         size={48}
-        color={colors.textSecondary}
+        color="rgba(255, 255, 255, 0.5)"
       />
-      <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+      <Text style={[styles.emptyText, { color: 'rgba(255, 255, 255, 0.9)' }]}>
         {searchQuery ? 'No matching transactions' : 'No transactions yet'}
       </Text>
-      <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>
+      <Text style={[styles.emptySubtext, { color: 'rgba(255, 255, 255, 0.6)' }]}>
         {searchQuery
           ? 'Try a different search term'
           : 'Your payment history will appear here'}
@@ -129,11 +171,16 @@ export default function HistoryScreen() {
     </View>
   );
 
-  const totalAmount = transactions.reduce((sum, tx) => sum + tx.amount, 0);
+  const totalAmount = transactions.reduce((sum, tx) => {
+    return tx.type === 'income' ? sum + tx.amount : sum - tx.amount;
+  }, 0);
+
+  // Match home/charts background
+  const backgroundColor = colorScheme === 'dark' ? '#1E3A8A' : '#3B82F6';
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+    <View style={[styles.container, { backgroundColor }]}>
+      <StatusBar style="light" />
 
       {/* Header */}
       <View
@@ -141,32 +188,32 @@ export default function HistoryScreen() {
           styles.header,
           {
             paddingTop: insets.top + Spacing.md,
-            backgroundColor: colors.surface,
+            backgroundColor: 'transparent',
           },
         ]}
       >
-        <Text style={[styles.title, { color: colors.text }]}>History</Text>
+        <Text style={[styles.title, { color: '#FFF' }]}>History</Text>
 
         {/* Search Bar */}
         <View
           style={[
             styles.searchContainer,
             {
-              backgroundColor: colors.card,
-              borderColor: colors.border,
+              backgroundColor: 'rgba(255, 255, 255, 0.1)',
+              borderColor: 'rgba(255, 255, 255, 0.2)',
             },
           ]}
         >
           <Ionicons
             name="search"
             size={20}
-            color={colors.textSecondary}
+            color="rgba(255, 255, 255, 0.7)"
             style={styles.searchIcon}
           />
           <TextInput
-            style={[styles.searchInput, { color: colors.text }]}
+            style={[styles.searchInput, { color: '#FFF' }]}
             placeholder="Search by reason, payee, category..."
-            placeholderTextColor={colors.textSecondary}
+            placeholderTextColor="rgba(255, 255, 255, 0.5)"
             value={searchQuery}
             onChangeText={handleSearch}
             returnKeyType="search"
@@ -177,19 +224,55 @@ export default function HistoryScreen() {
               <Ionicons
                 name="close-circle"
                 size={20}
-                color={colors.textSecondary}
+                color="rgba(255, 255, 255, 0.7)"
               />
             </TouchableOpacity>
           )}
         </View>
 
+        {/* Filters */}
+        <View style={styles.filterRow}>
+          <TouchableOpacity
+            style={styles.filterButton}
+            onPress={() => {
+              const categories: (CategoryType | 'all')[] = ['all', 'food', 'utility', 'college', 'rent', 'other'];
+              const currentIndex = categories.indexOf(selectedCategory);
+              const nextIndex = (currentIndex + 1) % categories.length;
+              setSelectedCategory(categories[nextIndex]);
+            }}
+          >
+            <Text style={styles.filterText}>
+              {selectedCategory === 'all' ? 'All Categories' : DEFAULT_CATEGORIES.find(c => c.key === selectedCategory)?.label || 'Other'}
+            </Text>
+            <Ionicons name="chevron-down" size={16} color="rgba(255, 255, 255, 0.7)" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.filterButton}
+            onPress={() => {
+              const ranges: DateFilter[] = ['all', 'today', 'week', 'month', 'year'];
+              const currentIndex = ranges.indexOf(selectedDateRange);
+              const nextIndex = (currentIndex + 1) % ranges.length;
+              setSelectedDateRange(ranges[nextIndex]);
+            }}
+          >
+            <Text style={styles.filterText}>
+              {selectedDateRange === 'all' ? 'All Time' :
+                selectedDateRange === 'today' ? 'Today' :
+                  selectedDateRange === 'week' ? 'This Week' :
+                    selectedDateRange === 'month' ? 'This Month' : 'This Year'}
+            </Text>
+            <Ionicons name="chevron-down" size={16} color="rgba(255, 255, 255, 0.7)" />
+          </TouchableOpacity>
+        </View>
+
         {/* Summary */}
         {transactions.length > 0 && (
           <View style={styles.summary}>
-            <Text style={[styles.summaryText, { color: colors.textSecondary }]}>
+            <Text style={[styles.summaryText, { color: 'rgba(255, 255, 255, 0.7)' }]}>
               {transactions.length} transaction{transactions.length !== 1 ? 's' : ''} •{' '}
-              <Text style={{ color: colors.text, fontWeight: '600' }}>
-                ₹{totalAmount.toLocaleString('en-IN')}
+              <Text style={{ color: '#FFF', fontWeight: '600' }}>
+                {isPrivacyModeEnabled ? '•••••' : `₹${totalAmount.toLocaleString('en-IN')}`}
               </Text>
             </Text>
           </View>
@@ -209,7 +292,9 @@ export default function HistoryScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={colors.tint}
+            tintColor="#FFF"
+            colors={['#3B82F6']}
+            progressBackgroundColor="#FFF"
           />
         }
         ListEmptyComponent={renderEmptyState}
@@ -251,10 +336,32 @@ const styles = StyleSheet.create({
     padding: Spacing.xs,
   },
   summary: {
-    marginTop: Spacing.md,
+    paddingTop: Spacing.sm,
   },
   summaryText: {
     fontSize: FontSizes.sm,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginTop: Spacing.sm,
+  },
+  filterButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  filterText: {
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: FontSizes.sm,
+    fontWeight: '500',
   },
   listContent: {
     padding: Spacing.lg,

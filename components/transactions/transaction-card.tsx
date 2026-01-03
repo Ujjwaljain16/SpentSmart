@@ -13,6 +13,7 @@ import { DEFAULT_CATEGORIES } from '@/constants/categories';
 import { getCategories, AVAILABLE_ICONS } from '@/services/category-storage';
 import { Colors, BorderRadius, FontSizes, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useSecurity } from '@/contexts/security-context';
 
 interface TransactionCardProps {
   transaction: Transaction;
@@ -22,7 +23,7 @@ interface TransactionCardProps {
   showEditButton?: boolean;
 }
 
-export function TransactionCard({
+function TransactionCardComponent({
   transaction,
   onDelete,
   onEdit,
@@ -31,6 +32,7 @@ export function TransactionCard({
 }: TransactionCardProps) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'dark'];
+  const { isPrivacyModeEnabled } = useSecurity();
   const [categoryInfo, setCategoryInfo] = useState<CategoryInfo>(
     DEFAULT_CATEGORIES[transaction.category] || DEFAULT_CATEGORIES.other
   );
@@ -62,12 +64,12 @@ export function TransactionCard({
   const formattedTime = format(new Date(transaction.timestamp), 'h:mm a');
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.card }]}>
+    <View style={[styles.container, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)' }]}>
       {/* Category Icon */}
       <View
         style={[
           styles.iconContainer,
-          { backgroundColor: `${categoryInfo.color}20` },
+          { backgroundColor: `${categoryInfo.color}40` },
         ]}
       >
         <Ionicons
@@ -79,17 +81,17 @@ export function TransactionCard({
 
       {/* Transaction Details */}
       <View style={styles.details}>
-        <Text style={[styles.reason, { color: colors.text }]} numberOfLines={1}>
+        <Text style={[styles.reason, { color: '#FFF' }]} numberOfLines={1}>
           {transaction.reason || transaction.category}
         </Text>
         <Text
-          style={[styles.payee, { color: colors.textSecondary }]}
+          style={[styles.payee, { color: 'rgba(255, 255, 255, 0.7)' }]}
           numberOfLines={1}
         >
-          {transaction.upiId}
+          {transaction.payeeName}
         </Text>
         <View style={styles.metaRow}>
-          <Text style={[styles.date, { color: colors.textSecondary }]}>
+          <Text style={[styles.date, { color: 'rgba(255, 255, 255, 0.6)' }]}>
             {formattedDate} • {formattedTime}
           </Text>
         </View>
@@ -97,11 +99,15 @@ export function TransactionCard({
 
       {/* Amount & Delete */}
       <View style={styles.rightSection}>
-        <Text style={[styles.amount, { color: colors.text }]}>
-          ₹{transaction.amount.toLocaleString('en-IN', {
+        <Text style={[
+          styles.amount,
+          { color: transaction.type === 'income' ? '#10B981' : '#FFF' }
+        ]}>
+          {transaction.type === 'income' ? '+' : '-'}
+          {isPrivacyModeEnabled ? '•••••' : `₹${transaction.amount.toLocaleString('en-IN', {
             minimumFractionDigits: 0,
             maximumFractionDigits: 2,
-          })}
+          })}`}
         </Text>
         <View style={styles.actionButtons}>
           {showEditButton && onEdit && (
@@ -128,13 +134,16 @@ export function TransactionCard({
   );
 }
 
+export const TransactionCard = React.memo(TransactionCardComponent);
+
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.md,
     marginBottom: Spacing.sm,
+    borderWidth: 1,
   },
   iconContainer: {
     width: 44,

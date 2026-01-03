@@ -1,5 +1,7 @@
 // CategoryType is now a string to support dynamic user-created categories
 export type CategoryType = string;
+export type TransactionType = 'income' | 'expense';
+export type PaymentMethod = 'upi' | 'cash' | 'bank' | 'other';
 
 export interface Transaction {
   id: string;
@@ -7,6 +9,8 @@ export interface Transaction {
   upiId: string;
   payeeName: string;
   category: CategoryType;
+  type: TransactionType;
+  paymentMethod: PaymentMethod;
   reason?: string;
   timestamp: number;
   monthKey: string; // 'YYYY-MM' format for quick filtering
@@ -25,6 +29,7 @@ export interface Transaction {
   returnedAt?: number; // When app resumed from UPI
   rawQr?: string; // Original scanned QR (for debugging/disputes)
   sanitizedUpiUri?: string; // Final URI sent to UPI app
+  externalRef?: string; // External transaction reference (e.g. UPI 'tr' parameter)
 }
 
 export interface UPIPaymentData {
@@ -40,7 +45,8 @@ export interface UPIPaymentData {
 
 export interface MonthlyStats {
   monthKey: string;
-  total: number;
+  totalIncome: number;
+  totalExpense: number;
   categoryBreakdown: Record<CategoryType, number>;
   transactionCount: number;
 }

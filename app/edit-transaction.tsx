@@ -29,6 +29,8 @@ export default function EditTransactionScreen() {
         reason?: string;
         payeeName: string;
         upiId: string;
+        type: string;
+        paymentMethod: string;
     }>();
 
     const colorScheme = useColorScheme();
@@ -41,6 +43,12 @@ export default function EditTransactionScreen() {
         (params.category as CategoryType) || null
     );
     const [reason, setReason] = useState(params.reason || '');
+    const [type, setType] = useState<'income' | 'expense'>(
+        (params.type as 'income' | 'expense') || 'expense'
+    );
+    const [paymentMethod, setPaymentMethod] = useState<'upi' | 'cash' | 'bank' | 'other'>(
+        (params.paymentMethod as any) || 'upi'
+    );
     const [isLoading, setIsLoading] = useState(false);
 
     const canSave = amount && parseFloat(amount) > 0 && category;
@@ -60,6 +68,8 @@ export default function EditTransactionScreen() {
                 amount: amountNum,
                 category: category!,
                 reason: reason.trim() || undefined,
+                type,
+                paymentMethod,
             });
 
             if (success) {
@@ -84,12 +94,15 @@ export default function EditTransactionScreen() {
         router.back();
     };
 
+    // Match home/charts background
+    const backgroundColor = colorScheme === 'dark' ? '#1E3A8A' : '#3B82F6';
+
     return (
         <KeyboardAvoidingView
-            style={[styles.container, { backgroundColor: colors.background }]}
+            style={[styles.container, { backgroundColor }]}
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-            <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+            <StatusBar style="light" />
 
             {/* Header */}
             <View
@@ -97,15 +110,15 @@ export default function EditTransactionScreen() {
                     styles.header,
                     {
                         paddingTop: insets.top + Spacing.sm,
-                        backgroundColor: colors.surface,
-                        borderBottomColor: colors.border,
+                        backgroundColor: 'transparent',
+                        borderBottomWidth: 0,
                     },
                 ]}
             >
                 <TouchableOpacity onPress={handleCancel} style={styles.headerButton}>
-                    <Ionicons name="close" size={24} color={colors.text} />
+                    <Ionicons name="close" size={24} color="#FFF" />
                 </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: colors.text }]}>
+                <Text style={[styles.headerTitle, { color: '#FFF' }]}>
                     Edit Transaction
                 </Text>
                 <TouchableOpacity
@@ -117,7 +130,7 @@ export default function EditTransactionScreen() {
                         style={[
                             styles.saveText,
                             {
-                                color: canSave && !isLoading ? colors.tint : colors.textSecondary,
+                                color: canSave && !isLoading ? '#FFF' : 'rgba(255, 255, 255, 0.5)',
                             },
                         ]}
                     >
@@ -132,43 +145,73 @@ export default function EditTransactionScreen() {
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
             >
+                {/* Type Toggle */}
+                <View style={[styles.typeToggleContainer, { backgroundColor: 'rgba(255,255,255,0.1)' }]}>
+                    <TouchableOpacity
+                        style={[
+                            styles.typeOption,
+                            type === 'expense' && styles.typeOptionActive,
+                            { backgroundColor: type === 'expense' ? '#EF4444' : 'transparent' }
+                        ]}
+                        onPress={() => {
+                            setType('expense');
+                            if (category === 'income') setCategory('food');
+                        }}
+                    >
+                        <Text style={[styles.typeText, type === 'expense' && styles.typeTextActive]}>Expense</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[
+                            styles.typeOption,
+                            type === 'income' && styles.typeOptionActive,
+                            { backgroundColor: type === 'income' ? '#10B981' : 'transparent' }
+                        ]}
+                        onPress={() => {
+                            setType('income');
+                            setCategory('income');
+                        }}
+                    >
+                        <Text style={[styles.typeText, type === 'income' && styles.typeTextActive]}>Income</Text>
+                    </TouchableOpacity>
+                </View>
+
                 {/* Payee Info (Read-only) */}
-                <View style={[styles.card, { backgroundColor: colors.card }]}>
-                    <Text style={[styles.label, { color: colors.textSecondary }]}>
-                        Payee
+                <View style={[styles.card, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1 }]}>
+                    <Text style={[styles.label, { color: 'rgba(255, 255, 255, 0.7)' }]}>
+                        {type === 'income' ? 'Payer' : 'Payee'}
                     </Text>
-                    <Text style={[styles.payeeText, { color: colors.text }]}>
+                    <Text style={[styles.payeeText, { color: '#FFF' }]}>
                         {params.payeeName}
                     </Text>
-                    <Text style={[styles.upiText, { color: colors.textSecondary }]}>
-                        {params.upiId}
+                    <Text style={[styles.upiText, { color: 'rgba(255, 255, 255, 0.5)' }]}>
+                        {params.upiId === 'manual' ? 'Manual Record' : params.upiId}
                     </Text>
                 </View>
 
                 {/* Amount Input */}
-                <View style={[styles.card, { backgroundColor: colors.card }]}>
-                    <Text style={[styles.label, { color: colors.textSecondary }]}>
+                <View style={[styles.card, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1 }]}>
+                    <Text style={[styles.label, { color: 'rgba(255, 255, 255, 0.7)' }]}>
                         Amount *
                     </Text>
                     <View style={styles.amountInputContainer}>
-                        <Text style={[styles.currencySymbol, { color: colors.text }]}>
+                        <Text style={[styles.currencySymbol, { color: '#FFF' }]}>
                             ₹
                         </Text>
                         <TextInput
-                            style={[styles.amountInput, { color: colors.text }]}
+                            style={[styles.amountInput, { color: '#FFF' }]}
                             value={amount}
                             onChangeText={setAmount}
                             keyboardType="numeric"
                             placeholder="0.00"
-                            placeholderTextColor={colors.textSecondary}
+                            placeholderTextColor="rgba(255, 255, 255, 0.3)"
                             selectTextOnFocus
                         />
                     </View>
                 </View>
 
                 {/* Category Picker */}
-                <View style={[styles.card, { backgroundColor: colors.card }]}>
-                    <Text style={[styles.label, { color: colors.textSecondary }]}>
+                <View style={[styles.card, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1 }]}>
+                    <Text style={[styles.label, { color: 'rgba(255, 255, 255, 0.7)' }]}>
                         Category *
                     </Text>
                     <CategoryPicker
@@ -177,23 +220,48 @@ export default function EditTransactionScreen() {
                     />
                 </View>
 
+                {/* Payment Method */}
+                <View style={[styles.card, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1 }]}>
+                    <Text style={[styles.label, { color: 'rgba(255, 255, 255, 0.7)' }]}>
+                        Payment Method
+                    </Text>
+                    <View style={styles.methodRow}>
+                        {(['upi', 'cash', 'bank', 'other'] as const).map((m) => (
+                            <TouchableOpacity
+                                key={m}
+                                style={[
+                                    styles.methodChip,
+                                    paymentMethod === m && styles.methodChipActive,
+                                    { backgroundColor: paymentMethod === m ? '#FFF' : 'rgba(255,255,255,0.1)' }
+                                ]}
+                                onPress={() => setPaymentMethod(m)}
+                            >
+                                <Text style={[styles.methodText, paymentMethod === m && styles.methodTextActive]}>
+                                    {m.toUpperCase()}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                </View>
+
                 {/* Reason Input */}
-                <View style={[styles.card, { backgroundColor: colors.card }]}>
-                    <Text style={[styles.label, { color: colors.textSecondary }]}>
+                <View style={[styles.card, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1 }]}>
+                    <Text style={[styles.label, { color: 'rgba(255, 255, 255, 0.7)' }]}>
                         Note (Optional)
                     </Text>
                     <TextInput
                         style={[
                             styles.reasonInput,
                             {
-                                color: colors.text,
-                                borderColor: colors.border,
+                                color: '#FFF',
+                                borderColor: 'rgba(255, 255, 255, 0.2)',
+                                backgroundColor: 'rgba(0, 0, 0, 0.1)',
                             },
                         ]}
                         value={reason}
                         onChangeText={setReason}
                         placeholder="Add a note about this transaction"
-                        placeholderTextColor={colors.textSecondary}
+                        placeholderTextColor="rgba(255, 255, 255, 0.3)"
                         multiline
                         numberOfLines={3}
                     />
@@ -203,11 +271,11 @@ export default function EditTransactionScreen() {
                 <View
                     style={[
                         styles.infoCard,
-                        { backgroundColor: `${colors.tint}10` },
+                        { backgroundColor: 'rgba(255, 255, 255, 0.05)', borderColor: 'rgba(255, 255, 255, 0.1)', borderWidth: 1 },
                     ]}
                 >
-                    <Ionicons name="information-circle" size={20} color={colors.tint} />
-                    <Text style={[styles.infoText, { color: colors.text }]}>
+                    <Ionicons name="information-circle" size={20} color="rgba(255, 255, 255, 0.7)" />
+                    <Text style={[styles.infoText, { color: 'rgba(255, 255, 255, 0.9)' }]}>
                         You can edit the amount, category, and note. The payee and date cannot be changed.
                     </Text>
                 </View>
@@ -299,5 +367,50 @@ const styles = StyleSheet.create({
         flex: 1,
         fontSize: FontSizes.sm,
         lineHeight: 20,
+    },
+    typeToggleContainer: {
+        flexDirection: 'row',
+        borderRadius: BorderRadius.lg,
+        padding: 4,
+        marginBottom: Spacing.md,
+    },
+    typeOption: {
+        flex: 1,
+        paddingVertical: 10,
+        borderRadius: BorderRadius.md,
+        alignItems: 'center',
+    },
+    typeOptionActive: {},
+    typeText: {
+        color: 'rgba(255,255,255,0.6)',
+        fontWeight: '600',
+        fontSize: FontSizes.sm,
+    },
+    typeTextActive: {
+        color: '#FFF',
+    },
+    methodRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        marginTop: 4,
+    },
+    methodChip: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: BorderRadius.full,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.2)',
+    },
+    methodChipActive: {
+        borderColor: '#FFF',
+    },
+    methodText: {
+        color: 'rgba(255,255,255,0.7)',
+        fontSize: 10,
+        fontWeight: '700',
+    },
+    methodTextActive: {
+        color: '#1E3A8A',
     },
 });

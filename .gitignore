@@ -41,3 +41,18 @@ app-example
 # generated native folders
 /ios
 /android
+
+# Build Artifacts
+*.apk
+*.aab
+*.ipa
+
+# Environment Variables
+.env
+.env.local
+.env.*.local
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini

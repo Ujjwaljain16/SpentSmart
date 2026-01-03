@@ -1,52 +1,45 @@
-# 💰 ExpenseTracker - Privacy-First UPI Expense Manager
+# 🛡️ SpentSmart - Privacy-First UPI Expense Manager
 
-> **Track your expenses automatically via UPI QR codes. No SMS snooping. No bank linking. Your data, your device.**
+> **Smart. Secure. Private. Track expenses via UPI QR codes without compromising your data.**
 
 [![React Native](https://img.shields.io/badge/React%20Native-0.81-61DAFB?logo=react)](https://reactnative.dev/)
 [![Expo](https://img.shields.io/badge/Expo-54-000020?logo=expo)](https://expo.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript)](https://www.typescriptlang.org/)
 [![Privacy First](https://img.shields.io/badge/Privacy-First-00C853)]()
+[![Production Ready](https://img.shields.io/badge/Status-Production%20Ready-blue)]()
 
-## 🎯 What Makes This Different
+## 🎯 Why SpentSmart?
 
-**ExpenseTracker** is an expense tracking app built for **privacy-conscious Indians**. Unlike other apps that read your SMS or link your bank accounts, we do things differently:
+**SpentSmart** is built for the **privacy-conscious Indian user**. Most expense trackers read your SMS, link your bank accounts, or upload data to the cloud. We don't.
 
-- ✅ **QR Code Scanning** - Capture payment details instantly
-- ✅ **100% Local Storage** - All data stays on your device
-- ✅ **Zero Permissions** - No SMS, contacts, or location access
-- ✅ **Smart Verification** - Privacy-safe payment confirmation
-- ✅ **Transaction Editing** - Fix mistakes without deleting
-- ✅ **Privacy Dashboard** - Full transparency on what we store
+- 🔒 **Biometric Security** - FaceID/Fingerprint lock for app access
+- 👁️ **Privacy Mode** - Blur sensitive amounts with a single tap
+- ⚡ **QR Code Scanning** - Instant payment details from UPI QRs
+- 📱 **Contacts Integration** - Easily pick payees for manual entry
+- 🏠 **100% Local Storage** - Your financial data never leaves your phone
 
-## 📱 Features
+## 📱 Key Features
 
-### Core Functionality
-- 🔍 **QR Code Scanner** - Scan UPI QR codes to pre-fill payment details
-- 💸 **Manual Entry** - Quick cash/UPI entry with category selection
-- ✏️ **Transaction Editing** - Edit amount, category, and notes
-- 📊 **Monthly Statistics** - Category breakdown and spending trends
-- 🔐 **Payment Verification** - Smart pending system (no SMS reading!)
+### 🛡️ Security & Privacy
+- **App Lock**: Secure the entire app with your device's biometrics.
+- **Privacy Dashboard**: Transparent view of exactly what data is stored.
+- **Zero Permissions**: No SMS, Location, or Storage access required.
 
-### Privacy Features
-- 🛡️ **Privacy Dashboard** - See exactly what data is stored
-- 📊 **Data Inventory** - Transaction count, storage usage, data age
-- 🗑️ **Delete All Data** - Clear everything with one tap
-- 🔒 **Full Transparency** - No hidden data collection
-- 📍 **Minimal Permissions** - Only camera for QR scanning
+### 💰 Smart Tracking
+- **Scanner**: Scan any UPI QR to log expenses instantly.
+- **Budgeting**: Set monthly limits and track progress with visual bars.
+- **Analytics**: Beautiful charts for daily, weekly, and monthly spending.
+- **Insights**: Category-wise breakdown to spot spending habits.
 
-### Smart Features
-- 📁 **Custom Categories** - Create unlimited expense categories
-- 🔎 **Transaction Search** - Find transactions by amount, payee, or note
-- 📅 **Monthly Reports** - Track spending patterns over time
-- 🌙 **Dark Mode** - Easy on the eyes
+### ⚡ Seamless Experience
+- **Manual Entry**: Fast entry with integrated Contact Picking.
+- **Dark/Light Mode**: Automatic theme switching.
+- **Transaction History**: Search, filter, and edit past transactions.
 
 ## 🚀 Getting Started
 
 ### Prerequisites
 - Node.js >= 18
-- npm or pnpm
-- Expo CLI (installed automatically)
-- Android Studio (for Android) or Xcode (for iOS)
+- pnpm
 
 ### Installation
 
@@ -62,139 +55,33 @@ pnpm install
 pnpm start
 ```
 
-### Running on Device
-
-#### Android
-```bash
-# Development build (recommended for testing UPI payments)
-pnpm android
-
-# Or scan QR code in Expo Go (payments won't work in dev mode)
-```
-
-#### iOS
-```bash
-pnpm ios
-```
-
-## ⚠️ Important Note About UPI Payments
-
-**Payments will be declined in development mode** (Expo Go) because UPI apps block test environments for security. This is expected!
-
-To test actual payments:
-1. Build a production APK: `eas build --platform android --profile preview`
-2. Install APK on your phone
-3. Payments will work normally ✅
-
-**For development**, use **Manual Entry** mode - no payment needed to track expenses!
-
 ## 🏗️ Tech Stack
 
 - **Framework**: React Native 0.81 + Expo 54
 - **Language**: TypeScript
-- **Navigation**: Expo Router (file-based routing)
-- **Storage**: AsyncStorage (local-only)
-- **UI**: Custom theme system (dark/light mode)
-- **QR Scanning**: expo-camera
-- **Charts**: react-native-chart-kit
+- **Navigation**: Expo Router (File-based routing)
+- **State/Storage**: React Context + AsyncStorage
+- **Security**: `expo-local-authentication` (Biometrics)
+- **Integration**: `expo-contacts`, `expo-camera`
+- **Charting**: Custom optimized SVG charts
 
-## 📂 Project Structure
+## 📂 Documentation
 
-```
-upi-tracker-react-native/
-├── app/                        # Expo Router screens
-│   ├── (tabs)/                # Tab navigation screens
-│   │   ├── index.tsx          # Home screen
-│   │   ├── history.tsx        # Transaction history
-│   │   └── settings.tsx       # Settings screen
-│   ├── scanner.tsx            # QR code scanner
-│   ├── payment.tsx            # Payment confirmation
-│   ├── edit-transaction.tsx   # Transaction editor
-│   ├── pending-transactions.tsx # Payment verification
-│   └── privacy-dashboard.tsx  # Privacy transparency
-├── components/                # Reusable components
-│   ├── transactions/          # Transaction cards, filters
-│   └── payment/               # Payment confirmation dialog
-├── services/                  # Business logic
-│   ├── storage.ts             # Transaction CRUD
-│   ├── payment-verification.ts # Smart verification
-│   ├── category-storage.ts    # Category management
-│   └── privacy-stats.ts       # Privacy dashboard data
-├── constants/                 # Theme, categories, config
-├── types/                     # TypeScript interfaces
-└── hooks/                     # Custom React hooks
-```
-
-## 🛡️ Privacy Commitments
-
-### What We Store (All Local)
-- ✅ Transaction records (amount, payee, category, date)
-- ✅ Custom categories you create
-- ✅ Theme preference (dark/light mode)
-
-### What We NEVER Access
-- ❌ SMS messages or inbox
-- ❌ Bank accounts or statements
-- ❌ Notifications from other apps
-- ❌ Contacts or call logs
-- ❌ Location or GPS data
-- ❌ Cloud servers or analytics
-
-### Data Control
-- 🗑️ **Delete All Data** - Removes everything permanently
-- 📤 **Export** - Coming soon (JSON/CSV)
-- 📥 **Import** - Coming soon (restore from backup)
-- 🔒 **No Cloud Sync** - Your device only
+We maintain detailed documentation for developers:
+- [📖 Architecture Overview](docs/ARCHITECTURE.md)
+- [🚀 Publishing Guide](docs/PUBLISHING_GUIDE.md)
+- [🧪 Testing Guide](docs/TESTING_GUIDE.md)
 
 ## 🤝 Contributing
 
 Contributions are welcome! This project prioritizes:
-1. **Privacy-first design** - No compromises
-2. **Offline-first** - Works without internet
-3. **User control** - Users own their data
-4. **Transparency** - Open source and auditable
-
-### Development Workflow
-
-```bash
-# Create feature branch
-git checkout -b feature/your-feature-name
-
-# Make changes and commit
-git add .
-git commit -m "feat: add your feature"
-
-# Push and create PR
-git push origin feature/your-feature-name
-```
-
-## 📋 Roadmap
-
-- [x] Core expense tracking
-- [x] QR code scanning
-- [x] Transaction editing
-- [x] Privacy dashboard
-- [x] Payment verification (smart pending)
-- [ ] Vernacular support (Hindi)
-- [ ] Cash fast-track entry
-- [ ] Data export/import (JSON + CSV)
-- [ ] Budget limits and alerts
-- [ ] Recurring expense tracking
-- [ ] Optional encrypted cloud backup
-
-## 🙏 Acknowledgments
-
-Built with a focus on **privacy, transparency, and user control**. Inspired by the need for a truly private expense tracker in India.
+1.  **Privacy-first design** - No compromises
+2.  **Offline-first** - Works without internet
+3.  **User control** - Users own their data
 
 ## 📄 License
 
 MIT License - See [LICENSE](LICENSE) file for details
-
-## 📧 Contact
-
-- **Author**: Ujjwal Jain
-- **GitHub**: [@Ujjwaljain16](https://github.com/Ujjwaljain16)
-- **Project**: [ExpenseTracker](https://github.com/Ujjwaljain16/ExpenseTracker)
 
 ---
 

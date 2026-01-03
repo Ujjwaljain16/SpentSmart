@@ -4,6 +4,7 @@ import * as Crypto from 'expo-crypto';
 import { Transaction, MonthlyStats, CategoryType, UPIPaymentData } from '@/types/transaction';
 
 const TRANSACTIONS_KEY = '@upitracker_transactions';
+const BUDGET_KEY = '@upitracker_monthly_budget';
 
 /**
  * Get all transactions from storage, sorted by date (newest first)
@@ -29,10 +30,23 @@ export const saveTransaction = async (
   category: CategoryType,
   reason?: string,
   amount?: number,
-  launchedAt?: number
+  launchedAt?: number,
+  type: 'income' | 'expense' = 'expense',
+  paymentMethod: 'upi' | 'cash' | 'bank' | 'other' = 'upi',
+  externalRef?: string
 ): Promise<Transaction> => {
   try {
     const transactions = await getAllTransactions();
+
+    // Prevent duplicates if externalRef is provided
+    if (externalRef) {
+      const existing = transactions.find(tx => tx.externalRef === externalRef);
+      if (existing) {
+        console.log(`Duplicate transaction detected for ref: ${externalRef}. Skipping.`);
+        return existing;
+      }
+    }
+
     const timestamp = Date.now();
 
     const newTransaction: Transaction = {
@@ -41,6 +55,9 @@ export const saveTransaction = async (
       upiId: paymentData.upiId,
       payeeName: paymentData.payeeName,
       category,
+      type,
+      paymentMethod,
+      externalRef,
       reason: reason || undefined,
       timestamp,
       monthKey: format(new Date(timestamp), 'yyyy-MM'),
@@ -188,19 +205,28 @@ export const getMonthlyStats = async (monthKey: string): Promise<MonthlyStats> =
     // Dynamic category breakdown based on actual transactions
     const categoryBreakdown: Record<CategoryType, number> = {};
 
-    let total = 0;
+    let totalIncome = 0;
+    let totalExpense = 0;
 
     transactions.forEach((tx) => {
-      total += tx.amount;
-      if (!categoryBreakdown[tx.category]) {
-        categoryBreakdown[tx.category] = 0;
+      // Default type to expense for existing transactions if type is missing
+      const type = tx.type || 'expense';
+
+      if (type === 'income') {
+        totalIncome += tx.amount;
+      } else {
+        totalExpense += tx.amount;
+        if (!categoryBreakdown[tx.category]) {
+          categoryBreakdown[tx.category] = 0;
+        }
+        categoryBreakdown[tx.category] += tx.amount;
       }
-      categoryBreakdown[tx.category] += tx.amount;
     });
 
     return {
       monthKey,
-      total,
+      totalIncome,
+      totalExpense,
       categoryBreakdown,
       transactionCount: transactions.length,
     };
@@ -208,7 +234,8 @@ export const getMonthlyStats = async (monthKey: string): Promise<MonthlyStats> =
     console.error('Error getting monthly stats:', error);
     return {
       monthKey,
-      total: 0,
+      totalIncome: 0,
+      totalExpense: 0,
       categoryBreakdown: {},
       transactionCount: 0,
     };
@@ -271,5 +298,31 @@ export const getRecentTransactions = async (limit: number = 5): Promise<Transact
  */
 export const getCurrentMonthKey = (): string => {
   return format(new Date(), 'yyyy-MM');
+};
+
+/**
+ * Get monthly budget
+ */
+export const getBudget = async (): Promise<number | null> => {
+  try {
+    const budget = await AsyncStorage.getItem(BUDGET_KEY);
+    return budget ? parseFloat(budget) : null;
+  } catch (error) {
+    console.error('Error getting budget:', error);
+    return null;
+  }
+};
+
+/**
+ * Set monthly budget
+ */
+export const setBudget = async (amount: number): Promise<boolean> => {
+  try {
+    await AsyncStorage.setItem(BUDGET_KEY, amount.toString());
+    return true;
+  } catch (error) {
+    console.error('Error setting budget:', error);
+    return false;
+  }
 };
 

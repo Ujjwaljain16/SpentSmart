@@ -4,60 +4,59 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { format } from 'date-fns';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Colors, BorderRadius, FontSizes, Spacing } from '@/constants/theme';
-import { Transaction, MonthlyStats } from '@/types/transaction';
-import { CategoryPieChart } from '@/components/charts/category-pie-chart';
-import { TransactionCard } from '@/components/transactions/transaction-card';
-import {
-  getRecentTransactions,
-  getMonthlyStats,
-  getCurrentMonthKey,
-  deleteTransaction,
-} from '@/services/storage';
+import { Colors, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { PendingManager } from '@/services/pending-manager';
+import { calculateInsights, Period, PeriodInsights } from '@/services/analytics';
+import { getBudget } from '@/services/storage';
+
+import { BalanceCard } from '@/components/home/BalanceCard';
+import { InsightsGrid } from '@/components/home/InsightsGrid';
+import { FloatingScanButton } from '@/components/home/FloatingScanButton';
+import { TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { BorderRadius, FontSizes } from '@/constants/theme';
 
 export default function HomeScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'dark'];
   const insets = useSafeAreaInsets();
 
-  const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
-  const [monthlyStats, setMonthlyStats] = useState<MonthlyStats | null>(null);
+  const [period, setPeriod] = useState<Period>('week');
+  const [insights, setInsights] = useState<PeriodInsights | null>(null);
+  const [budget, setBudget] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-
-  const currentMonthKey = getCurrentMonthKey();
-  const currentMonthLabel = format(new Date(), 'MMMM yyyy');
+  const [loading, setLoading] = useState(true);
 
   const loadData = useCallback(async () => {
     try {
-      // 🛡️ Pre-emptive check for abandoned (killed) payment attempts
+      // Check for abandoned payment attempts
       const activePendings = await PendingManager.getPendings();
       if (activePendings.length > 0) {
-        console.log(`⚠️ Found ${activePendings.length} abandoned payments. Routing to recovery...`);
         router.push('/recover-pending');
         return;
       }
 
-      const [transactions, stats] = await Promise.all([
-        getRecentTransactions(5),
-        getMonthlyStats(currentMonthKey),
+      // Load insights for selected period
+      const [data, budgetData] = await Promise.all([
+        calculateInsights(period),
+        getBudget()
       ]);
-      setRecentTransactions(transactions);
-      setMonthlyStats(stats);
+      setInsights(data);
+      setBudget(budgetData);
     } catch (error) {
-      console.error('Error loading data:', error);
+      console.error('Error loading insights:', error);
+    } finally {
+      setLoading(false);
     }
-  }, [currentMonthKey]);
+  }, [period]);
 
   useFocusEffect(
     useCallback(() => {
@@ -71,183 +70,102 @@ export default function HomeScreen() {
     setRefreshing(false);
   };
 
-  const handleDelete = async (id: string) => {
-    await deleteTransaction(id);
-    loadData();
+  const handlePeriodChange = (newPeriod: Period) => {
+    // Don't reload if clicking same period
+    if (newPeriod === period) {
+      return;
+    }
+    setPeriod(newPeriod);
+    setLoading(true);
   };
 
-  const handleQRScan = () => {
-    router.push('/scanner');
-  };
-
-  const handleManualEntry = () => {
-    router.push('/manual-entry');
-  };
-
-  const handleEdit = (transaction: Transaction) => {
-    router.push({
-      pathname: '/edit-transaction',
-      params: {
-        id: transaction.id,
-        amount: transaction.amount.toString(),
-        category: transaction.category,
-        reason: transaction.reason || '',
-        payeeName: transaction.payeeName,
-        upiId: transaction.upiId,
-      },
-    });
-  };
+  // Solid background color
+  const backgroundColor = colorScheme === 'dark' ? '#1E3A8A' : '#3B82F6';
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+    <View style={[styles.container, { backgroundColor }]}>
+      <StatusBar style="light" />
 
       <ScrollView
-        style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingTop: insets.top + Spacing.md },
+          { paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + 120 }
         ]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={colors.tint}
+            tintColor="#FFF"
+            colors={['#3B82F6']} // Use primary blue for the spinner
+            progressBackgroundColor="#FFF" // White circular background for better contrast
           />
         }
-        showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={[styles.appName, { color: colors.tint }]}>
-            UPI Tracker
-          </Text>
-          <Text style={[styles.monthLabel, { color: colors.textSecondary }]}>
-            {currentMonthLabel}
-          </Text>
-        </View>
-
-        {/* Monthly Total Card */}
-        <View style={[styles.totalCard, { backgroundColor: colors.card }]}>
-          <Text style={[styles.totalLabel, { color: colors.textSecondary }]}>
-            Total Spent This Month
-          </Text>
-          <Text style={[styles.totalAmount, { color: colors.text }]}>
-            ₹{(monthlyStats?.total || 0).toLocaleString('en-IN', {
-              minimumFractionDigits: 0,
-              maximumFractionDigits: 2,
-            })}
-          </Text>
-          <Text style={[styles.transactionCount, { color: colors.textSecondary }]}>
-            {monthlyStats?.transactionCount || 0} transactions
-          </Text>
-        </View>
-
-        {/* Category Breakdown */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            Spending by Category
-          </Text>
-          {monthlyStats && (
-            <CategoryPieChart
-              categoryBreakdown={monthlyStats.categoryBreakdown}
-              total={monthlyStats.total}
-            />
-          )}
-        </View>
-
-        {/* Recent Transactions */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              Recent Transactions
-            </Text>
-            {recentTransactions.length > 0 && (
-              <TouchableOpacity
-                onPress={() => router.push('/history')}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Text style={[styles.seeAllButton, { color: colors.tint }]}>
-                  See All
-                </Text>
-              </TouchableOpacity>
-            )}
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#FFF" />
           </View>
+        ) : insights ? (
+          <>
+            {/* Balance Card */}
+            <BalanceCard
+              balance={insights.balance}
+              totalIncome={insights.totalIncome}
+              totalExpense={insights.totalExpense}
+              trend={insights.trend}
+              period={period}
+              budget={budget}
+              onPeriodChange={handlePeriodChange}
+            />
 
-          {recentTransactions.length === 0 ? (
-            <View style={[styles.emptyState, { backgroundColor: colors.card }]}>
-              <Ionicons
-                name="receipt-outline"
-                size={48}
-                color={colors.textSecondary}
-              />
-              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                No transactions yet
-              </Text>
-              <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>
-                Tap the button below to start tracking
-              </Text>
+            {/* Quick Actions Row */}
+            <View style={styles.quickActionsRow}>
+              <TouchableOpacity
+                style={[styles.quickAction, { backgroundColor: 'rgba(255,255,255,0.1)' }]}
+                onPress={() => router.push('/manual-entry')}
+              >
+                <View style={[styles.actionIcon, { backgroundColor: '#1E40AF' }]}>
+                  <Ionicons name="send-outline" size={20} color="#FFF" />
+                </View>
+                <Text style={styles.actionLabel}>Transfer</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.quickAction, { backgroundColor: 'rgba(255,255,255,0.1)' }]}
+                onPress={() => router.push('/receive')}
+              >
+                <View style={[styles.actionIcon, { backgroundColor: '#065F46' }]}>
+                  <Ionicons name="download-outline" size={20} color="#FFF" />
+                </View>
+                <Text style={styles.actionLabel}>Receive</Text>
+              </TouchableOpacity>
             </View>
-          ) : (
-            recentTransactions.map((transaction) => (
-              <TransactionCard
-                key={transaction.id}
-                transaction={transaction}
-                onDelete={handleDelete}
-                onEdit={handleEdit}
-              />
-            ))
-          )}
-        </View>
 
-        {/* Bottom padding for FABs */}
-        <View style={{ height: 120 }} />
+            {/* Insights Grid */}
+            {insights.totalExpense > 0 ? (
+              <InsightsGrid
+                categoryBreakdown={insights.categoryBreakdown}
+                topPayees={insights.topPayees}
+              />
+            ) : (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyTitle}>No spending data</Text>
+                <Text style={styles.emptySubtitle}>
+                  Scan first UPI → Auto track everything
+                </Text>
+              </View>
+            )}
+          </>
+        ) : (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyTitle}>Unable to load data</Text>
+            <Text style={styles.emptySubtitle}>Pull to refresh</Text>
+          </View>
+        )}
       </ScrollView>
 
-      {/* Payment Options */}
-      <View
-        style={[
-          styles.paymentOptions,
-          {
-            bottom: insets.bottom + Spacing.md,
-          },
-        ]}
-      >
-        {/* QR Scan Button */}
-        <TouchableOpacity
-          style={[
-            styles.paymentButton,
-            styles.qrButton,
-            {
-              backgroundColor: colors.tint,
-            },
-          ]}
-          onPress={handleQRScan}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="scan" size={24} color="#fff" />
-          <Text style={styles.paymentButtonText}>Scan QR</Text>
-        </TouchableOpacity>
-
-        {/* Manual Entry Button */}
-        <TouchableOpacity
-          style={[
-            styles.paymentButton,
-            styles.manualButton,
-            {
-              backgroundColor: colors.card,
-              borderColor: colors.border,
-            },
-          ]}
-          onPress={handleManualEntry}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="create-outline" size={24} color={colors.text} />
-          <Text style={[styles.paymentButtonText, { color: colors.text }]}>
-            Manual
-          </Text>
-        </TouchableOpacity>
-      </View>
+      {/* Floating Scan Button */}
+      <FloatingScanButton />
     </View>
   );
 }
@@ -256,104 +174,54 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  scrollView: {
-    flex: 1,
-  },
   scrollContent: {
     paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.xl,
   },
-  header: {
-    marginBottom: Spacing.lg,
-  },
-  appName: {
-    fontSize: FontSizes.xxl,
-    fontWeight: '700',
-    marginBottom: Spacing.xs,
-  },
-  monthLabel: {
-    fontSize: FontSizes.md,
-  },
-  totalCard: {
-    padding: Spacing.xl,
-    borderRadius: BorderRadius.xl,
+  loadingContainer: {
+    flex: 1,
     alignItems: 'center',
-    marginBottom: Spacing.xl,
-  },
-  totalLabel: {
-    fontSize: FontSizes.sm,
-    marginBottom: Spacing.xs,
-  },
-  totalAmount: {
-    fontSize: FontSizes.display,
-    fontWeight: '700',
-    marginBottom: Spacing.xs,
-  },
-  transactionCount: {
-    fontSize: FontSizes.sm,
-  },
-  section: {
-    marginBottom: Spacing.xl,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.md,
-  },
-  sectionTitle: {
-    fontSize: FontSizes.lg,
-    fontWeight: '600',
-    marginBottom: Spacing.md,
-  },
-  seeAllButton: {
-    fontSize: FontSizes.sm,
-    fontWeight: '500',
+    justifyContent: 'center',
+    paddingVertical: 100,
   },
   emptyState: {
-    padding: Spacing.xl,
-    borderRadius: BorderRadius.lg,
     alignItems: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: Spacing.lg,
   },
-  emptyText: {
-    fontSize: FontSizes.md,
-    fontWeight: '500',
-    marginTop: Spacing.md,
-    marginBottom: Spacing.xs,
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#FFF',
+    marginBottom: 12,
   },
-  emptySubtext: {
-    fontSize: FontSizes.sm,
+  emptySubtitle: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.8)',
     textAlign: 'center',
+    lineHeight: 22,
   },
-  paymentOptions: {
-    position: 'absolute',
-    left: Spacing.lg,
-    right: Spacing.lg,
+  quickActionsRow: {
     flexDirection: 'row',
     gap: Spacing.md,
+    marginBottom: Spacing.xl,
   },
-  paymentButton: {
+  quickAction: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.md,
+    padding: 12,
+    borderRadius: BorderRadius.lg,
     gap: Spacing.sm,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
   },
-  qrButton: {
-    // Primary button styling handled by backgroundColor
+  actionIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  manualButton: {
-    borderWidth: 1,
-  },
-  paymentButtonText: {
-    color: '#fff',
+  actionLabel: {
+    color: '#FFF',
     fontSize: FontSizes.md,
     fontWeight: '600',
   },

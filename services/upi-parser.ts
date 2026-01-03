@@ -11,9 +11,22 @@ export const parseUPIQRCode = (qrData: string): UPIPaymentData | null => {
   try {
     if (!qrData) return null;
 
-    // Normalize the URL scheme to lowercase
+    console.log('🔍 Original QR Code:', qrData);
+
+    // BHARAT QR DETECTION: EMV format QRs (TLV encoded)
+    // These start with digits, not "upi://"
+    // Don't parse - let UPI apps handle EMV format directly
+    const isUpiFormat = qrData.toLowerCase().startsWith('upi://') ||
+      qrData.toLowerCase().startsWith('upi:');
+
+    if (!isUpiFormat) {
+      console.log('🏛️ Bharat QR / EMV format detected - passing raw to UPI app');
+      return null; // Signal to handle as raw QR
+    }
+
+    // Normalize the URL scheme to lowercase (only prefix)
     let normalizedData = qrData.trim();
-    
+
     // Handle case-insensitive upi:// prefix
     if (normalizedData.toLowerCase().startsWith('upi://')) {
       normalizedData = 'upi://' + normalizedData.substring(6);
@@ -44,6 +57,9 @@ export const parseUPIQRCode = (qrData: string): UPIPaymentData | null => {
       // Keep original if decode fails
     }
 
+    // Clean up payee name: trim and normalize whitespace
+    payeeName = payeeName.trim().replace(/\s+/g, ' ');
+
     // Extract amount if present (am)
     const amountStr = params.get('am');
     let amount: number | undefined;
@@ -59,17 +75,34 @@ export const parseUPIQRCode = (qrData: string): UPIPaymentData | null => {
     const tnValue = params.get('tn');
     if (tnValue) {
       try {
-        transactionNote = decodeURIComponent(tnValue);
+        transactionNote = decodeURIComponent(tnValue).trim();
       } catch (e) {
-        transactionNote = tnValue;
+        transactionNote = tnValue.trim();
       }
     }
+
+    // Extract ALL parameters PRESERVING ORIGINAL ENCODING
+    // URLSearchParams decodes values, but we need the ORIGINAL encoded form!
+    const rawParams: Record<string, string> = {};
+
+    // Parse the query string manually to preserve encoding
+    const queryString = url.search.substring(1); // Remove '?'
+    queryString.split('&').forEach(pair => {
+      const [key, value] = pair.split('=');
+      if (key && value) {
+        rawParams[key] = value; // Store ENCODED value as-is from QR
+      }
+    });
+
+    console.log('📦 Parsed QR with all params:', Object.keys(rawParams));
+    console.log('🔍 pn raw value:', rawParams['pn']); // Debug what we're storing
 
     return {
       upiId,
       payeeName,
       amount,
       transactionNote,
+      rawParams, // CRITICAL: Actually return rawParams!
     };
   } catch (error) {
     console.error('Failed to parse UPI QR code:', error);
@@ -83,7 +116,7 @@ export const parseUPIQRCode = (qrData: string): UPIPaymentData | null => {
  */
 export const isValidUPIId = (upiId: string): boolean => {
   if (!upiId || typeof upiId !== 'string') return false;
-  
+
   // UPI ID format: username@bankhandle
   const upiPattern = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9]+$/;
   return upiPattern.test(upiId.trim());

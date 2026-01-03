@@ -105,7 +105,7 @@ export async function launchUPIFallback(upiUrl: string = 'upi://pay'): Promise<b
  * Open a UPI app by package name (like tapping app icon)
  * Returns true if successful, false if app not installed
  */
-export async function openUPIApp(appId: string): Promise<boolean> {
+export async function openUPIApp(appId: string, url?: string): Promise<boolean> {
     // 1. Try to find in our hardcoded list for known schemes/names
     let app = UPI_APPS.find(a => a.id === appId);
 

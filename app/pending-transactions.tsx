@@ -90,67 +90,52 @@ export default function PendingTransactionsScreen() {
     };
 
     const renderTransaction = ({ item }: { item: Transaction }) => (
-        <View style={[styles.card, { backgroundColor: colors.card }]}>
+        <View style={[styles.card, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1 }]}>
             <View style={styles.cardHeader}>
                 <View style={styles.cardInfo}>
-                    <Text style={[styles.amount, { color: colors.text }]}>
+                    <Text style={[styles.amount, { color: '#FFF' }]}>
                         ₹{item.amount.toLocaleString('en-IN')}
                     </Text>
-                    <Text style={[styles.category, { color: colors.textSecondary }]}>
+                    <Text style={[styles.category, { color: 'rgba(255, 255, 255, 0.6)' }]}>
                         {item.category}
-                    </Text>
-                </View>
-                <View style={[styles.confidenceBadge, {
-                    backgroundColor: item.confidence >= 70
-                        ? `${colors.success}20`
-                        : item.confidence >= 40
-                            ? `${colors.warning}20`
-                            : `${colors.error}20`
-                }]}>
-                    <Text style={[styles.confidenceText, {
-                        color: item.confidence >= 70
-                            ? colors.success
-                            : item.confidence >= 40
-                                ? colors.warning
-                                : colors.error
-                    }]}>
-                        {item.confidence}%
                     </Text>
                 </View>
             </View>
 
-            <Text style={[styles.payee, { color: colors.text }]}>
+            <Text style={[styles.payee, { color: '#FFF' }]}>
                 {item.payeeName}
             </Text>
 
-            {item.reason && (
-                <Text style={[styles.reason, { color: colors.textSecondary }]}>
-                    {item.reason}
-                </Text>
-            )}
+            {
+                item.reason && (
+                    <Text style={[styles.reason, { color: 'rgba(255, 255, 255, 0.6)' }]}>
+                        {item.reason}
+                    </Text>
+                )
+            }
 
-            <Text style={[styles.time, { color: colors.textSecondary }]}>
+            <Text style={[styles.time, { color: 'rgba(255, 255, 255, 0.5)' }]}>
                 {format(new Date(item.timestamp), 'MMM d, h:mm a')}
             </Text>
 
             <View style={styles.actions}>
                 <TouchableOpacity
-                    style={[styles.button, styles.confirmButton, { backgroundColor: colors.success }]}
+                    style={[styles.button, styles.confirmButton, { backgroundColor: '#3B82F6' }]}
                     onPress={() => handleConfirm(item)}
                 >
                     <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
-                    <Text style={styles.buttonText}>Paid</Text>
+                    <Text style={styles.buttonText}>Confirmed</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                    style={[styles.button, styles.failButton, { backgroundColor: colors.error }]}
+                    style={[styles.button, styles.failButton, { backgroundColor: 'rgba(255, 255, 255, 0.15)', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.2)' }]}
                     onPress={() => handleFail(item)}
                 >
                     <Ionicons name="close-circle" size={20} color="#FFFFFF" />
-                    <Text style={styles.buttonText}>Failed</Text>
+                    <Text style={[styles.buttonText, { color: '#FFF' }]}>Failed</Text>
                 </TouchableOpacity>
             </View>
-        </View>
+        </View >
     );
 
     const renderEmpty = () => (
@@ -301,15 +286,6 @@ const styles = StyleSheet.create({
     },
     category: {
         fontSize: FontSizes.sm,
-    },
-    confidenceBadge: {
-        paddingHorizontal: Spacing.sm,
-        paddingVertical: 4,
-        borderRadius: BorderRadius.md,
-    },
-    confidenceText: {
-        fontSize: FontSizes.xs,
-        fontWeight: '700',
     },
     payee: {
         fontSize: FontSizes.md,

@@ -49,7 +49,6 @@ export default function RecoverPendingScreen() {
                     amountNum,
                     tx.timestamp
                 );
-                console.log('✅ Transaction recovered and saved');
             }
 
             await PendingManager.resolvePending(tx.id, status);
@@ -75,16 +74,19 @@ export default function RecoverPendingScreen() {
         return `${hours}h ago`;
     };
 
+    // Match home/charts background
+    const backgroundColor = colorScheme === 'dark' ? '#1E3A8A' : '#3B82F6';
+
     return (
-        <View style={[styles.container, { backgroundColor: colors.background }]}>
-            <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+        <View style={[styles.container, { backgroundColor }]}>
+            <StatusBar style="light" />
 
             {/* Header */}
-            <View style={[styles.header, { paddingTop: insets.top + Spacing.md, borderBottomColor: colors.border }]}>
-                <Text style={[styles.headerTitle, { color: colors.text }]}>
+            <View style={[styles.header, { paddingTop: insets.top + Spacing.md, borderBottomColor: 'rgba(255, 255, 255, 0.1)' }]}>
+                <Text style={[styles.headerTitle, { color: '#FFF' }]}>
                     Recover Payments
                 </Text>
-                <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
+                <Text style={[styles.headerSubtitle, { color: 'rgba(255, 255, 255, 0.7)' }]}>
                     You opened a UPI app but didn't confirm the payment.
                 </Text>
             </View>
@@ -93,51 +95,42 @@ export default function RecoverPendingScreen() {
                 {pendings.map((tx) => {
                     const confidence = PendingManager.getConfidence(tx);
                     return (
-                        <View key={tx.id} style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                            <View style={styles.cardHeader}>
-                                <View>
-                                    <Text style={[styles.payeeName, { color: colors.text }]}>
-                                        {tx.paymentData.payeeName}
-                                    </Text>
-                                    <Text style={[styles.upiId, { color: colors.textSecondary }]}>
-                                        {tx.paymentData.upiId}
-                                    </Text>
-                                </View>
-                                <View style={[styles.confidenceBadge, { backgroundColor: confidence > 60 ? '#22c55e' : '#eab308' }]}>
-                                    <Text style={styles.confidenceText}>{confidence}% Match</Text>
-                                </View>
-                            </View>
-
+                        <View key={tx.id} style={[styles.card, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1 }]}>
                             <View style={styles.cardDetails}>
                                 <View style={styles.detailRow}>
-                                    <Text style={[styles.amount, { color: colors.text }]}>
+                                    <Text style={[styles.payeeName, { color: '#FFF' }]}>
+                                        {tx.paymentData.payeeName}
+                                    </Text>
+                                    <Text style={[styles.amount, { color: '#FFF' }]}>
                                         ₹{tx.paymentData.amount?.toFixed(2) || '0.00'}
                                     </Text>
-                                    <Text style={[styles.timestamp, { color: colors.textSecondary }]}>
+                                </View>
+                                <View style={styles.detailRow}>
+                                    <Text style={[styles.timestamp, { color: 'rgba(255, 255, 255, 0.6)' }]}>
                                         {getTimeAgo(tx.timestamp)}
                                     </Text>
+                                    <View style={[styles.categoryTag, { borderColor: 'rgba(255, 255, 255, 0.3)', backgroundColor: 'rgba(255, 255, 255, 0.05)' }]}>
+                                        <Text style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: 10 }}>#{tx.category}</Text>
+                                    </View>
                                 </View>
                                 {tx.reason && (
-                                    <Text style={[styles.reason, { color: colors.textSecondary }]}>
+                                    <Text style={[styles.reason, { color: 'rgba(255, 255, 255, 0.6)' }]}>
                                         "{tx.reason}"
                                     </Text>
                                 )}
-                                <Text style={[styles.categoryTag, { color: colors.tint, borderColor: colors.tint }]}>
-                                    #{tx.category}
-                                </Text>
                             </View>
 
                             <View style={styles.cardActions}>
                                 <TouchableOpacity
-                                    style={[styles.actionButton, styles.cancelButton, { backgroundColor: colors.border }]}
+                                    style={[styles.actionButton, styles.cancelButton, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1 }]}
                                     onPress={() => handleResolve(tx, 'cancelled')}
                                 >
-                                    <Ionicons name="close-outline" size={20} color={colors.text} />
-                                    <Text style={[styles.actionText, { color: colors.text }]}>Didn't Pay</Text>
+                                    <Ionicons name="close-outline" size={20} color="#FFF" />
+                                    <Text style={[styles.actionText, { color: '#FFF' }]}>Didn't Pay</Text>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity
-                                    style={[styles.actionButton, styles.payButton, { backgroundColor: colors.tint }]}
+                                    style={[styles.actionButton, styles.payButton, { backgroundColor: '#3B82F6' }]}
                                     onPress={() => handleResolve(tx, 'confirmed')}
                                 >
                                     <Ionicons name="checkmark-outline" size={20} color="#fff" />
@@ -198,17 +191,6 @@ const styles = StyleSheet.create({
     },
     upiId: {
         fontSize: FontSizes.sm,
-    },
-    confidenceBadge: {
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: BorderRadius.sm,
-    },
-    confidenceText: {
-        color: '#fff',
-        fontSize: 10,
-        fontWeight: '800',
-        textTransform: 'uppercase',
     },
     cardDetails: {
         marginBottom: Spacing.xl,

@@ -48,9 +48,24 @@ function RootLayoutNav() {
 
   // Handle locking when app goes to background
   React.useEffect(() => {
+    // Grace period reference to track when we backgrounded
+    let backgroundTime: number | null = null;
+
     const subscription = AppState.addEventListener('change', nextAppState => {
       if (nextAppState === 'background' || nextAppState === 'inactive') {
-        lockApp();
+        // Mark the time we went to background
+        backgroundTime = Date.now();
+      } else if (nextAppState === 'active') {
+        // App came back to foreground
+        if (backgroundTime) {
+          const timeInBackground = Date.now() - backgroundTime;
+          // Only lock if we were gone for more than 2 minutes (120000ms)
+          // This prevents locking during "Pick Contact" or "Permission Requests"
+          if (timeInBackground > 120000) {
+            lockApp();
+          }
+          backgroundTime = null;
+        }
       }
     });
 

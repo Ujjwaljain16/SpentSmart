@@ -8,8 +8,8 @@ We use EAS (Expo Application Services) to build the standalone APK.
 
 ### 1. Run the Build Command
 ```bash
-# Build for Android (Preview profile = APK)
-eas build --platform android --profile preview
+# Build Optimized APK (Small Size ~40-60MB)
+eas build --platform android --profile release-apk
 ```
 
 ### 2. Wait for Completion

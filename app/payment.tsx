@@ -30,12 +30,14 @@ import { SlideToPay } from '@/components/ui/SlideToPay';
 import { ConfirmationModal } from '@/components/ui/ConfirmationModal';
 
 export default function PaymentScreen() {
+  /* Updated Params to accept Category */
   const params = useLocalSearchParams<{
     upiId: string;
     payeeName: string;
     amount: string;
     transactionNote: string;
     rawParams?: string;
+    initialCategory?: CategoryType; /* Added Param */
   }>();
 
   // Helper to safely parse params
@@ -51,7 +53,8 @@ export default function PaymentScreen() {
     : undefined;
 
   const [amount, setAmount] = useState(paymentData.amount || '');
-  const [category, setCategory] = useState<CategoryType>('food'); // Default category
+  /* Initialize with param or default */
+  const [category, setCategory] = useState<CategoryType>(params.initialCategory as CategoryType || 'food');
   const [isLoading, setIsLoading] = useState(false);
   const [installedApps, setInstalledApps] = useState<UPIAppInfo[]>([]);
   const [preferredApp, setPreferredApp] = useState<string | null>(null);

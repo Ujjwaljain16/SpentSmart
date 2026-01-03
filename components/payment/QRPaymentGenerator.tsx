@@ -1,11 +1,14 @@
 import React, { useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Linking } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Linking, ScrollView } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import ViewShot from 'react-native-view-shot';
 import * as MediaLibrary from 'expo-media-library';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, BorderRadius, FontSizes, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { openUPIApp } from '@/services/upi-app-launcher';
+import { PendingManager } from '@/services/pending-manager';
+import { router } from 'expo-router';
 
 interface QRGeneratorProps {
     upiUrl: string;
@@ -36,37 +39,64 @@ export function QRPaymentGenerator({
             }
 
             // Capture the QR view as image
-            if (qrRef.current) {
+            if (qrRef.current?.capture) {
                 const uri = await qrRef.current.capture();
 
                 // Save to gallery
                 const asset = await MediaLibrary.saveToLibraryAsync(uri);
 
+                // Don't use deep linking - just open the app
                 Alert.alert(
                     'QR Code Saved! 📸',
-                    'Now open your UPI app and scan from gallery',
+                    'Open your UPI app and scan the QR from gallery. Mark as pending to track this expense.',
                     [
                         {
-                            text: 'Done',
-                            onPress: onClose
+                            text: 'Mark as Pending',
+                            onPress: async () => {
+                                // Save as pending transaction
+                                await PendingManager.savePending({
+                                    id: `qr_${Date.now()}`,
+                                    paymentData: {
+                                        upiId,
+                                        payeeName,
+                                        amount: amount || 0,
+                                        transactionNote: '',
+                                    },
+                                    category: 'other',
+                                    reason: 'QR Code Payment',
+                                    timestamp: Date.now(),
+                                    status: 'pending',
+                                });
+                                onClose();
+                                // Navigate to pending transactions
+                                router.push('/pending-transactions');
+                            },
+                            style: 'default'
                         },
                         {
                             text: 'Open GPay',
-                            onPress: () => {
-                                // Try to open GPay directly
-                                Linking.openURL('tez://').catch(() => {
+                            onPress: async () => {
+                                try {
+                                    await openUPIApp('gpay');
+                                } catch (error) {
                                     Alert.alert('GPay not installed', 'Please install Google Pay');
-                                });
+                                }
                             }
                         },
                         {
                             text: 'Open PhonePe',
-                            onPress: () => {
-                                // Try to open PhonePe directly
-                                Linking.openURL('phonepe://').catch(() => {
+                            onPress: async () => {
+                                try {
+                                    await openUPIApp('phonepe');
+                                } catch (error) {
                                     Alert.alert('PhonePe not installed', 'Please install PhonePe');
-                                });
+                                }
                             }
+                        },
+                        {
+                            text: 'Done',
+                            onPress: onClose,
+                            style: 'cancel'
                         }
                     ]
                 );
@@ -87,7 +117,10 @@ export function QRPaymentGenerator({
                 <View style={styles.closeButton} />
             </View>
 
-            <View style={styles.content}>
+            <ScrollView
+                contentContainerStyle={[styles.content, { flex: undefined, flexGrow: 1 }]}
+                showsVerticalScrollIndicator={false}
+            >
                 <ViewShot ref={qrRef} options={{ format: 'png', quality: 1.0 }}>
                     <View style={[styles.qrContainer, { backgroundColor: '#FFFFFF' }]}>
                         <Text style={styles.qrTitle}>Scan in UPI App</Text>
@@ -104,7 +137,7 @@ export function QRPaymentGenerator({
                         <View style={styles.qrDetails}>
                             <Text style={styles.qrPayeeName}>{payeeName}</Text>
                             <Text style={styles.qrUpiId}>{upiId}</Text>
-                            {amount && (
+                            {!!amount && amount > 0 && (
                                 <Text style={styles.qrAmount}>₹{amount.toFixed(2)}</Text>
                             )}
                         </View>
@@ -148,7 +181,7 @@ export function QRPaymentGenerator({
                     <Ionicons name="download" size={20} color="#fff" />
                     <Text style={styles.saveButtonText}>Save QR to Gallery</Text>
                 </TouchableOpacity>
-            </View>
+            </ScrollView>
         </View>
     );
 }
@@ -184,10 +217,7 @@ const styles = StyleSheet.create({
         padding: Spacing.xl,
         borderRadius: BorderRadius.lg,
         alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
+        boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
         elevation: 4,
     },
     qrTitle: {

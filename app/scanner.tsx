@@ -12,6 +12,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useIsFocused } from '@react-navigation/native';
 
 import { Colors, BorderRadius, FontSizes, Spacing } from '@/constants/theme';
 import { parseUPIQRCode } from '@/services/upi-parser';
@@ -26,6 +27,7 @@ export default function ScannerScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'dark'];
   const insets = useSafeAreaInsets();
+  const isFocused = useIsFocused();
 
   useEffect(() => {
     if (!permission?.granted) {
@@ -35,7 +37,7 @@ export default function ScannerScreen() {
 
   const handleBarCodeScanned = (result: BarcodeScanningResult) => {
     if (scanned) return;
-    
+
     setScanned(true);
     const qrData = result.data;
 
@@ -43,6 +45,11 @@ export default function ScannerScreen() {
     const paymentData = parseUPIQRCode(qrData);
 
     if (paymentData) {
+      // Base64 encode rawParams to prevent Expo Router from decoding URL params
+      const rawParamsB64 = paymentData.rawParams
+        ? btoa(JSON.stringify(paymentData.rawParams))
+        : '';
+
       // Navigate to payment screen with parsed data
       router.replace({
         pathname: '/payment',
@@ -51,6 +58,7 @@ export default function ScannerScreen() {
           payeeName: paymentData.payeeName,
           amount: paymentData.amount?.toString() || '',
           transactionNote: paymentData.transactionNote || '',
+          rawParams: rawParamsB64, // Pass as Base64 to preserve encoding
         },
       });
     } else {
@@ -88,26 +96,28 @@ export default function ScannerScreen() {
 
   if (!permission.granted) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.container, { backgroundColor: '#1E3A8A' }]}>
         <View style={styles.permissionContainer}>
-          <Ionicons name="camera-outline" size={64} color={colors.textSecondary} />
-          <Text style={[styles.title, { color: colors.text }]}>
+          <View style={[styles.shieldContainer, { backgroundColor: 'rgba(255, 255, 255, 0.1)' }]}>
+            <Ionicons name="camera-outline" size={64} color="#FFF" />
+          </View>
+          <Text style={[styles.title, { color: '#FFF' }]}>
             Camera Access Required
           </Text>
-          <Text style={[styles.message, { color: colors.textSecondary }]}>
+          <Text style={[styles.message, { color: 'rgba(255, 255, 255, 0.7)' }]}>
             Please allow camera access to scan UPI QR codes
           </Text>
           <TouchableOpacity
-            style={[styles.permissionButton, { backgroundColor: colors.tint }]}
+            style={[styles.permissionButton, { backgroundColor: '#3B82F6' }]}
             onPress={requestPermission}
           >
             <Text style={styles.permissionButtonText}>Grant Permission</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.cancelButton, { borderColor: colors.border }]}
+            style={[styles.cancelButton, { borderColor: 'rgba(255, 255, 255, 0.3)' }]}
             onPress={handleClose}
           >
-            <Text style={[styles.cancelButtonText, { color: colors.textSecondary }]}>
+            <Text style={[styles.cancelButtonText, { color: 'rgba(255, 255, 255, 0.7)' }]}>
               Go Back
             </Text>
           </TouchableOpacity>
@@ -119,13 +129,15 @@ export default function ScannerScreen() {
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
-      <CameraView
-        style={StyleSheet.absoluteFillObject}
-        barcodeScannerSettings={{
-          barcodeTypes: ['qr'],
-        }}
-        onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
-      />
+      {isFocused && (
+        <CameraView
+          style={StyleSheet.absoluteFillObject}
+          barcodeScannerSettings={{
+            barcodeTypes: ['qr'],
+          }}
+          onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+        />
+      )}
 
       {/* Overlay */}
       <View style={styles.overlay}>
@@ -182,6 +194,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: Spacing.xl,
   },
+  shieldContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: Spacing.xl,
+  },
   title: {
     fontSize: FontSizes.xl,
     fontWeight: '600',
@@ -237,7 +257,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 30,
     height: 30,
-    borderColor: '#14B8A6',
+    borderColor: '#3B82F6',
     borderWidth: 4,
   },
   topLeft: {
@@ -289,7 +309,7 @@ const styles = StyleSheet.create({
     marginTop: Spacing.lg,
     paddingVertical: Spacing.md,
     paddingHorizontal: Spacing.xl,
-    backgroundColor: '#14B8A6',
+    backgroundColor: '#3B82F6',
     borderRadius: BorderRadius.md,
   },
   rescanButtonText: {

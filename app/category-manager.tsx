@@ -33,7 +33,7 @@ export default function CategoryManagerScreen() {
 
   const [categories, setCategories] = useState<CategoryInfo[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
-  
+
   // New category form state
   const [newLabel, setNewLabel] = useState('');
   const [selectedIcon, setSelectedIcon] = useState('pricetag');
@@ -87,7 +87,7 @@ export default function CategoryManagerScreen() {
 
   const handleAddCategory = async () => {
     const trimmedLabel = newLabel.trim();
-    
+
     if (!trimmedLabel) {
       Alert.alert('Required', 'Please enter a category name.');
       return;
@@ -113,7 +113,7 @@ export default function CategoryManagerScreen() {
         icon: selectedIcon,
         color: selectedColor,
       });
-      
+
       setShowAddModal(false);
       setNewLabel('');
       setSelectedIcon('pricetag');
@@ -155,9 +155,12 @@ export default function CategoryManagerScreen() {
     return 'pricetag';
   };
 
+  // Match home/charts background
+  const backgroundColor = colorScheme === 'dark' ? '#1E3A8A' : '#3B82F6';
+
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+    <View style={[styles.container, { backgroundColor }]}>
+      <StatusBar style="light" />
 
       {/* Header */}
       <View
@@ -165,22 +168,22 @@ export default function CategoryManagerScreen() {
           styles.header,
           {
             paddingTop: insets.top + Spacing.sm,
-            backgroundColor: colors.surface,
-            borderBottomColor: colors.border,
+            backgroundColor: 'transparent',
+            borderBottomColor: 'rgba(255, 255, 255, 0.1)',
           },
         ]}
       >
         <TouchableOpacity onPress={handleClose} style={styles.headerButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <Ionicons name="arrow-back" size={24} color="#FFF" />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>
+        <Text style={[styles.headerTitle, { color: '#FFF' }]}>
           Manage Categories
         </Text>
         <TouchableOpacity
           onPress={() => setShowAddModal(true)}
           style={styles.headerButton}
         >
-          <Ionicons name="add" size={24} color={colors.tint} />
+          <Ionicons name="add" size={24} color="#3B82F6" />
         </TouchableOpacity>
       </View>
 
@@ -190,7 +193,7 @@ export default function CategoryManagerScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Categories List */}
-        <View style={[styles.card, { backgroundColor: colors.card }]}>
+        <View style={[styles.card, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1 }]}>
           {categories.map((category, index) => (
             <View key={category.key}>
               <View style={styles.categoryItem}>
@@ -207,10 +210,10 @@ export default function CategoryManagerScreen() {
                   />
                 </View>
                 <View style={styles.categoryInfo}>
-                  <Text style={[styles.categoryLabel, { color: colors.text }]}>
+                  <Text style={[styles.categoryLabel, { color: '#FFF' }]}>
                     {category.label}
                   </Text>
-                  <Text style={[styles.categoryKey, { color: colors.textSecondary }]}>
+                  <Text style={[styles.categoryKey, { color: 'rgba(255, 255, 255, 0.5)' }]}>
                     {category.key}
                   </Text>
                 </View>
@@ -220,12 +223,12 @@ export default function CategoryManagerScreen() {
                     style={styles.deleteButton}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
-                    <Ionicons name="trash-outline" size={20} color={colors.error} />
+                    <Ionicons name="trash-outline" size={20} color="#EF4444" />
                   </TouchableOpacity>
                 )}
               </View>
               {index < categories.length - 1 && (
-                <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                <View style={[styles.divider, { backgroundColor: 'rgba(255, 255, 255, 0.1)' }]} />
               )}
             </View>
           ))}
@@ -233,11 +236,11 @@ export default function CategoryManagerScreen() {
 
         {/* Reset Button */}
         <TouchableOpacity
-          style={[styles.resetButton, { backgroundColor: colors.card }]}
+          style={[styles.resetButton, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1 }]}
           onPress={handleResetDefaults}
         >
-          <Ionicons name="refresh" size={20} color={colors.textSecondary} />
-          <Text style={[styles.resetButtonText, { color: colors.textSecondary }]}>
+          <Ionicons name="refresh" size={20} color="rgba(255, 255, 255, 0.7)" />
+          <Text style={[styles.resetButtonText, { color: 'rgba(255, 255, 255, 0.7)' }]}>
             Reset to Default Categories
           </Text>
         </TouchableOpacity>
@@ -255,23 +258,23 @@ export default function CategoryManagerScreen() {
             style={[
               styles.modalContent,
               {
-                backgroundColor: colors.surface,
+                backgroundColor: '#1E3A8A', // Deep blue modal
                 paddingBottom: insets.bottom + Spacing.lg,
               },
             ]}
           >
             {/* Modal Header */}
-            <View style={styles.modalHeader}>
+            <View style={[styles.modalHeader, { borderBottomColor: 'rgba(255, 255, 255, 0.1)' }]}>
               <TouchableOpacity onPress={() => setShowAddModal(false)}>
-                <Text style={[styles.modalCancel, { color: colors.textSecondary }]}>
+                <Text style={[styles.modalCancel, { color: 'rgba(255, 255, 255, 0.7)' }]}>
                   Cancel
                 </Text>
               </TouchableOpacity>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>
+              <Text style={[styles.modalTitle, { color: '#FFF' }]}>
                 New Category
               </Text>
               <TouchableOpacity onPress={handleAddCategory}>
-                <Text style={[styles.modalSave, { color: colors.tint }]}>
+                <Text style={[styles.modalSave, { color: '#3B82F6' }]}>
                   Add
                 </Text>
               </TouchableOpacity>
@@ -283,22 +286,22 @@ export default function CategoryManagerScreen() {
             >
               {/* Category Name */}
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+                <Text style={[styles.inputLabel, { color: 'rgba(255, 255, 255, 0.7)' }]}>
                   Name
                 </Text>
                 <TextInput
                   style={[
                     styles.textInput,
                     {
-                      backgroundColor: colors.card,
-                      borderColor: colors.border,
-                      color: colors.text,
+                      backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                      borderColor: 'rgba(255, 255, 255, 0.2)',
+                      color: '#FFF',
                     },
                   ]}
                   value={newLabel}
                   onChangeText={setNewLabel}
                   placeholder="e.g., Shopping, Entertainment"
-                  placeholderTextColor={colors.textSecondary}
+                  placeholderTextColor="rgba(255, 255, 255, 0.3)"
                   maxLength={20}
                   autoFocus
                 />
@@ -306,7 +309,7 @@ export default function CategoryManagerScreen() {
 
               {/* Preview */}
               <View style={styles.previewContainer}>
-                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+                <Text style={[styles.inputLabel, { color: 'rgba(255, 255, 255, 0.7)' }]}>
                   Preview
                 </Text>
                 <View
@@ -337,7 +340,7 @@ export default function CategoryManagerScreen() {
 
               {/* Color Picker */}
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+                <Text style={[styles.inputLabel, { color: 'rgba(255, 255, 255, 0.7)' }]}>
                   Color
                 </Text>
                 <View style={styles.colorGrid}>
@@ -361,7 +364,7 @@ export default function CategoryManagerScreen() {
 
               {/* Icon Picker */}
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+                <Text style={[styles.inputLabel, { color: 'rgba(255, 255, 255, 0.7)' }]}>
                   Icon
                 </Text>
                 <View style={styles.iconGrid}>
@@ -370,7 +373,7 @@ export default function CategoryManagerScreen() {
                       key={icon}
                       style={[
                         styles.iconOption,
-                        { backgroundColor: colors.card },
+                        { backgroundColor: 'rgba(255, 255, 255, 0.1)' },
                         selectedIcon === icon && {
                           backgroundColor: selectedColor,
                         },
@@ -380,7 +383,7 @@ export default function CategoryManagerScreen() {
                       <Ionicons
                         name={getIconName(icon)}
                         size={20}
-                        color={selectedIcon === icon ? '#fff' : colors.text}
+                        color={selectedIcon === icon ? '#fff' : '#FFF'}
                       />
                     </TouchableOpacity>
                   ))}

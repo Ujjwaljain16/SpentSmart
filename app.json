@@ -1,18 +1,20 @@
 {
   "expo": {
-    "name": "ExpenseTracker",
-    "slug": "expensetracker",
+    "name": "SpentSmart",
+    "slug": "spentsmart",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "expensetracker",
+    "scheme": "spentsmart",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.ujjwaljain.expensetracker",
+      "bundleIdentifier": "com.ujjwaljain.spentsmart",
       "infoPlist": {
-        "NSCameraUsageDescription": "ExpenseTracker needs camera access to scan UPI QR codes for payment tracking."
+        "NSCameraUsageDescription": "ExpenseTracker needs camera access to scan UPI QR codes for payment tracking.",
+        "NSFaceIDUsageDescription": "ExpenseTracker needs FaceID to secure your financial data.",
+        "NSContactsUsageDescription": "ExpenseTracker uses your contacts to help you easily select payees for manual transactions."
       }
     },
     "android": {
@@ -26,9 +28,11 @@
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "android.permission.CAMERA",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.READ_CONTACTS",
         "android.permission.RECORD_AUDIO"
       ],
-      "package": "com.ujjwaljain.expensetracker"
+      "package": "com.ujjwaljain.spentsmart"
     },
     "web": {
       "output": "static",
@@ -62,7 +66,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "e9ef3305-6be2-42f5-99e3-9cb7c304e985"
+        "projectId": "921b03ee-d272-469d-81d5-161813173ce9"
       }
     },
     "owner": "ujjwaljain16"

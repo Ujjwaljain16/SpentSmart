@@ -63,12 +63,6 @@ export default function ManualEntryScreen() {
     }
   };
 
-  const launchUPI = (amount: string, name: string) => {
-    const upiUrl = `upi://pay?pa=&pn=${encodeURIComponent(name)}&am=${amount}&cu=INR`;
-    Linking.openURL(upiUrl).catch(() => {
-      Alert.alert('Error', 'Could not launch UPI app. Please ensure you have a UPI app installed.');
-    });
-  };
 
   const handleSave = async () => {
     const parsedAmount = parseFloat(amount);
@@ -82,7 +76,54 @@ export default function ManualEntryScreen() {
       return;
     }
 
-    try {
+    if (type === 'expense' && paymentMethod === 'upi') {
+      Alert.alert(
+        'Transaction Saved',
+        'Would you like to complete the payment now?',
+        [
+          {
+            text: 'Just Save',
+            onPress: async () => {
+              // Save as completed immediately (Manual Entry logic)
+              await saveTransaction(
+                {
+                  upiId: upiId || 'manual',
+                  payeeName: payeeName,
+                  amount: parsedAmount,
+                  transactionNote: note,
+                },
+                category,
+                note || `Paid to ${payeeName}`,
+                parsedAmount,
+                Date.now(),
+                type,
+                paymentMethod
+              );
+              router.replace('/(tabs)');
+            },
+            style: 'cancel'
+          },
+          {
+            text: 'Pay Now',
+            onPress: () => {
+              // Redirect to Payment Screen for full verification flow
+              // We do NOT save it here yet, PaymentScreen will handle "Pending" -> "Completed"
+              router.push({
+                pathname: '/payment',
+                params: {
+                  upiId: upiId || '',
+                  payeeName: payeeName,
+                  amount: parsedAmount.toString(),
+                  transactionNote: note,
+                  initialCategory: category,
+                }
+              });
+            }
+          }
+        ]
+      );
+    } else {
+      // Non-UPI or Income: Save directly
       await saveTransaction(
         {
           upiId: upiId || 'manual',
@@ -97,32 +138,10 @@ export default function ManualEntryScreen() {
         type,
         paymentMethod
       );
-
-      if (type === 'expense' && paymentMethod === 'upi') {
-        Alert.alert(
-          'Transaction Saved',
-          'Would you like to complete the payment now?',
-          [
-            {
-              text: 'Later',
-              onPress: () => router.replace('/(tabs)'),
-              style: 'cancel'
-            },
-            {
-              text: 'Pay Now',
-              onPress: () => {
-                launchUPI(amount, payeeName);
-                router.replace('/(tabs)');
-              }
-            }
-          ]
-        );
-      } else {
-        router.replace('/(tabs)');
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to save transaction');
+      router.replace('/(tabs)');
     }
+    // Error handling moved to individual catch blocks if needed, 
+    // but here we are wrapping the "Just Save" async call.
   };
 
   const backgroundColor = colorScheme === 'dark' ? '#1E3A8A' : '#3B82F6';

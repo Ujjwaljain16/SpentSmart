@@ -46,31 +46,45 @@
 
 ```mermaid
 graph TD
-    User-->|Biometrics| SecurityLayer[Security Context]
-    SecurityLayer-->|Authenticated| AppLayer[App Layer]
-    
-    subgraph "UI Layer"
+    User -->|Biometrics| SecurityLayer
+    SecurityLayer -->|Authenticated| AppLayer
+
+    %% UI Layer
+    subgraph UILayer["UI Layer"]
         HomeScreen
         ScannerScreen
         PaymentModules
         AnalyticsDashboard
     end
-    
-    subgraph "Service Layer"
-        Storage[Storage Service]
-        Auth[Biometric Service]
-        UPI[Native UPI Intent]
-        Stats[Analytics Engine]
-    end
-    
-    subgraph "Data Layer"
-        AsyncStore[AsyncStorage JSON]
-        SecureStore[SecureStore (Keys)]
+
+    %% Service Layer
+    subgraph ServiceLayer["Service Layer"]
+        Storage
+        Auth
+        UPI
+        Stats
     end
 
-    AppLayer-->UI Layer
-    UI Layer-->Service Layer
-    Service Layer-->Data Layer
+    %% Data Layer
+    subgraph DataLayer["Data Layer"]
+        AsyncStore["AsyncStorage (JSON)"]
+        SecureStore["SecureStore (Keys)"]
+    end
+
+    %% Connections
+    AppLayer --> HomeScreen
+    AppLayer --> ScannerScreen
+    AppLayer --> PaymentModules
+    AppLayer --> AnalyticsDashboard
+
+    HomeScreen --> Storage
+    ScannerScreen --> Auth
+    PaymentModules --> UPI
+    AnalyticsDashboard --> Stats
+
+    Storage --> AsyncStore
+    Auth --> SecureStore
+
 ```
 
 ## 📊 Data Models & Types

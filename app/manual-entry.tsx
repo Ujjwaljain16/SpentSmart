@@ -55,7 +55,7 @@ export default function ManualEntryScreen() {
             // so we leave UPI ID empty for the user to fill or it defaults to 'manual'.
           }
         } catch (e) {
-          console.log('Contact picker error:', e);
+          console.error('Contact picker error:', e);
         }
       }
     } else {
@@ -144,18 +144,18 @@ export default function ManualEntryScreen() {
     // but here we are wrapping the "Just Save" async call.
   };
 
-  const backgroundColor = colorScheme === 'dark' ? '#1E3A8A' : '#3B82F6';
+  const isDark = colorScheme === 'dark';
 
   return (
-    <View style={[styles.container, { backgroundColor }]}>
-      <StatusBar style="light" />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
 
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + Spacing.sm }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
-          <Ionicons name="close" size={24} color="#FFF" />
+        <TouchableOpacity onPress={() => router.back()} style={[styles.headerButton, { backgroundColor: colors.card }]}>
+          <Ionicons name="close" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: '#FFF' }]}>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>
           Manual Entry
         </Text>
         <View style={{ width: 40 }} />
@@ -172,88 +172,88 @@ export default function ManualEntryScreen() {
               style={[
                 styles.typeOption,
                 type === 'expense' && styles.typeOptionActive,
-                { backgroundColor: type === 'expense' ? '#EF4444' : 'rgba(255,255,255,0.1)' }
+                { backgroundColor: type === 'expense' ? colors.error : colors.card }
               ]}
               onPress={() => {
                 setType('expense');
                 if (category === 'income') setCategory('food');
               }}
             >
-              <Text style={[styles.typeText, type === 'expense' && styles.typeTextActive]}>Expense</Text>
+              <Text style={[styles.typeText, { color: type === 'expense' ? '#FFF' : colors.textSecondary }]}>Expense</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[
                 styles.typeOption,
                 type === 'income' && styles.typeOptionActive,
-                { backgroundColor: type === 'income' ? '#10B981' : 'rgba(255,255,255,0.1)' }
+                { backgroundColor: type === 'income' ? colors.success : colors.card }
               ]}
               onPress={() => {
                 setType('income');
                 setCategory('income');
               }}
             >
-              <Text style={[styles.typeText, type === 'income' && styles.typeTextActive]}>Income</Text>
+              <Text style={[styles.typeText, { color: type === 'income' ? '#FFF' : colors.textSecondary }]}>Income</Text>
             </TouchableOpacity>
           </View>
 
           {/* Amount Input */}
           <View style={styles.amountContainer}>
-            <Text style={styles.currencySymbol}>₹</Text>
+            <Text style={[styles.currencySymbol, { color: colors.text }]}>₹</Text>
             <TextInput
-              style={styles.amountInput}
+              style={[styles.amountInput, { color: colors.text }]}
               value={amount}
               onChangeText={setAmount}
               placeholder="0"
-              placeholderTextColor="rgba(255,255,255,0.4)"
+              placeholderTextColor={colors.textSecondary}
               keyboardType="decimal-pad"
               autoFocus
             />
           </View>
 
           {/* Form Fields */}
-          <View style={styles.formCard}>
+          <View style={[styles.formCard, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
             <View style={styles.labelRow}>
-              <Text style={styles.label}>{type === 'income' ? 'Payer Name' : 'Payee Name'}</Text>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>{type === 'income' ? 'Payer Name' : 'Payee Name'}</Text>
               {type === 'expense' && (
-                <TouchableOpacity onPress={pickContact} style={styles.contactButton}>
-                  <Ionicons name="person-add-outline" size={16} color="#FFF" />
-                  <Text style={styles.contactButtonText}>Pick Contact</Text>
+                <TouchableOpacity onPress={pickContact} style={[styles.contactButton, { backgroundColor: colors.surface }]}>
+                  <Ionicons name="person-add-outline" size={16} color={colors.tint} />
+                  <Text style={[styles.contactButtonText, { color: colors.tint }]}>Pick Contact</Text>
                 </TouchableOpacity>
               )}
             </View>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { color: colors.text, borderColor: colors.border }]}
               value={payeeName}
               onChangeText={setPayeeName}
               placeholder="Name"
-              placeholderTextColor="rgba(255,255,255,0.4)"
+              placeholderTextColor={colors.textSecondary}
             />
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>UPI ID (Optional)</Text>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>UPI ID (Optional)</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { color: colors.text, borderColor: colors.border }]}
                 value={upiId}
                 onChangeText={setUpiId}
                 placeholder="user@bank"
-                placeholderTextColor="rgba(255,255,255,0.4)"
+                placeholderTextColor={colors.textSecondary}
                 autoCapitalize="none"
               />
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Note</Text>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>Note</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { color: colors.text, borderColor: colors.border }]}
                 value={note}
                 onChangeText={setNote}
                 placeholder="What was this for?"
-                placeholderTextColor="rgba(255,255,255,0.4)"
+                placeholderTextColor={colors.textSecondary}
               />
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Payment Method</Text>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>Payment Method</Text>
               <View style={styles.methodRow}>
                 {(['upi', 'cash', 'bank', 'other'] as PaymentMethod[]).map((m) => (
                   <TouchableOpacity
@@ -261,11 +261,17 @@ export default function ManualEntryScreen() {
                     style={[
                       styles.methodChip,
                       paymentMethod === m && styles.methodChipActive,
-                      { backgroundColor: paymentMethod === m ? '#FFF' : 'rgba(255,255,255,0.1)' }
+                      {
+                        backgroundColor: paymentMethod === m ? colors.tint : colors.surface,
+                        borderColor: paymentMethod === m ? colors.tint : colors.border
+                      }
                     ]}
                     onPress={() => setPaymentMethod(m)}
                   >
-                    <Text style={[styles.methodText, paymentMethod === m && styles.methodTextActive]}>
+                    <Text style={[
+                      styles.methodText,
+                      { color: paymentMethod === m ? '#FFF' : colors.textSecondary }
+                    ]}>
                       {m.toUpperCase()}
                     </Text>
                   </TouchableOpacity>
@@ -274,7 +280,7 @@ export default function ManualEntryScreen() {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Category</Text>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>Category</Text>
               <CategoryPicker
                 selectedCategory={category}
                 onSelectCategory={setCategory}
@@ -283,8 +289,8 @@ export default function ManualEntryScreen() {
             </View>
           </View>
 
-          <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-            <Text style={styles.saveButtonText}>Save Transaction</Text>
+          <TouchableOpacity style={[styles.saveButton, { backgroundColor: colors.tint }]} onPress={handleSave}>
+            <Text style={[styles.saveButtonText, { color: '#FFF' }]}>Save Transaction</Text>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -320,10 +326,10 @@ const styles = StyleSheet.create({
   },
   typeToggleContainer: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: BorderRadius.lg,
     padding: 4,
     marginBottom: Spacing.xl,
+    gap: 8,
   },
   typeOption: {
     flex: 1,
@@ -361,7 +367,6 @@ const styles = StyleSheet.create({
     minWidth: 120,
   },
   formCard: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: BorderRadius.lg,
     padding: Spacing.lg,
     marginBottom: Spacing.xl,
@@ -379,7 +384,6 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.md,
     paddingVertical: Spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.2)',
   },
   methodRow: {
     flexDirection: 'row',

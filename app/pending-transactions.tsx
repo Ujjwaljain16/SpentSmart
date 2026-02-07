@@ -90,37 +90,37 @@ export default function PendingTransactionsScreen() {
     };
 
     const renderTransaction = ({ item }: { item: Transaction }) => (
-        <View style={[styles.card, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1 }]}>
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
             <View style={styles.cardHeader}>
                 <View style={styles.cardInfo}>
-                    <Text style={[styles.amount, { color: '#FFF' }]}>
+                    <Text style={[styles.amount, { color: colors.text }]}>
                         ₹{item.amount.toLocaleString('en-IN')}
                     </Text>
-                    <Text style={[styles.category, { color: 'rgba(255, 255, 255, 0.6)' }]}>
+                    <Text style={[styles.category, { color: colors.textSecondary }]}>
                         {item.category}
                     </Text>
                 </View>
             </View>
 
-            <Text style={[styles.payee, { color: '#FFF' }]}>
+            <Text style={[styles.payee, { color: colors.text }]}>
                 {item.payeeName}
             </Text>
 
             {
                 item.reason && (
-                    <Text style={[styles.reason, { color: 'rgba(255, 255, 255, 0.6)' }]}>
+                    <Text style={[styles.reason, { color: colors.textSecondary }]}>
                         {item.reason}
                     </Text>
                 )
             }
 
-            <Text style={[styles.time, { color: 'rgba(255, 255, 255, 0.5)' }]}>
+            <Text style={[styles.time, { color: colors.textSecondary }]}>
                 {format(new Date(item.timestamp), 'MMM d, h:mm a')}
             </Text>
 
             <View style={styles.actions}>
                 <TouchableOpacity
-                    style={[styles.button, styles.confirmButton, { backgroundColor: '#3B82F6' }]}
+                    style={[styles.button, styles.confirmButton, { backgroundColor: colors.tint }]}
                     onPress={() => handleConfirm(item)}
                 >
                     <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
@@ -128,11 +128,19 @@ export default function PendingTransactionsScreen() {
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                    style={[styles.button, styles.failButton, { backgroundColor: 'rgba(255, 255, 255, 0.15)', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.2)' }]}
+                    style={[
+                        styles.button,
+                        styles.failButton,
+                        {
+                            backgroundColor: colors.surface,
+                            borderWidth: 1,
+                            borderColor: colors.border
+                        }
+                    ]}
                     onPress={() => handleFail(item)}
                 >
-                    <Ionicons name="close-circle" size={20} color="#FFFFFF" />
-                    <Text style={[styles.buttonText, { color: '#FFF' }]}>Failed</Text>
+                    <Ionicons name="close-circle" size={20} color={colors.error} />
+                    <Text style={[styles.buttonText, { color: colors.error }]}>Failed</Text>
                 </TouchableOpacity>
             </View>
         </View >

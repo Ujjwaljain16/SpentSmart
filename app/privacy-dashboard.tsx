@@ -22,6 +22,8 @@ import {
     PrivacyStats,
 } from '@/services/privacy-stats';
 import { clearAllData } from '@/services/storage';
+import { getUserProfile, saveUserProfile, UserProfile } from '@/services/user-storage';
+
 
 export default function PrivacyDashboardScreen() {
     const colorScheme = useColorScheme();
@@ -43,10 +45,20 @@ export default function PrivacyDashboardScreen() {
         }
     }, []);
 
+    const [profile, setProfile] = useState<UserProfile | null>(null);
+
+    const loadProfile = useCallback(async () => {
+        const userProfile = await getUserProfile();
+        if (userProfile) {
+            setProfile(userProfile);
+        }
+    }, []);
+
     useFocusEffect(
         useCallback(() => {
             loadStats();
-        }, [loadStats])
+            loadProfile();
+        }, [loadStats, loadProfile])
     );
 
     const handleClose = () => {
@@ -76,11 +88,8 @@ export default function PrivacyDashboardScreen() {
         );
     };
 
-    // Match home/charts background
-    const backgroundColor = colorScheme === 'dark' ? '#1E3A8A' : '#3B82F6';
-
     return (
-        <View style={[styles.container, { backgroundColor }]}>
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
             <StatusBar style="light" />
 
             {/* Header */}
@@ -90,14 +99,14 @@ export default function PrivacyDashboardScreen() {
                     {
                         paddingTop: insets.top + Spacing.sm,
                         backgroundColor: 'transparent',
-                        borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+                        borderBottomColor: colors.border,
                     },
                 ]}
             >
-                <TouchableOpacity onPress={handleClose} style={styles.headerButton}>
-                    <Ionicons name="arrow-back" size={24} color="#FFF" />
+                <TouchableOpacity onPress={handleClose} style={[styles.headerButton, { backgroundColor: colors.card, width: 40, height: 40, borderRadius: 20 }]}>
+                    <Ionicons name="arrow-back" size={24} color={colors.text} />
                 </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: '#FFF' }]}>
+                <Text style={[styles.headerTitle, { color: colors.text }]}>
                     Privacy Dashboard
                 </Text>
                 <View style={styles.headerButton} />
@@ -108,60 +117,89 @@ export default function PrivacyDashboardScreen() {
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
             >
+                {/* Profile Section */}
+                {profile && (
+                    <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, marginBottom: Spacing.lg }]}>
+                        <View style={styles.cardHeader}>
+                            <Ionicons name="person-circle" size={24} color={colors.tint} />
+                            <Text style={[styles.cardTitle, { color: colors.text }]}>Profile</Text>
+                            <View style={{ flex: 1 }} />
+                            <TouchableOpacity
+                                onPress={() => router.push('/edit-profile')}
+                                style={{ padding: 4 }}
+                            >
+                                <Text style={{ color: colors.tint, fontWeight: '600' }}>
+                                    Edit
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.md }}>
+                            <View style={[styles.avatarContainer, { backgroundColor: colors.surface }]}>
+                                <Text style={{ fontSize: 24 }}>{profile.avatarId || '👤'}</Text>
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={[styles.label, { color: colors.textSecondary, marginBottom: 4 }]}>Name</Text>
+                                <Text style={[styles.value, { color: colors.text }]}>{profile.name}</Text>
+                            </View>
+                        </View>
+                    </View>
+                )}
+
                 {/* Hero Section */}
                 <View style={styles.heroSection}>
                     <View
                         style={[
                             styles.shieldContainer,
-                            { backgroundColor: 'rgba(255, 255, 255, 0.1)' },
+                            { backgroundColor: colors.card },
                         ]}
                     >
-                        <Ionicons name="shield-checkmark" size={64} color="#FFF" />
+                        <Ionicons name="shield-checkmark" size={64} color={colors.tint} />
                     </View>
-                    <Text style={[styles.heroTitle, { color: '#FFF' }]}>
+                    <Text style={[styles.heroTitle, { color: colors.text }]}>
                         Your Data, Your Control
                     </Text>
-                    <Text style={[styles.heroSubtitle, { color: 'rgba(255, 255, 255, 0.7)' }]}>
+                    <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
                         100% stored on this device • Zero cloud • Zero tracking
                     </Text>
                 </View>
 
                 {/* Data Inventory Card */}
-                <View style={[styles.card, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1 }]}>
+                <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
                     <View style={styles.cardHeader}>
-                        <Ionicons name="document-text" size={20} color="#3B82F6" />
-                        <Text style={[styles.cardTitle, { color: '#FFF' }]}>
+                        <Ionicons name="document-text" size={20} color={colors.tint} />
+                        <Text style={[styles.cardTitle, { color: colors.text }]}>
                             What We Store
                         </Text>
                     </View>
 
                     <View style={styles.statRow}>
-                        <Text style={[styles.statLabel, { color: 'rgba(255, 255, 255, 0.7)' }]}>
+                        <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
                             Transactions
                         </Text>
-                        <Text style={[styles.statValue, { color: '#FFF' }]}>
+                        <Text style={[styles.statValue, { color: colors.text }]}>
                             {stats?.transactionCount || 0}
                         </Text>
                     </View>
 
-                    <View style={[styles.divider, { backgroundColor: 'rgba(255, 255, 255, 0.1)' }]} />
+                    <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
                     <View style={styles.statRow}>
-                        <Text style={[styles.statLabel, { color: 'rgba(255, 255, 255, 0.7)' }]}>
+                        <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
                             Categories
                         </Text>
-                        <Text style={[styles.statValue, { color: '#FFF' }]}>
+                        <Text style={[styles.statValue, { color: colors.text }]}>
                             {stats?.categoryCount || 0}
                         </Text>
                     </View>
 
-                    <View style={[styles.divider, { backgroundColor: 'rgba(255, 255, 255, 0.1)' }]} />
+                    <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
                     <View style={styles.statRow}>
-                        <Text style={[styles.statLabel, { color: 'rgba(255, 255, 255, 0.7)' }]}>
+                        <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
                             Total Storage
                         </Text>
-                        <Text style={[styles.statValue, { color: '#FFF' }]}>
+                        <Text style={[styles.statValue, { color: colors.text }]}>
                             {formatBytes(stats?.totalStorageBytes || 0)}
                         </Text>
                     </View>
@@ -169,10 +207,10 @@ export default function PrivacyDashboardScreen() {
 
                 {/* Data Timeline Card */}
                 {stats && stats.transactionCount > 0 && (
-                    <View style={[styles.card, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1 }]}>
+                    <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
                         <View style={styles.cardHeader}>
-                            <Ionicons name="time" size={20} color="#3B82F6" />
-                            <Text style={[styles.cardTitle, { color: '#FFF' }]}>
+                            <Ionicons name="time" size={20} color={colors.tint} />
+                            <Text style={[styles.cardTitle, { color: colors.text }]}>
                                 Data Timeline
                             </Text>
                         </View>
@@ -183,18 +221,18 @@ export default function PrivacyDashboardScreen() {
                                     <View
                                         style={[
                                             styles.timelineDotInner,
-                                            { backgroundColor: '#3B82F6' },
+                                            { backgroundColor: colors.tint },
                                         ]}
                                     />
                                 </View>
                                 <View style={styles.timelineContent}>
-                                    <Text style={[styles.timelineLabel, { color: '#FFF' }]}>
+                                    <Text style={[styles.timelineLabel, { color: colors.text }]}>
                                         First transaction recorded
                                     </Text>
                                     <Text
                                         style={[
                                             styles.timelineDate,
-                                            { color: 'rgba(255, 255, 255, 0.7)' },
+                                            { color: colors.textSecondary },
                                         ]}
                                     >
                                         {format(new Date(stats.oldestTransaction), 'MMM d, yyyy')}
@@ -209,18 +247,18 @@ export default function PrivacyDashboardScreen() {
                                     <View
                                         style={[
                                             styles.timelineDotInner,
-                                            { backgroundColor: '#3B82F6' },
+                                            { backgroundColor: colors.tint },
                                         ]}
                                     />
                                 </View>
                                 <View style={styles.timelineContent}>
-                                    <Text style={[styles.timelineLabel, { color: '#FFF' }]}>
+                                    <Text style={[styles.timelineLabel, { color: colors.text }]}>
                                         Most recent transaction
                                     </Text>
                                     <Text
                                         style={[
                                             styles.timelineDate,
-                                            { color: 'rgba(255, 255, 255, 0.7)' },
+                                            { color: colors.textSecondary },
                                         ]}
                                     >
                                         {format(new Date(stats.newestTransaction), 'MMM d, yyyy')}
@@ -235,18 +273,18 @@ export default function PrivacyDashboardScreen() {
                                     <View
                                         style={[
                                             styles.timelineDotInner,
-                                            { backgroundColor: '#3B82F6' },
+                                            { backgroundColor: colors.tint },
                                         ]}
                                     />
                                 </View>
                                 <View style={styles.timelineContent}>
-                                    <Text style={[styles.timelineLabel, { color: '#FFF' }]}>
+                                    <Text style={[styles.timelineLabel, { color: colors.text }]}>
                                         Total history
                                     </Text>
                                     <Text
                                         style={[
                                             styles.timelineDate,
-                                            { color: 'rgba(255, 255, 255, 0.7)' },
+                                            { color: colors.textSecondary },
                                         ]}
                                     >
                                         {stats.dataAgeDays} days
@@ -258,24 +296,24 @@ export default function PrivacyDashboardScreen() {
                 )}
 
                 {/* Permissions Card */}
-                <View style={[styles.card, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1 }]}>
+                <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
                     <View style={styles.cardHeader}>
-                        <Ionicons name="lock-closed" size={20} color="#3B82F6" />
-                        <Text style={[styles.cardTitle, { color: '#FFF' }]}>
+                        <Ionicons name="lock-closed" size={20} color={colors.tint} />
+                        <Text style={[styles.cardTitle, { color: colors.text }]}>
                             Permissions
                         </Text>
                     </View>
 
                     <View style={styles.permissionItem}>
-                        <Ionicons name="camera" size={20} color="rgba(255, 255, 255, 0.7)" />
+                        <Ionicons name="camera" size={20} color={colors.textSecondary} />
                         <View style={styles.permissionText}>
-                            <Text style={[styles.permissionName, { color: '#FFF' }]}>
+                            <Text style={[styles.permissionName, { color: colors.text }]}>
                                 Camera
                             </Text>
                             <Text
                                 style={[
                                     styles.permissionStatus,
-                                    { color: 'rgba(255, 255, 255, 0.5)' },
+                                    { color: colors.textSecondary },
                                 ]}
                             >
                                 Optional • For QR code scanning only
@@ -283,22 +321,22 @@ export default function PrivacyDashboardScreen() {
                         </View>
                     </View>
 
-                    <View style={[styles.divider, { backgroundColor: 'rgba(255, 255, 255, 0.1)' }]} />
+                    <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
                     <View style={styles.permissionItem}>
                         <Ionicons
                             name="notifications"
                             size={20}
-                            color="rgba(255, 255, 255, 0.7)"
+                            color={colors.textSecondary}
                         />
                         <View style={styles.permissionText}>
-                            <Text style={[styles.permissionName, { color: '#FFF' }]}>
+                            <Text style={[styles.permissionName, { color: colors.text }]}>
                                 Notifications
                             </Text>
                             <Text
                                 style={[
                                     styles.permissionStatus,
-                                    { color: 'rgba(255, 255, 255, 0.5)' },
+                                    { color: colors.textSecondary },
                                 ]}
                             >
                                 Optional • For budget alerts only
@@ -309,15 +347,15 @@ export default function PrivacyDashboardScreen() {
                     <View
                         style={[
                             styles.guaranteeBox,
-                            { backgroundColor: 'rgba(74, 222, 128, 0.1)' },
+                            { backgroundColor: `${colors.success}15` },
                         ]}
                     >
                         <Text
-                            style={[styles.guaranteeTitle, { color: '#4ADE80' }]}
+                            style={[styles.guaranteeTitle, { color: colors.success }]}
                         >
                             ✓ Privacy Guarantee
                         </Text>
-                        <Text style={[styles.guaranteeText, { color: '#FFF' }]}>
+                        <Text style={[styles.guaranteeText, { color: colors.text }]}>
                             ✓ No SMS access {'\n'}
                             ✓ No contacts access {'\n'}
                             ✓ No location tracking {'\n'}
@@ -330,9 +368,9 @@ export default function PrivacyDashboardScreen() {
 
                 {/* Privacy Promise Card */}
                 <View
-                    style={[styles.promiseCard, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1 }]}
+                    style={[styles.promiseCard, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
                 >
-                    <Text style={[styles.promiseTitle, { color: '#FFF' }]}>
+                    <Text style={[styles.promiseTitle, { color: colors.text }]}>
                         Our Privacy Promise
                     </Text>
 
@@ -340,9 +378,9 @@ export default function PrivacyDashboardScreen() {
                         <Ionicons
                             name="checkmark-circle"
                             size={20}
-                            color="#4ADE80"
+                            color={colors.success}
                         />
-                        <Text style={[styles.promiseText, { color: 'rgba(255, 255, 255, 0.9)' }]}>
+                        <Text style={[styles.promiseText, { color: colors.textSecondary }]}>
                             Your data never leaves this device
                         </Text>
                     </View>
@@ -351,9 +389,9 @@ export default function PrivacyDashboardScreen() {
                         <Ionicons
                             name="checkmark-circle"
                             size={20}
-                            color="#4ADE80"
+                            color={colors.success}
                         />
-                        <Text style={[styles.promiseText, { color: 'rgba(255, 255, 255, 0.9)' }]}>
+                        <Text style={[styles.promiseText, { color: colors.textSecondary }]}>
                             No analytics or usage tracking
                         </Text>
                     </View>
@@ -362,9 +400,9 @@ export default function PrivacyDashboardScreen() {
                         <Ionicons
                             name="checkmark-circle"
                             size={20}
-                            color="#4ADE80"
+                            color={colors.success}
                         />
-                        <Text style={[styles.promiseText, { color: 'rgba(255, 255, 255, 0.9)' }]}>
+                        <Text style={[styles.promiseText, { color: colors.textSecondary }]}>
                             No user accounts or cloud servers
                         </Text>
                     </View>
@@ -373,9 +411,9 @@ export default function PrivacyDashboardScreen() {
                         <Ionicons
                             name="checkmark-circle"
                             size={20}
-                            color="#4ADE80"
+                            color={colors.success}
                         />
-                        <Text style={[styles.promiseText, { color: 'rgba(255, 255, 255, 0.9)' }]}>
+                        <Text style={[styles.promiseText, { color: colors.textSecondary }]}>
                             Open source and fully auditable
                         </Text>
                     </View>
@@ -384,17 +422,19 @@ export default function PrivacyDashboardScreen() {
                         <Ionicons
                             name="checkmark-circle"
                             size={20}
-                            color="#4ADE80"
+                            color={colors.success}
                         />
-                        <Text style={[styles.promiseText, { color: 'rgba(255, 255, 255, 0.9)' }]}>
+                        <Text style={[styles.promiseText, { color: colors.textSecondary }]}>
                             You can delete everything, anytime
                         </Text>
                     </View>
                 </View>
 
+
+
                 {/* Danger Zone */}
-                <View style={[styles.dangerCard, { backgroundColor: 'rgba(239, 68, 68, 0.1)', borderColor: 'rgba(239, 68, 68, 0.2)', borderWidth: 1 }]}>
-                    <Text style={[styles.dangerTitle, { color: '#EF4444' }]}>
+                <View style={[styles.dangerCard, { backgroundColor: `${colors.error}15`, borderColor: `${colors.error}30`, borderWidth: 1 }]}>
+                    <Text style={[styles.dangerTitle, { color: colors.error }]}>
                         Danger Zone
                     </Text>
 
@@ -402,21 +442,21 @@ export default function PrivacyDashboardScreen() {
                         style={[
                             styles.dangerButton,
                             {
-                                backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                                borderColor: '#EF4444',
+                                backgroundColor: `${colors.error}15`,
+                                borderColor: colors.error,
                             },
                         ]}
                         onPress={handleClearAllData}
                     >
-                        <Ionicons name="trash" size={20} color="#EF4444" />
+                        <Ionicons name="trash" size={20} color={colors.error} />
                         <View style={styles.dangerButtonText}>
-                            <Text style={[styles.dangerButtonLabel, { color: '#EF4444' }]}>
+                            <Text style={[styles.dangerButtonLabel, { color: colors.error }]}>
                                 Delete All Data
                             </Text>
                             <Text
                                 style={[
                                     styles.dangerButtonSubtext,
-                                    { color: 'rgba(255, 255, 255, 0.6)' },
+                                    { color: colors.textSecondary },
                                 ]}
                             >
                                 Permanently delete all transactions and categories
@@ -425,11 +465,11 @@ export default function PrivacyDashboardScreen() {
                         <Ionicons
                             name="chevron-forward"
                             size={20}
-                            color="rgba(255, 255, 255, 0.5)"
+                            color={colors.textSecondary}
                         />
                     </TouchableOpacity>
 
-                    <Text style={[styles.dangerWarning, { color: 'rgba(255, 255, 255, 0.5)' }]}>
+                    <Text style={[styles.dangerWarning, { color: colors.textSecondary }]}>
                         ⚠️ Data deletion is permanent and immediate. Make sure to export
                         your data first if you want to keep a backup.
                     </Text>
@@ -633,5 +673,35 @@ const styles = StyleSheet.create({
     dangerWarning: {
         fontSize: FontSizes.sm,
         lineHeight: 18,
+    },
+    avatarContainer: {
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    label: {
+        fontSize: FontSizes.xs,
+        fontWeight: '500',
+    },
+    value: {
+        fontSize: FontSizes.lg,
+        fontWeight: '600',
+    },
+    actionButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: Spacing.md,
+        borderRadius: BorderRadius.md,
+        gap: Spacing.md,
+    },
+    actionButtonText: {
+        fontSize: FontSizes.md,
+        fontWeight: '500',
+    },
+    actionButtonSubtext: {
+        fontSize: FontSizes.xs,
+        marginTop: 2,
     },
 });

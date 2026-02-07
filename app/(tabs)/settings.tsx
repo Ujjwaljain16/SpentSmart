@@ -13,11 +13,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import Constants from "expo-constants";
+import { openURL } from "expo-linking";
 
 import { Colors, BorderRadius, FontSizes, Spacing } from "@/constants/theme";
 import { clearAllData, getAllTransactions } from "@/services/storage";
 import { exportToPDF } from "@/services/pdf-export";
-import { getCategories, DEFAULT_CATEGORIES } from "@/services/category-storage";
+import { getCategories } from "@/services/category-storage";
 import { useTheme } from "@/contexts/theme-context";
 import { useSecurity } from "@/contexts/security-context";
 import { setBudget, getBudget } from "@/services/storage";
@@ -132,125 +133,104 @@ export default function SettingsScreen() {
 
   const appVersion = Constants.expoConfig?.version || "1.0.0";
 
-  // Match home/charts background
-  const backgroundColor = colorScheme === 'dark' ? '#1E3A8A' : '#3B82F6';
-
   return (
-    <View style={[styles.container, { backgroundColor }]}>
-      <StatusBar style="light" />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
 
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingTop: insets.top + Spacing.md },
+          { paddingTop: insets.top + Spacing.md, paddingBottom: insets.bottom + 100 },
         ]}
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <Text style={[styles.title, { color: '#FFF' }]}>Settings</Text>
+        <Text style={[styles.title, { color: colors.text }]}>Settings</Text>
 
         {/* Privacy Section */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: 'rgba(255, 255, 255, 0.7)' }]}>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
             PRIVACY
           </Text>
 
-          <View style={[styles.card, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1 }]}>
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
             {/* Privacy Dashboard */}
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => router.push('/privacy-dashboard')}
             >
               <View style={styles.menuItemLeft}>
-                <View
-                  style={[
-                    styles.iconContainer,
-                    { backgroundColor: 'rgba(255, 255, 255, 0.1)' },
-                  ]}
-                >
-                  <Ionicons
-                    name="shield-checkmark"
-                    size={20}
-                    color="#FFF"
-                  />
+                <View style={[styles.iconContainer, { backgroundColor: colors.surface }]}>
+                  <Ionicons name="shield-checkmark" size={20} color={colors.tint} />
                 </View>
                 <View style={styles.menuItemText}>
-                  <Text style={[styles.menuItemLabel, { color: '#FFF' }]}>
+                  <Text style={[styles.menuItemLabel, { color: colors.text }]}>
                     Privacy Dashboard
                   </Text>
-                  <Text
-                    style={[
-                      styles.menuItemDescription,
-                      { color: 'rgba(255, 255, 255, 0.6)' },
-                    ]}
-                  >
+                  <Text style={[styles.menuItemDescription, { color: colors.textSecondary }]}>
                     See what we store & control your data
                   </Text>
                 </View>
               </View>
-              <Ionicons
-                name="chevron-forward"
-                size={20}
-                color="rgba(255, 255, 255, 0.5)"
-              />
+              <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
         </View>
 
         {/* Security Section */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: 'rgba(255, 255, 255, 0.7)' }]}>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
             SECURITY & PRIVACY
           </Text>
 
-          <View style={[styles.card, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1 }]}>
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
             {/* Biometric Lock */}
             {hasHardware && (
               <>
                 <View style={styles.menuItem}>
                   <View style={styles.menuItemLeft}>
-                    <View style={[styles.iconContainer, { backgroundColor: 'rgba(255, 255, 255, 0.1)' }]}>
-                      <Ionicons name="finger-print" size={20} color="#FFF" />
+                    <View style={[styles.iconContainer, { backgroundColor: colors.surface }]}>
+                      <Ionicons name="finger-print" size={20} color={colors.tint} />
                     </View>
                     <View style={styles.menuItemText}>
-                      <Text style={[styles.menuItemLabel, { color: '#FFF' }]}>
+                      <Text style={[styles.menuItemLabel, { color: colors.text }]}>
                         Biometric Lock
                       </Text>
-                      <Text style={[styles.menuItemDescription, { color: 'rgba(255, 255, 255, 0.6)' }]}>
+                      <Text style={[styles.menuItemDescription, { color: colors.textSecondary }]}>
                         Require authentication to open app
                       </Text>
                     </View>
                   </View>
                   <TouchableOpacity
                     onPress={() => setBioLockEnabled(!isBioLockEnabled)}
-                    style={[styles.toggleWrap, { backgroundColor: isBioLockEnabled ? '#EC4899' : 'rgba(255,255,255,0.1)' }]}
+                    style={[styles.toggleWrap, { backgroundColor: isBioLockEnabled ? colors.tint : colors.surface }]}
                   >
                     <View style={[styles.toggleHandle, { marginLeft: isBioLockEnabled ? 22 : 2 }]} />
                   </TouchableOpacity>
                 </View>
-                <View style={[styles.divider, { backgroundColor: 'rgba(255, 255, 255, 0.1)' }]} />
+                <View style={[styles.divider, { backgroundColor: colors.border }]} />
               </>
             )}
 
             {/* Privacy Mode */}
             <View style={styles.menuItem}>
               <View style={styles.menuItemLeft}>
-                <View style={[styles.iconContainer, { backgroundColor: 'rgba(255, 255, 255, 0.1)' }]}>
-                  <Ionicons name="eye-off-outline" size={20} color="#FFF" />
+                <View style={[styles.iconContainer, { backgroundColor: colors.surface }]}>
+                  <Ionicons name="eye-off-outline" size={20} color={colors.tint} />
                 </View>
                 <View style={styles.menuItemText}>
-                  <Text style={[styles.menuItemLabel, { color: '#FFF' }]}>
+                  <Text style={[styles.menuItemLabel, { color: colors.text }]}>
                     Privacy Mode
                   </Text>
-                  <Text style={[styles.menuItemDescription, { color: 'rgba(255, 255, 255, 0.6)' }]}>
+                  <Text style={[styles.menuItemDescription, { color: colors.textSecondary }]}>
                     Mask amounts on home screen
                   </Text>
                 </View>
               </View>
               <TouchableOpacity
                 onPress={() => setPrivacyModeEnabled(!isPrivacyModeEnabled)}
-                style={[styles.toggleWrap, { backgroundColor: isPrivacyModeEnabled ? '#EC4899' : 'rgba(255,255,255,0.1)' }]}
+                style={[styles.toggleWrap, { backgroundColor: isPrivacyModeEnabled ? colors.tint : colors.surface }]}
               >
                 <View style={[styles.toggleHandle, { marginLeft: isPrivacyModeEnabled ? 22 : 2 }]} />
               </TouchableOpacity>
@@ -260,32 +240,32 @@ export default function SettingsScreen() {
 
         {/* Budget Section */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: 'rgba(255, 255, 255, 0.7)' }]}>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
             BUDGETING
           </Text>
 
-          <View style={[styles.card, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1 }]}>
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
             <View style={styles.budgetSetting}>
               <View style={styles.budgetInputRow}>
-                <View style={[styles.iconContainer, { backgroundColor: 'rgba(255, 255, 255, 0.1)' }]}>
-                  <Ionicons name="wallet-outline" size={20} color="#FFF" />
+                <View style={[styles.iconContainer, { backgroundColor: colors.surface }]}>
+                  <Ionicons name="wallet-outline" size={20} color={colors.tint} />
                 </View>
                 <View style={styles.inputWrap}>
-                  <Text style={[styles.menuItemLabel, { color: '#FFF' }]}>
+                  <Text style={[styles.menuItemLabel, { color: colors.text }]}>
                     Monthly Limit
                   </Text>
                   <TextInput
-                    style={[styles.budgetInput, { color: '#FFF' }]}
+                    style={[styles.budgetInput, { color: colors.text, borderBottomColor: colors.border }]}
                     value={budgetInput}
                     onChangeText={setBudgetInput}
                     placeholder="Enter limit (e.g. 15000)"
-                    placeholderTextColor="rgba(255, 255, 255, 0.4)"
+                    placeholderTextColor={colors.textSecondary}
                     keyboardType="numeric"
                   />
                 </View>
               </View>
               <TouchableOpacity
-                style={[styles.saveBudgetButton, { opacity: isSavingBudget ? 0.7 : 1 }]}
+                style={[styles.saveBudgetButton, { backgroundColor: colors.tint, opacity: isSavingBudget ? 0.7 : 1 }]}
                 onPress={handleSaveBudget}
                 disabled={isSavingBudget}
               >
@@ -299,60 +279,40 @@ export default function SettingsScreen() {
 
         {/* Categories Section */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: 'rgba(255, 255, 255, 0.7)' }]}>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
             CATEGORIES
           </Text>
 
-          <View style={[styles.card, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1 }]}>
-            {/* Manage Categories */}
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => router.push("/category-manager")}
             >
               <View style={styles.menuItemLeft}>
-                <View
-                  style={[
-                    styles.iconContainer,
-                    { backgroundColor: 'rgba(255, 255, 255, 0.1)' },
-                  ]}
-                >
-                  <Ionicons
-                    name="pricetags-outline"
-                    size={20}
-                    color="#FFF"
-                  />
+                <View style={[styles.iconContainer, { backgroundColor: colors.surface }]}>
+                  <Ionicons name="pricetags-outline" size={20} color={colors.tint} />
                 </View>
                 <View style={styles.menuItemText}>
-                  <Text style={[styles.menuItemLabel, { color: '#FFF' }]}>
+                  <Text style={[styles.menuItemLabel, { color: colors.text }]}>
                     Manage Categories
                   </Text>
-                  <Text
-                    style={[
-                      styles.menuItemDescription,
-                      { color: 'rgba(255, 255, 255, 0.6)' },
-                    ]}
-                  >
-                    {categoryCount} categor{categoryCount !== 1 ? "ies" : "y"}{" "}
-                    configured
+                  <Text style={[styles.menuItemDescription, { color: colors.textSecondary }]}>
+                    {categoryCount} categor{categoryCount !== 1 ? "ies" : "y"} configured
                   </Text>
                 </View>
               </View>
-              <Ionicons
-                name="chevron-forward"
-                size={20}
-                color="rgba(255, 255, 255, 0.5)"
-              />
+              <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
         </View>
 
         {/* Data Section */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: 'rgba(255, 255, 255, 0.7)' }]}>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
             DATA
           </Text>
 
-          <View style={[styles.card, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1 }]}>
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
             {/* Export PDF */}
             <TouchableOpacity
               style={styles.menuItem}
@@ -360,98 +320,57 @@ export default function SettingsScreen() {
               disabled={isExporting}
             >
               <View style={styles.menuItemLeft}>
-                <View
-                  style={[
-                    styles.iconContainer,
-                    { backgroundColor: 'rgba(255, 255, 255, 0.1)' },
-                  ]}
-                >
-                  <Ionicons
-                    name="download-outline"
-                    size={20}
-                    color="#FFF"
-                  />
+                <View style={[styles.iconContainer, { backgroundColor: colors.surface }]}>
+                  <Ionicons name="download-outline" size={20} color={colors.tint} />
                 </View>
                 <View style={styles.menuItemText}>
-                  <Text style={[styles.menuItemLabel, { color: '#FFF' }]}>
+                  <Text style={[styles.menuItemLabel, { color: colors.text }]}>
                     {isExporting ? "Exporting..." : "Export Transactions"}
                   </Text>
-                  <Text
-                    style={[
-                      styles.menuItemDescription,
-                      { color: 'rgba(255, 255, 255, 0.6)' },
-                    ]}
-                  >
+                  <Text style={[styles.menuItemDescription, { color: colors.textSecondary }]}>
                     Get PDF report of all transactions
                   </Text>
                 </View>
               </View>
-              <Ionicons
-                name="chevron-forward"
-                size={20}
-                color="rgba(255, 255, 255, 0.5)"
-              />
+              <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
             </TouchableOpacity>
 
-            <View
-              style={[styles.divider, { backgroundColor: 'rgba(255, 255, 255, 0.1)' }]}
-            />
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
             {/* Clear Data */}
             <TouchableOpacity style={styles.menuItem} onPress={handleClearData}>
               <View style={styles.menuItemLeft}>
-                <View
-                  style={[
-                    styles.iconContainer,
-                    { backgroundColor: 'rgba(239, 68, 68, 0.2)' },
-                  ]}
-                >
-                  <Ionicons
-                    name="trash-outline"
-                    size={20}
-                    color="#EF4444"
-                  />
+                <View style={[styles.iconContainer, { backgroundColor: `${colors.error}20` }]}>
+                  <Ionicons name="trash-outline" size={20} color={colors.error} />
                 </View>
                 <View style={styles.menuItemText}>
-                  <Text style={[styles.menuItemLabel, { color: '#EF4444' }]}>
+                  <Text style={[styles.menuItemLabel, { color: colors.error }]}>
                     Clear All Data
                   </Text>
-                  <Text
-                    style={[
-                      styles.menuItemDescription,
-                      { color: 'rgba(255, 255, 255, 0.6)' },
-                    ]}
-                  >
-                    {transactionCount} transaction
-                    {transactionCount !== 1 ? "s" : ""} stored
+                  <Text style={[styles.menuItemDescription, { color: colors.textSecondary }]}>
+                    {transactionCount} transaction{transactionCount !== 1 ? "s" : ""} stored
                   </Text>
                 </View>
               </View>
-              <Ionicons
-                name="chevron-forward"
-                size={20}
-                color="rgba(255, 255, 255, 0.5)"
-              />
+              <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
         </View>
 
         {/* Appearance Section */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: 'rgba(255, 255, 255, 0.7)' }]}>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
             APPEARANCE
           </Text>
 
-          <View style={[styles.card, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1 }]}>
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
             <View style={styles.themeSelector}>
               <TouchableOpacity
                 style={[
                   styles.themeOption,
                   {
-                    backgroundColor:
-                      themeMode === "light" ? 'rgba(255, 255, 255, 0.2)' : "transparent",
-                    borderColor:
-                      themeMode === "light" ? '#FFF' : 'rgba(255, 255, 255, 0.2)',
+                    backgroundColor: themeMode === "light" ? colors.tint : "transparent",
+                    borderColor: themeMode === "light" ? colors.tint : colors.border,
                   },
                 ]}
                 onPress={() => handleThemeChange("light")}
@@ -459,7 +378,7 @@ export default function SettingsScreen() {
                 <Ionicons
                   name="sunny"
                   size={20}
-                  color={themeMode === "light" ? "#fff" : "rgba(255, 255, 255, 0.5)"}
+                  color={themeMode === "light" ? "#fff" : colors.textSecondary}
                 />
               </TouchableOpacity>
 
@@ -467,10 +386,8 @@ export default function SettingsScreen() {
                 style={[
                   styles.themeOption,
                   {
-                    backgroundColor:
-                      themeMode === "dark" ? 'rgba(255, 255, 255, 0.2)' : "transparent",
-                    borderColor:
-                      themeMode === "dark" ? '#FFF' : 'rgba(255, 255, 255, 0.2)',
+                    backgroundColor: themeMode === "dark" ? colors.tint : "transparent",
+                    borderColor: themeMode === "dark" ? colors.tint : colors.border,
                   },
                 ]}
                 onPress={() => handleThemeChange("dark")}
@@ -478,7 +395,7 @@ export default function SettingsScreen() {
                 <Ionicons
                   name="moon"
                   size={20}
-                  color={themeMode === "dark" ? "#fff" : "rgba(255, 255, 255, 0.5)"}
+                  color={themeMode === "dark" ? "#fff" : colors.textSecondary}
                 />
               </TouchableOpacity>
 
@@ -486,10 +403,8 @@ export default function SettingsScreen() {
                 style={[
                   styles.themeOption,
                   {
-                    backgroundColor:
-                      themeMode === "system" ? 'rgba(255, 255, 255, 0.2)' : "transparent",
-                    borderColor:
-                      themeMode === "system" ? '#FFF' : 'rgba(255, 255, 255, 0.2)',
+                    backgroundColor: themeMode === "system" ? colors.tint : "transparent",
+                    borderColor: themeMode === "system" ? colors.tint : colors.border,
                   },
                 ]}
                 onPress={() => handleThemeChange("system")}
@@ -497,7 +412,7 @@ export default function SettingsScreen() {
                 <Ionicons
                   name="phone-portrait"
                   size={20}
-                  color={themeMode === "system" ? "#fff" : "rgba(255, 255, 255, 0.5)"}
+                  color={themeMode === "system" ? "#fff" : colors.textSecondary}
                 />
               </TouchableOpacity>
             </View>
@@ -506,36 +421,55 @@ export default function SettingsScreen() {
 
         {/* About Section */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: 'rgba(255, 255, 255, 0.7)' }]}>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
             ABOUT
           </Text>
 
-          <View style={[styles.card, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1 }]}>
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
             <View style={styles.aboutItem}>
-              <Text style={[styles.aboutLabel, { color: '#FFF' }]}>
+              <Text style={[styles.aboutLabel, { color: colors.text }]}>
                 App Version
               </Text>
-              <Text
-                style={[styles.aboutValue, { color: 'rgba(255, 255, 255, 0.6)' }]}
-              >
+              <Text style={[styles.aboutValue, { color: colors.textSecondary }]}>
                 {appVersion}
               </Text>
             </View>
 
-            <View
-              style={[styles.divider, { backgroundColor: 'rgba(255, 255, 255, 0.1)' }]}
-            />
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
             <View style={styles.aboutItem}>
-              <Text style={[styles.aboutLabel, { color: '#FFF' }]}>
+              <Text style={[styles.aboutLabel, { color: colors.text }]}>
                 Privacy
               </Text>
-              <Text
-                style={[styles.aboutValue, { color: 'rgba(255, 255, 255, 0.6)' }]}
-              >
+              <Text style={[styles.aboutValue, { color: colors.textSecondary }]}>
                 All data stored locally
               </Text>
             </View>
+
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+            {/* Privacy Policy Link */}
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                openURL('https://github.com/Ujjwaljain16/ExpenseTracker/blob/main/PRIVACY.md');
+              }}
+            >
+              <View style={styles.menuItemLeft}>
+                <View style={[styles.iconContainer, { backgroundColor: colors.surface }]}>
+                  <Ionicons name="document-text-outline" size={20} color={colors.tint} />
+                </View>
+                <View style={styles.menuItemText}>
+                  <Text style={[styles.menuItemLabel, { color: colors.text }]}>
+                    Privacy Policy
+                  </Text>
+                  <Text style={[styles.menuItemDescription, { color: colors.textSecondary }]}>
+                    Read our privacy commitment
+                  </Text>
+                </View>
+              </View>
+              <Ionicons name="open-outline" size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
           </View>
         </View>
       </ScrollView>
@@ -588,10 +522,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: Spacing.xs,
   },
-  themeOptionText: {
-    fontSize: FontSizes.sm,
-    fontWeight: "500",
-  },
   menuItem: {
     flexDirection: "row",
     alignItems: "center",
@@ -637,21 +567,6 @@ const styles = StyleSheet.create({
   aboutValue: {
     fontSize: FontSizes.md,
   },
-  infoCard: {
-    flexDirection: "row",
-    padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
-    marginTop: Spacing.lg,
-  },
-  infoIcon: {
-    marginRight: Spacing.md,
-    marginTop: 2,
-  },
-  infoText: {
-    flex: 1,
-    fontSize: FontSizes.sm,
-    lineHeight: 20,
-  },
   toggleWrap: {
     width: 44,
     height: 24,
@@ -681,10 +596,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     paddingVertical: Spacing.xs,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.2)',
   },
   saveBudgetButton: {
-    backgroundColor: '#3B82F6',
     paddingVertical: Spacing.sm,
     borderRadius: BorderRadius.md,
     alignItems: 'center',

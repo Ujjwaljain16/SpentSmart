@@ -89,18 +89,17 @@ export default function ReceiveScreen() {
         callbackUrl: Linking.createURL('upi-callback'),
     });
 
-    // Match home/charts background
-    const backgroundColor = colorScheme === 'dark' ? '#1E3A8A' : '#3B82F6';
+    // Use theme background
 
     if (!isProfileSet) {
         return (
-            <View style={[styles.container, { backgroundColor }]}>
-                <StatusBar style="light" />
+            <View style={[styles.container, { backgroundColor: colors.background }]}>
+                <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
                 <View style={[styles.header, { paddingTop: insets.top + Spacing.sm }]}>
-                    <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
-                        <Ionicons name="close" size={24} color="#FFF" />
+                    <TouchableOpacity onPress={() => router.back()} style={[styles.headerButton, { backgroundColor: colors.card }]}>
+                        <Ionicons name="close" size={24} color={colors.text} />
                     </TouchableOpacity>
-                    <Text style={[styles.headerTitle, { color: '#FFF' }]}>Setup UPI Profile</Text>
+                    <Text style={[styles.headerTitle, { color: colors.text }]}>Setup UPI Profile</Text>
                     <View style={{ width: 40 }} />
                 </View>
 
@@ -110,27 +109,27 @@ export default function ReceiveScreen() {
                 >
                     <ScrollView contentContainerStyle={styles.content}>
                         <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Your UPI ID</Text>
+                            <Text style={[styles.label, { color: colors.textSecondary }]}>Your UPI ID</Text>
                             <TextInput
-                                style={styles.input}
+                                style={[styles.input, { color: colors.text, backgroundColor: colors.card, borderColor: colors.border }]}
                                 value={upiId}
                                 onChangeText={setUpiId}
                                 placeholder="username@bank"
-                                placeholderTextColor="rgba(255,255,255,0.4)"
+                                placeholderTextColor={colors.textSecondary}
                                 autoCapitalize="none"
                             />
                         </View>
                         <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Your Name</Text>
+                            <Text style={[styles.label, { color: colors.textSecondary }]}>Your Name</Text>
                             <TextInput
-                                style={styles.input}
+                                style={[styles.input, { color: colors.text, backgroundColor: colors.card, borderColor: colors.border }]}
                                 value={name}
                                 onChangeText={setName}
                                 placeholder="Payee Name"
-                                placeholderTextColor="rgba(255,255,255,0.4)"
+                                placeholderTextColor={colors.textSecondary}
                             />
                         </View>
-                        <TouchableOpacity style={styles.primaryButton} onPress={handleSaveProfile}>
+                        <TouchableOpacity style={[styles.primaryButton, { backgroundColor: colors.tint }]} onPress={handleSaveProfile}>
                             <Text style={styles.primaryButtonText}>Continue</Text>
                         </TouchableOpacity>
                     </ScrollView>
@@ -140,42 +139,42 @@ export default function ReceiveScreen() {
     }
 
     return (
-        <View style={[styles.container, { backgroundColor }]}>
-            <StatusBar style="light" />
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
+            <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
             <View style={[styles.header, { paddingTop: insets.top + Spacing.sm }]}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
-                    <Ionicons name="close" size={24} color="#FFF" />
+                <TouchableOpacity onPress={() => router.back()} style={[styles.headerButton, { backgroundColor: colors.card }]}>
+                    <Ionicons name="close" size={24} color={colors.text} />
                 </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: '#FFF' }]}>Receive Money</Text>
-                <TouchableOpacity onPress={() => setIsProfileSet(false)} style={styles.headerButton}>
-                    <Ionicons name="settings-outline" size={24} color="#FFF" />
+                <Text style={[styles.headerTitle, { color: colors.text }]}>Receive Money</Text>
+                <TouchableOpacity onPress={() => setIsProfileSet(false)} style={[styles.headerButton, { backgroundColor: colors.card }]}>
+                    <Ionicons name="settings-outline" size={24} color={colors.text} />
                 </TouchableOpacity>
             </View>
 
             <ScrollView contentContainerStyle={styles.content}>
-                <View style={styles.amountCard}>
-                    <Text style={styles.amountLabel}>Requesting Amount (Optional)</Text>
+                <View style={[styles.amountCard, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
+                    <Text style={[styles.amountLabel, { color: colors.textSecondary }]}>Requesting Amount (Optional)</Text>
                     <View style={styles.amountInputRow}>
-                        <Text style={styles.currency}>₹</Text>
+                        <Text style={[styles.currency, { color: colors.text }]}>₹</Text>
                         <TextInput
-                            style={styles.amountInput}
+                            style={[styles.amountInput, { color: colors.text }]}
                             value={amount}
                             onChangeText={setAmount}
                             placeholder="0"
-                            placeholderTextColor="rgba(255,255,255,0.3)"
+                            placeholderTextColor={colors.textSecondary}
                             keyboardType="decimal-pad"
                         />
                     </View>
                 </View>
 
                 <View style={[styles.inputGroup, { marginBottom: Spacing.xl }]}>
-                    <Text style={styles.label}>Note (Optional)</Text>
+                    <Text style={[styles.label, { color: colors.textSecondary }]}>Note (Optional)</Text>
                     <TextInput
-                        style={styles.input}
+                        style={[styles.input, { color: colors.text, backgroundColor: colors.card, borderColor: colors.border }]}
                         value={note}
                         onChangeText={setNote}
                         placeholder="What's this for?"
-                        placeholderTextColor="rgba(255,255,255,0.4)"
+                        placeholderTextColor={colors.textSecondary}
                     />
                 </View>
 
@@ -188,18 +187,18 @@ export default function ReceiveScreen() {
                             backgroundColor="#FFF"
                         />
                     </View>
-                    <Text style={styles.upiIdText}>{upiId}</Text>
-                    <Text style={styles.payeeNameText}>{name}</Text>
+                    <Text style={[styles.upiIdText, { color: colors.text }]}>{upiId}</Text>
+                    <Text style={[styles.payeeNameText, { color: colors.textSecondary }]}>{name}</Text>
                 </View>
 
                 <View style={styles.actions}>
-                    <TouchableOpacity style={styles.actionButton} onPress={handleShare}>
+                    <TouchableOpacity style={[styles.actionButton, { backgroundColor: colors.tint }]} onPress={handleShare}>
                         <Ionicons name="share-social-outline" size={24} color="#FFF" />
                         <Text style={styles.actionButtonText}>Share Payment Link</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={[styles.actionButton, { marginTop: 12, backgroundColor: 'rgba(255,255,255,0.1)' }]}
+                        style={[styles.actionButton, { marginTop: 12, backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
                         onPress={() => {
                             Alert.alert('Manual Record', 'Did you receive this payment?', [
                                 { text: 'No', style: 'cancel' },
@@ -226,8 +225,8 @@ export default function ReceiveScreen() {
                             ]);
                         }}
                     >
-                        <Ionicons name="checkmark-circle-outline" size={24} color="#FFF" />
-                        <Text style={styles.actionButtonText}>Record Manually</Text>
+                        <Ionicons name="checkmark-circle-outline" size={24} color={colors.text} />
+                        <Text style={[styles.actionButtonText, { color: colors.text }]}>Record Manually</Text>
                     </TouchableOpacity>
                 </View>
             </ScrollView>

@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { DarkTheme, DefaultTheme, ThemeProvider as NavigationThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -8,9 +8,13 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ThemeProvider, useColorScheme } from '@/contexts/theme-context';
 import { SecurityProvider, useSecurity } from '@/contexts/security-context';
 import { Colors, Spacing, FontSizes, BorderRadius } from '@/constants/theme';
-import { View, Text, TouchableOpacity, StyleSheet, AppState } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, AppState, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as LocalAuthentication from 'expo-local-authentication';
+import { initIntentMonitor } from '@/services/intent-monitor';
+import { scheduleDailyReminders } from '@/services/reminder-scheduler';
+import { isOnboardingComplete } from '@/services/user-storage';
+import { GlobalErrorBoundary } from '@/components/GlobalErrorBoundary';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -45,6 +49,8 @@ function RootLayoutNav() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const { isUnlocked, authenticate, isBioLockEnabled, lockApp } = useSecurity();
+  const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(true);
+  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
 
   // Handle locking when app goes to background
   React.useEffect(() => {
@@ -74,25 +80,52 @@ function RootLayoutNav() {
     };
   }, [lockApp]);
 
+  // Check onboarding status
+  useEffect(() => {
+    const checkOnboarding = async () => {
+      try {
+        const completed = await isOnboardingComplete();
+        setHasCompletedOnboarding(completed);
+        if (!completed) {
+          router.replace('/onboarding/profile-setup' as any);
+        }
+      } catch (error) {
+        console.error('Error checking onboarding:', error);
+      } finally {
+        setIsCheckingOnboarding(false);
+      }
+    };
+    checkOnboarding();
+  }, []);
+
   // Initial authentication
   React.useEffect(() => {
     if (isBioLockEnabled && !isUnlocked) {
       authenticate();
     }
+
+
+
+    // Initialize Intent Monitor (Automation Layer 2)
+    initIntentMonitor();
+
+    // Schedule Daily Reminders
+    scheduleDailyReminders();
   }, [isBioLockEnabled, isUnlocked]);
 
   if (!isUnlocked) {
+    const currentColors = isDark ? Colors.dark : Colors.light;
     return (
-      <View style={[styles.lockContainer, { backgroundColor: isDark ? Colors.dark.background : Colors.light.background }]}>
-        <Ionicons name="lock-closed" size={64} color={isDark ? Colors.dark.tint : Colors.light.tint} />
-        <Text style={[styles.lockTitle, { color: isDark ? Colors.dark.text : Colors.light.text }]}>
+      <View style={[styles.lockContainer, { backgroundColor: currentColors.background }]}>
+        <Ionicons name="lock-closed" size={64} color={currentColors.tint} />
+        <Text style={[styles.lockTitle, { color: currentColors.text }]}>
           App Locked
         </Text>
-        <Text style={[styles.lockSubtitle, { color: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)' }]}>
+        <Text style={[styles.lockSubtitle, { color: currentColors.textSecondary }]}>
           Unlock with biometrics to continue
         </Text>
         <TouchableOpacity
-          style={[styles.unlockButton, { backgroundColor: '#EC4899' }]}
+          style={[styles.unlockButton, { backgroundColor: currentColors.tint }]}
           onPress={authenticate}
         >
           <Text style={styles.unlockButtonText}>Unlock App</Text>
@@ -111,6 +144,12 @@ function RootLayoutNav() {
           }}
         >
           <Stack.Screen name="(tabs)" />
+          <Stack.Screen
+            name="onboarding"
+            options={{
+              animation: 'fade',
+            }}
+          />
           <Stack.Screen
             name="scanner"
             options={{
@@ -148,7 +187,9 @@ export default function RootLayout() {
   return (
     <ThemeProvider>
       <SecurityProvider>
-        <RootLayoutNav />
+        <GlobalErrorBoundary>
+          <RootLayoutNav />
+        </GlobalErrorBoundary>
       </SecurityProvider>
     </ThemeProvider>
   );

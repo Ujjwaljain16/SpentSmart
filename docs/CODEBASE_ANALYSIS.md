@@ -27,15 +27,35 @@
 
 ## 🔍 Module-Level Analysis
 
-### 1. `modules/upi-intent` (The Core Engine)
-**Type**: React Native Custom Native Module (Android-only)
-**Path**: `modules/upi-intent`
+### 1. `modules/notification-listener` (Layer 1: The Brain) 🧠
+**Type**: Custom Expo Native Module (Kotlin)
+**Path**: `modules/notification-listener`
 
-This is the most critical piece of infrastructure. Standard `Linking.openURL` often fails with banking apps in 2024 due to stricter Android 12+ intent filters.
-- **Implementation**: Uses `currentActivity.startActivity(intent)` explicitly.
-- **Safety**: Checks `intent.resolveActivity()` before launching to prevent crashes if no UPI app is installed.
+The crown jewel of automation.
+- **Function**: Intercepts `StatusBarNotification` events from Android System.
+- **Logic**: Filters for financial apps (GPay, PhonePe, Banks). Parses regex `Pattern.compile("Paid... (\\d+)")`.
+- **Privacy**: Processing happens 100% on-device in the native layer before passing sanitised data to JS.
 
-### 2. `contexts/security-context.tsx` (The Gatekeeper)
+### 2. `services/local-upi.ts` (Layer 2: LocalSetu Handler) ⚡
+**Type**: TypeScript Service + Intent Monitor
+**Path**: `services/local-upi.ts`
+
+Implements a self-hosted "Payment Gateway" logic.
+- **Mechanism**: Generates unique Transaction IDs (`tr` param) in UPI Intent Links.
+- **Tracking**: `IntentMonitor` listens for the specific callback URL containing the success/failure token.
+- **Result**: Zero-effort confirmation for pre-set merchants ("Quick Pay").
+
+### 3. `services/voice-parser.ts` (Layer 3: The Commander) 🎙️
+**Type**: NLP Logic Service
+**Path**: `services/voice-parser.ts`
+
+Provides a frictionless fallback for cash or untracked payments.
+- **Logic**: Distinguishes Intent.
+    - "Pay..." -> Launches UPI (Triggering Layer 2).
+    - "Paid..." -> Records historical expense.
+- **Tech**: Uses `expo-speech-recognition` (or native voice fallback) for high-accuracy transcription.
+
+### 4. `contexts/security-context.tsx` (The Gatekeeper) 🛡️
 **Type**: React Context + AppState Listener
 
 Implements the "Trust No One" model.

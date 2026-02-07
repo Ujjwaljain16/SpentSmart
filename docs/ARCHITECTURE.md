@@ -122,19 +122,22 @@ interface SecurityState {
 - Controls `privacyMode`: When active, all currency components blur their content.
 - Auto-locks app when put in background (AppState monitoring).
 
-### 2. Native UPI Module (`modules/upi-intent`)
-**Role**: Bridge between JS and Android Intents.
-This is a **Custom Native Module** written in Kotlin.
-- **Function**: `launchApp(packageName, uri)`
-- **Behavior**: Directly launches target UPI apps (PhonePe, GPay, Paytm) with a signed payment intent URI.
-- **Why Native?**: `Linking.openURL` is flaky for deep Android intents. This module ensures 100% launch success rate.
+### 2. Automation Hybrid Stack (The Core)
+**Role**: Ensuring 100% Transaction Coverage.
 
-### 3. Smart Verification (`services/payment-verification.ts`)
-**Role**: Heuristic analysis of payments.
-- **Pending Logic**: When a user clicks "Pay", the app suspends. On resume, it logs a "Pending" transaction.
-- **Confidence Score**: Based on time-away-from-app.
-    - < 5s away: High chance of user cancellation (Low Confidence).
-    - > 15s away: High chance of completion (High Confidence).
+#### Layer 1: Notification Listener (Passive)
+- **Module**: `modules/notification-listener` (Native Kotlin)
+- **Function**: Listens for `com.google.android.apps.nbu.paisa` (GPay) and others.
+- **Verification**: Auto-deduplicates against manual entries.
+
+#### Layer 2: LocalSetu / Intent Monitor (Active)
+- **Module**: `services/local-upi.ts` & `services/intent-monitor.ts`
+- **Function**: Generates tracked UPI links -> Listens for specific `tr` (Transaction Ref) callbacks.
+- **Result**: Instant confirmation for "Quick Pay" presets.
+
+#### Layer 3: Voice Commander (Fallback)
+- **Module**: `components/voice/VoiceInput.tsx`
+- **Function**: Parses natural language ("Paid 50 to Raju") to fill gaps.
 
 ### 4. Custom Charting (`components/home/InsightsGrid.tsx`)
 **Role**: High-performance visualization.

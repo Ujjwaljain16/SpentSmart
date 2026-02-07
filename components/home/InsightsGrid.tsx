@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Colors, BorderRadius, Spacing, FontSizes } from '@/constants/theme';
@@ -31,16 +31,16 @@ export function InsightsGrid({ categoryBreakdown, topPayees }: InsightsGridProps
     return (
         <View style={styles.grid}>
             {/* Left: Category Breakdown */}
-            <View style={[styles.card, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)' }]}>
+            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={styles.header}>
-                    <Ionicons name="pie-chart" size={18} color="#FFF" />
-                    <Text style={styles.cardTitle}>Spending</Text>
+                    <Ionicons name="pie-chart" size={18} color={colors.tint} />
+                    <Text style={[styles.cardTitle, { color: colors.text }]}>Spending</Text>
                 </View>
 
                 {topCategories.length > 0 ? (
                     <View style={styles.categoryList}>
                         {topCategories.map((item) => {
-                            const catInfo = DEFAULT_CATEGORIES.find(c => c.key === item.category) || DEFAULT_CATEGORIES[4]; // fallback to 'other'
+                            const catInfo = DEFAULT_CATEGORIES.find(c => c.key === item.category) || DEFAULT_CATEGORIES[4];
                             return (
                                 <TouchableOpacity
                                     key={item.category}
@@ -52,15 +52,15 @@ export function InsightsGrid({ categoryBreakdown, topPayees }: InsightsGridProps
                                 >
                                     <View style={styles.categoryLeft}>
                                         <View style={[styles.categoryDot, { backgroundColor: catInfo.color }]} />
-                                        <Text style={[styles.categoryLabel, { color: '#FFF' }]}>
+                                        <Text style={[styles.categoryLabel, { color: colors.text }]}>
                                             {catInfo.label}
                                         </Text>
                                     </View>
                                     <View style={styles.categoryRight}>
-                                        <Text style={[styles.categoryPercent, { color: 'rgba(255, 255, 255, 0.9)' }]}>
+                                        <Text style={[styles.categoryPercent, { color: colors.text }]}>
                                             {item.percent}%
                                         </Text>
-                                        <Text style={[styles.categoryAmount, { color: 'rgba(255, 255, 255, 0.6)' }]}>
+                                        <Text style={[styles.categoryAmount, { color: colors.textSecondary }]}>
                                             ₹{item.amount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                                         </Text>
                                     </View>
@@ -69,17 +69,17 @@ export function InsightsGrid({ categoryBreakdown, topPayees }: InsightsGridProps
                         })}
                     </View>
                 ) : (
-                    <Text style={[styles.emptyText, { color: 'rgba(255, 255, 255, 0.5)' }]}>
+                    <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
                         No spending data
                     </Text>
                 )}
             </View>
 
             {/* Right: Top Payees */}
-            <View style={[styles.card, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)' }]}>
+            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={styles.header}>
-                    <Ionicons name="people" size={18} color="#FFF" />
-                    <Text style={styles.cardTitle}>Top Payees</Text>
+                    <Ionicons name="people" size={18} color={colors.tint} />
+                    <Text style={[styles.cardTitle, { color: colors.text }]}>Top Payees</Text>
                 </View>
 
                 {topPayees.length > 0 ? (
@@ -90,18 +90,18 @@ export function InsightsGrid({ categoryBreakdown, topPayees }: InsightsGridProps
                                     <View style={[styles.payeeDot, {
                                         backgroundColor: index === 0 ? '#EC4899' : index === 1 ? '#8B5CF6' : '#14B8A6'
                                     }]} />
-                                    <Text style={[styles.payeeName, { color: '#FFF' }]} numberOfLines={1}>
+                                    <Text style={[styles.payeeName, { color: colors.text }]} numberOfLines={1}>
                                         {payee.name}
                                     </Text>
                                 </View>
-                                <Text style={[styles.payeeAmount, { color: 'rgba(255, 255, 255, 0.9)' }]}>
+                                <Text style={[styles.payeeAmount, { color: colors.text }]}>
                                     ₹{payee.amount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                                 </Text>
                             </View>
                         ))}
                     </View>
                 ) : (
-                    <Text style={[styles.emptyText, { color: 'rgba(255, 255, 255, 0.5)' }]}>
+                    <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
                         No payees yet
                     </Text>
                 )}
@@ -121,8 +121,6 @@ const styles = StyleSheet.create({
         borderRadius: BorderRadius.lg,
         borderWidth: 1,
         padding: Spacing.md,
-        boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.15)',
-        elevation: 3,
     },
     header: {
         flexDirection: 'row',
@@ -133,7 +131,6 @@ const styles = StyleSheet.create({
     cardTitle: {
         fontSize: FontSizes.md,
         fontWeight: '600',
-        color: '#FFF',
     },
     categoryList: {
         gap: Spacing.sm,

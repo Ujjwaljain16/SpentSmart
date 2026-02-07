@@ -39,9 +39,9 @@ export function BalanceCard({ balance, totalIncome, totalExpense, trend, period,
     const trendIcon = trend.direction === 'up' ? 'trending-up' : trend.direction === 'down' ? 'trending-down' : 'remove';
 
     return (
-        <View style={[styles.container, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)' }]}>
+        <View style={[styles.container, { backgroundColor: colors.card, borderColor: colors.border }]}>
             {/* Period Selector */}
-            <View style={styles.periodRow}>
+            <View style={[styles.periodRow, { backgroundColor: colors.surface }]}>
                 {(['week', 'month', 'year'] as Period[]).map((p) => (
                     <TouchableOpacity
                         key={p}
@@ -49,8 +49,7 @@ export function BalanceCard({ balance, totalIncome, totalExpense, trend, period,
                         style={[
                             styles.periodButton,
                             {
-                                backgroundColor: period === p ? 'rgba(255, 255, 255, 0.2)' : 'transparent',
-                                borderColor: period === p ? 'rgba(255, 255, 255, 0.3)' : 'transparent',
+                                backgroundColor: period === p ? colors.tint : 'transparent',
                             },
                         ]}
                     >
@@ -58,7 +57,7 @@ export function BalanceCard({ balance, totalIncome, totalExpense, trend, period,
                             style={[
                                 styles.periodText,
                                 {
-                                    color: period === p ? '#FFF' : 'rgba(255, 255, 255, 0.6)',
+                                    color: period === p ? '#FFF' : colors.textSecondary,
                                     fontWeight: period === p ? '600' : '400',
                                 },
                             ]}
@@ -73,20 +72,20 @@ export function BalanceCard({ balance, totalIncome, totalExpense, trend, period,
             {budget !== null && (
                 <View style={styles.budgetContainer}>
                     <View style={styles.budgetHeader}>
-                        <Text style={styles.budgetText}>
-                            Monthly Budget: <Text style={styles.budgetAmount}>₹{budget.toLocaleString('en-IN')}</Text>
+                        <Text style={[styles.budgetText, { color: colors.textSecondary }]}>
+                            Monthly Budget: <Text style={[styles.budgetAmount, { color: colors.text }]}>₹{budget.toLocaleString('en-IN')}</Text>
                         </Text>
-                        <Text style={[styles.budgetText, { color: totalExpense > budget ? '#EF4444' : 'rgba(255,255,255,0.6)' }]}>
+                        <Text style={[styles.budgetText, { color: totalExpense > budget ? colors.error : colors.textSecondary }]}>
                             {Math.round((totalExpense / budget) * 100)}% spent
                         </Text>
                     </View>
-                    <View style={[styles.progressBarBg, { backgroundColor: 'rgba(255,255,255,0.1)' }]}>
+                    <View style={[styles.progressBarBg, { backgroundColor: colors.surface }]}>
                         <View
                             style={[
                                 styles.progressBarFill,
                                 {
                                     width: `${Math.min((totalExpense / budget) * 100, 100)}%`,
-                                    backgroundColor: totalExpense > budget ? '#EF4444' : '#3B82F6'
+                                    backgroundColor: totalExpense > budget ? colors.error : colors.tint
                                 }
                             ]}
                         />
@@ -97,18 +96,18 @@ export function BalanceCard({ balance, totalIncome, totalExpense, trend, period,
             {/* Balance Display */}
             <View style={styles.balanceSection}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={[styles.periodLabel, { color: 'rgba(255, 255, 255, 0.6)' }]}>
+                    <Text style={[styles.periodLabel, { color: colors.textSecondary }]}>
                         {periodLabels[period]}
                     </Text>
                     <TouchableOpacity onPress={() => setPrivacyModeEnabled(!isPrivacyModeEnabled)}>
                         <Ionicons
                             name={isPrivacyModeEnabled ? "eye-off" : "eye"}
                             size={14}
-                            color="rgba(255, 255, 255, 0.4)"
+                            color={colors.textSecondary}
                         />
                     </TouchableOpacity>
                 </View>
-                <Text style={[styles.balance, isPrivacyModeEnabled && { fontSize: 48, marginVertical: 12 }]}>
+                <Text style={[styles.balance, { color: colors.text }, isPrivacyModeEnabled && { fontSize: 48, marginVertical: 12 }]}>
                     {formatAmount(balance)}
                 </Text>
 
@@ -119,31 +118,31 @@ export function BalanceCard({ balance, totalIncome, totalExpense, trend, period,
                         <Text style={[styles.trendText, { color: trendColor }]}>
                             {trend.percent}%
                         </Text>
-                        <Text style={[styles.trendLabel, { color: 'rgba(255, 255, 255, 0.7)' }]}>
+                        <Text style={[styles.trendLabel, { color: colors.textSecondary }]}>
                             vs last {period}
                         </Text>
                     </View>
                 )}
 
                 {/* Sub-totals Row */}
-                <View style={styles.subtotalsRow}>
+                <View style={[styles.subtotalsRow, { borderTopColor: colors.border }]}>
                     <View style={styles.subtotalItem}>
-                        <View style={[styles.subtotalIcon, { backgroundColor: 'rgba(16, 185, 129, 0.2)' }]}>
-                            <Ionicons name="arrow-down-circle" size={16} color="#10B981" />
+                        <View style={[styles.subtotalIcon, { backgroundColor: `${colors.success}20` }]}>
+                            <Ionicons name="arrow-down-circle" size={16} color={colors.success} />
                         </View>
                         <View>
-                            <Text style={styles.subtotalLabel}>Income</Text>
-                            <Text style={[styles.subtotalValue, { color: '#10B981' }]}>{formatAmount(totalIncome)}</Text>
+                            <Text style={[styles.subtotalLabel, { color: colors.textSecondary }]}>Income</Text>
+                            <Text style={[styles.subtotalValue, { color: colors.success }]}>{formatAmount(totalIncome)}</Text>
                         </View>
                     </View>
-                    <View style={styles.subtotalDivider} />
+                    <View style={[styles.subtotalDivider, { backgroundColor: colors.border }]} />
                     <View style={styles.subtotalItem}>
-                        <View style={[styles.subtotalIcon, { backgroundColor: 'rgba(239, 68, 68, 0.2)' }]}>
-                            <Ionicons name="arrow-up-circle" size={16} color="#EF4444" />
+                        <View style={[styles.subtotalIcon, { backgroundColor: `${colors.error}20` }]}>
+                            <Ionicons name="arrow-up-circle" size={16} color={colors.error} />
                         </View>
                         <View>
-                            <Text style={styles.subtotalLabel}>Expense</Text>
-                            <Text style={styles.subtotalValue}>{formatAmount(totalExpense)}</Text>
+                            <Text style={[styles.subtotalLabel, { color: colors.textSecondary }]}>Expense</Text>
+                            <Text style={[styles.subtotalValue, { color: colors.text }]}>{formatAmount(totalExpense)}</Text>
                         </View>
                     </View>
                 </View>
@@ -158,14 +157,11 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         padding: Spacing.lg,
         marginBottom: Spacing.lg,
-        boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.2)',
-        elevation: 5,
     },
     periodRow: {
         flexDirection: 'row',
         marginBottom: Spacing.md,
         borderRadius: BorderRadius.md,
-        backgroundColor: 'rgba(0, 0, 0, 0.1)',
         padding: 4,
     },
     periodButton: {
@@ -174,7 +170,6 @@ const styles = StyleSheet.create({
         paddingHorizontal: Spacing.sm,
         borderRadius: BorderRadius.sm,
         alignItems: 'center',
-        borderWidth: 1,
     },
     periodText: {
         fontSize: FontSizes.sm,
@@ -188,9 +183,8 @@ const styles = StyleSheet.create({
         marginBottom: 4,
     },
     balance: {
-        fontSize: 72,
-        fontWeight: '900',
-        color: '#FFF',
+        fontSize: 56,
+        fontWeight: '800',
         marginBottom: Spacing.xs,
     },
     trendRow: {
@@ -211,7 +205,6 @@ const styles = StyleSheet.create({
         width: '100%',
         paddingTop: Spacing.lg,
         borderTopWidth: 1,
-        borderTopColor: 'rgba(255, 255, 255, 0.1)',
         justifyContent: 'space-between',
         alignItems: 'center',
     },
@@ -231,19 +224,16 @@ const styles = StyleSheet.create({
     subtotalLabel: {
         fontSize: 10,
         fontWeight: '700',
-        color: 'rgba(255, 255, 255, 0.5)',
         textTransform: 'uppercase',
         letterSpacing: 0.5,
     },
     subtotalValue: {
         fontSize: FontSizes.md,
         fontWeight: '700',
-        color: '#FFF',
     },
     subtotalDivider: {
         width: 1,
         height: 30,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
         marginHorizontal: Spacing.md,
     },
     budgetContainer: {
@@ -257,11 +247,9 @@ const styles = StyleSheet.create({
     },
     budgetText: {
         fontSize: 10,
-        color: 'rgba(255, 255, 255, 0.6)',
         fontWeight: '600',
     },
     budgetAmount: {
-        color: '#FFF',
     },
     progressBarBg: {
         height: 4,

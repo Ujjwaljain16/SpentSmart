@@ -6,6 +6,11 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
+  FlatList,
+  Modal,
+  TouchableWithoutFeedback,
+  Dimensions,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
@@ -20,10 +25,11 @@ import { Colors, BorderRadius, FontSizes, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 interface CategoryPickerProps {
-  selectedCategory: CategoryType | null;
-  onSelectCategory: (category: CategoryType) => void;
+  selectedCategory: CategoryType | string | null;
+  onSelectCategory: (category: any) => void;
   compact?: boolean;
   mode?: 'dropdown' | 'chips';
+  customCategories?: CategoryInfo[];
 }
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
@@ -66,8 +72,8 @@ function CategoryButton({
       style={[
         styles.categoryButton,
         {
-          backgroundColor: isSelected ? category.color : 'rgba(255, 255, 255, 0.1)',
-          borderColor: isSelected ? category.color : 'rgba(255, 255, 255, 0.15)',
+          backgroundColor: isSelected ? category.color : 'transparent',
+          borderColor: isSelected ? category.color : colors.border,
         },
         animatedStyle,
       ]}
@@ -80,7 +86,7 @@ function CategoryButton({
           {
             backgroundColor: isSelected
               ? 'rgba(255, 255, 255, 0.2)'
-              : `${category.color}20`,
+              : colors.surface,
           },
         ]}
       >
@@ -94,7 +100,7 @@ function CategoryButton({
         style={[
           styles.categoryLabel,
           {
-            color: '#fff',
+            color: isSelected ? '#fff' : colors.text,
           },
         ]}
         numberOfLines={1}
@@ -109,17 +115,24 @@ export function CategoryPicker({
   selectedCategory,
   onSelectCategory,
   compact = false,
-  mode = 'dropdown'
+  mode = 'dropdown',
+  customCategories
 }: CategoryPickerProps) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'dark'];
-  const [categories, setCategories] = useState<CategoryInfo[]>(DEFAULT_CATEGORY_LIST);
-  const [isLoading, setIsLoading] = useState(true);
+  const [categories, setCategories] = useState<CategoryInfo[]>(customCategories || DEFAULT_CATEGORY_LIST);
+  const [isLoading, setIsLoading] = useState(!customCategories);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
+  const buttonRef = React.useRef<View>(null);
 
   useEffect(() => {
-    loadCategories();
-  }, []);
+    if (!customCategories) {
+      loadCategories();
+    } else {
+      setCategories(customCategories);
+    }
+  }, [customCategories]);
 
   const loadCategories = async () => {
     try {
@@ -156,11 +169,11 @@ export function CategoryPicker({
                 borderRadius: 20,
                 backgroundColor: isActive
                   ? cat.color
-                  : 'rgba(255, 255, 255, 0.1)',
+                  : 'transparent',
                 borderWidth: 1,
                 borderColor: isActive
                   ? cat.color
-                  : 'rgba(255, 255, 255, 0.2)',
+                  : colors.border,
               }}
               onPress={() => onSelectCategory(cat.key)}
             >
@@ -171,7 +184,7 @@ export function CategoryPicker({
                 style={{ marginRight: 6 }}
               />
               <Text style={{
-                color: '#fff',
+                color: isActive ? '#fff' : colors.text,
                 fontWeight: isActive ? '700' : '500',
                 fontSize: 14
               }}>
@@ -186,64 +199,97 @@ export function CategoryPicker({
 
   // Compact Dropdown Mode
   if (compact) {
+    const handleOpen = () => {
+      buttonRef.current?.measureInWindow((x, y, width, height) => {
+        setDropdownPosition({
+          top: y + height + 4,
+          left: x,
+          width: width,
+        });
+        setIsExpanded(true);
+      });
+    };
+
     return (
-      <View style={{ zIndex: 100 }}>
+      <View style={{ width: '100%' }}>
         <TouchableOpacity
+          ref={buttonRef}
           style={[
             styles.dropdownButton,
             {
-              backgroundColor: 'rgba(255, 255, 255, 0.1)',
-              borderColor: 'rgba(255, 255, 255, 0.2)',
+              backgroundColor: colors.card,
+              borderColor: colors.border,
             }
           ]}
-          onPress={() => setIsExpanded(!isExpanded)}
+          onPress={handleOpen}
         >
           <View style={[styles.iconContainer, { width: 24, height: 24, backgroundColor: 'transparent' }]}>
             <Ionicons
-              name={selectedCategoryInfo.icon as keyof typeof Ionicons.glyphMap}
+              name={(selectedCategoryInfo.icon || 'apps') as keyof typeof Ionicons.glyphMap}
               size={18}
-              color="#FFF"
+              color={colors.text}
             />
           </View>
-          <Text style={[styles.categoryLabel, { color: '#FFF', marginRight: 4 }]}>
+          <Text
+            style={[styles.categoryLabel, { color: colors.text, flex: 1, marginRight: 4 }]}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
             {selectedCategoryInfo.label}
           </Text>
-          <Ionicons name={isExpanded ? "chevron-up" : "chevron-down"} size={16} color="#FFF" />
+          <Ionicons name={isExpanded ? "chevron-up" : "chevron-down"} size={16} color={colors.text} />
         </TouchableOpacity>
 
-        {isExpanded && (
-          <View style={[
-            styles.dropdownList,
-            {
-              backgroundColor: 'rgba(30, 58, 138, 0.95)',
-              borderColor: 'rgba(255, 255, 255, 0.2)',
-            }
-          ]}>
-            {categories.map((category) => (
-              <TouchableOpacity
-                key={category.key}
-                style={[
-                  styles.dropdownItem,
-                  selectedCategory === category.key && { backgroundColor: colors.tint + '20' }
-                ]}
-                onPress={() => {
-                  onSelectCategory(category.key);
-                  setIsExpanded(false);
-                }}
-              >
-                <Ionicons
-                  name={category.icon as keyof typeof Ionicons.glyphMap}
-                  size={20}
-                  color={category.color}
-                  style={{ marginRight: 8 }}
+        <Modal
+          visible={isExpanded}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setIsExpanded(false)}
+        >
+          <TouchableWithoutFeedback onPress={() => setIsExpanded(false)}>
+            <View style={styles.modalOverlay}>
+              <View style={[
+                styles.dropdownList,
+                {
+                  backgroundColor: colors.card,
+                  borderColor: colors.border,
+                  top: dropdownPosition.top,
+                  left: dropdownPosition.left,
+                  width: dropdownPosition.width,
+                  maxHeight: 300, // Explicit height constraint
+                }
+              ]}>
+                <FlatList
+                  data={categories}
+                  keyExtractor={(item) => item.key}
+                  showsVerticalScrollIndicator={false}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={[
+                        styles.dropdownItem,
+                        selectedCategory === item.key && { backgroundColor: colors.tint + '20' }
+                      ]}
+                      onPress={() => {
+                        onSelectCategory(item.key);
+                        setIsExpanded(false);
+                      }}
+                    >
+                      <Ionicons
+                        name={(item.icon || 'apps') as keyof typeof Ionicons.glyphMap}
+                        size={20}
+                        color={item.color}
+                        style={{ marginRight: 8 }}
+                      />
+                      <Text style={{ color: colors.text, fontSize: 14, fontWeight: '500' }}>
+                        {item.label}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 />
-                <Text style={{ color: '#FFF', fontSize: 14, fontWeight: '500' }}>
-                  {category.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
+              </View>
+            </View>
+          </TouchableWithoutFeedback>
+        </Modal>
       </View>
     );
   }
@@ -251,7 +297,7 @@ export function CategoryPicker({
   // Default List Mode
   return (
     <View style={styles.container}>
-      <Text style={[styles.label, { color: 'rgba(255, 255, 255, 0.7)' }]}>
+      <Text style={[styles.label, { color: colors.textSecondary }]}>
         Category
       </Text>
       <View style={styles.categoriesContainer}>
@@ -311,12 +357,14 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.full,
     borderWidth: 1,
     gap: 6,
+    minHeight: 40,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.2)', // Dim background slightly to show focus
   },
   dropdownList: {
     position: 'absolute',
-    top: '120%',
-    right: 0,
-    minWidth: 180,
     borderRadius: BorderRadius.md,
     borderWidth: 1,
     padding: 4,

@@ -1,45 +1,79 @@
-# 🛡️ SpentSmart - Privacy-First UPI Expense Manager
+<p align="center">
+  <img src="assets/images/icon.png" alt="SpentSmart Logo" width="120" height="120" />
+</p>
 
-> **Smart. Secure. Private. Track expenses via UPI QR codes without compromising your data.**
+<h1 align="center">SpentSmart</h1>
+<p align="center"><strong>Privacy-First UPI Expense Tracker for India</strong></p>
 
-[![React Native](https://img.shields.io/badge/React%20Native-0.81-61DAFB?logo=react)](https://reactnative.dev/)
-[![Expo](https://img.shields.io/badge/Expo-54-000020?logo=expo)](https://expo.dev/)
-[![Privacy First](https://img.shields.io/badge/Privacy-First-00C853)]()
-[![Production Ready](https://img.shields.io/badge/Status-Production%20Ready-blue)]()
+<p align="center">
+  <a href="#"><img src="https://img.shields.io/badge/React%20Native-0.81-61DAFB?logo=react" alt="React Native" /></a>
+  <a href="#"><img src="https://img.shields.io/badge/Expo-54-000020?logo=expo" alt="Expo" /></a>
+  <a href="#"><img src="https://img.shields.io/badge/TypeScript-5.3-3178C6?logo=typescript" alt="TypeScript" /></a>
+  <a href="#"><img src="https://img.shields.io/badge/Privacy-First-00C853" alt="Privacy First" /></a>
+</p>
 
-## 🎯 Why SpentSmart?
+---
 
-**SpentSmart** is built for the **privacy-conscious Indian user**. Most expense trackers read your SMS, link your bank accounts, or upload data to the cloud. We don't.
+## 📖 What is SpentSmart?
 
-- 🔒 **Biometric Security** - FaceID/Fingerprint lock for app access
-- 👁️ **Privacy Mode** - Blur sensitive amounts with a single tap
-- ⚡ **QR Code Scanning** - Instant payment details from UPI QRs
-- 📱 **Contacts Integration** - Easily pick payees for manual entry
-- 🏠 **100% Local Storage** - Your financial data never leaves your phone
+**SpentSmart** is a mobile expense tracking app designed specifically for the Indian UPI ecosystem. Scan any UPI QR code, track your spending, and get insights — all while keeping your data **100% local** on your device.
 
-## 📱 Key Features
+No cloud. No SMS access. No bank linking. Just pure, private expense tracking.
 
-### 🛡️ Security & Privacy
-- **App Lock**: Secure the entire app with your device's biometrics.
-- **Privacy Dashboard**: Transparent view of exactly what data is stored.
-- **Zero Permissions**: No SMS, Location, or Storage access required.
+---
 
-### 💰 Smart Tracking
-- **Scanner**: Scan any UPI QR to log expenses instantly.
-- **Budgeting**: Set monthly limits and track progress with visual bars.
-- **Analytics**: Beautiful charts for daily, weekly, and monthly spending.
-- **Insights**: Category-wise breakdown to spot spending habits.
+## 🤔 Why SpentSmart?
 
-### ⚡ Seamless Experience
-- **Manual Entry**: Fast entry with integrated Contact Picking.
-- **Dark/Light Mode**: Automatic theme switching.
-- **Transaction History**: Search, filter, and edit past transactions.
+Most expense apps in India require invasive permissions:
+- ❌ Reading your SMS for transaction alerts
+- ❌ Linking your bank accounts via Account Aggregators
+- ❌ Uploading your financial data to cloud servers
+
+**SpentSmart takes a different approach:**
+
+| Feature | SpentSmart | Other Apps |
+|---------|------------|------------|
+| Data Storage | 📱 100% Local | ☁️ Cloud |
+| SMS Access | ❌ Not Required | ✅ Required |
+| Bank Linking | ❌ Never | ✅ Often Required |
+| Works Offline | ✅ Yes | ❌ Usually No |
+| Open Source | ✅ Yes | ❌ Rarely |
+
+---
+
+## ✨ Features
+
+### 🔒 Security & Privacy
+- **Biometric Lock** — FaceID/Fingerprint to unlock the app
+- **Privacy Mode** — Blur amounts with one tap
+- **Privacy Dashboard** — See exactly what data is stored
+- **Zero Cloud** — All data stays on your phone
+
+### 📸 Smart Expense Tracking
+- **QR Scanner** — Scan any UPI QR code to log payments instantly
+- **Manual Entry** — Quick entry with contact picker integration
+- **Categories** — Auto-categorize or customize your own
+- **Edit & Delete** — Full control over your transaction history
+
+### 📊 Insights & Analytics
+- **Daily/Weekly/Monthly** trends
+- **Category breakdown** with visual charts
+- **Budget tracking** with progress bars
+- **Spending patterns** to spot habits
+
+### ⚡ User Experience
+- **Dark/Light Mode** — Automatic theme switching
+- **OTA Updates** — Get new features without app store updates
+- **Crash Protection** — Global error boundary for stability
+- **Optimized Lists** — Smooth scrolling even with 1000+ transactions
+
+---
 
 ## 🚀 Getting Started
 
 ### Prerequisites
 - Node.js >= 18
-- pnpm
+- npm or pnpm
 
 ### Installation
 
@@ -49,40 +83,96 @@ git clone https://github.com/Ujjwaljain16/ExpenseTracker.git
 cd ExpenseTracker/upi-tracker-react-native
 
 # Install dependencies
-pnpm install
+npm install
 
 # Start development server
-pnpm start
+npx expo start
 ```
 
-## 🏗️ Tech Stack
+### Building for Production
 
-- **Framework**: React Native 0.81 + Expo 54
-- **Language**: TypeScript
-- **Navigation**: Expo Router (File-based routing)
-- **State/Storage**: React Context + AsyncStorage
-- **Security**: `expo-local-authentication` (Biometrics)
-- **Integration**: `expo-contacts`, `expo-camera`
-- **Charting**: Custom optimized SVG charts
+```bash
+# Configure EAS (one-time)
+eas build:configure
 
-## 📂 Documentation
+# Build Android APK
+eas build --platform android --profile preview
 
-We maintain detailed documentation for developers:
-- [📖 Architecture Overview](docs/ARCHITECTURE.md)
-- [🚀 Publishing Guide](docs/PUBLISHING_GUIDE.md)
-- [🧪 Testing Guide](docs/TESTING_GUIDE.md)
-
-## 🤝 Contributing
-
-Contributions are welcome! This project prioritizes:
-1.  **Privacy-first design** - No compromises
-2.  **Offline-first** - Works without internet
-3.  **User control** - Users own their data
-
-## 📄 License
-
-MIT License - See [LICENSE](LICENSE) file for details
+# Push OTA update (no build needed)
+eas update --branch preview --message "Your update message"
+```
 
 ---
 
-**Made with ❤️ for privacy-conscious Indians**
+## 🏗️ Architecture
+
+```
+upi-tracker-react-native/
+├── app/                    # Screens (Expo Router file-based routing)
+│   ├── (tabs)/             # Tab navigation screens
+│   ├── onboarding/         # First-time user flow
+│   └── *.tsx               # Individual screens
+├── components/             # Reusable UI components
+│   ├── home/               # Home screen components
+│   ├── payment/            # Payment flow components
+│   └── ui/                 # Generic UI elements
+├── services/               # Business logic layer
+│   ├── storage.ts          # Transaction CRUD operations
+│   ├── analytics.ts        # Insights calculations
+│   └── upi-app-launcher.ts # UPI intent handling
+├── contexts/               # React Context providers
+│   └── security-context.tsx
+├── hooks/                  # Custom React hooks
+├── constants/              # Theme, categories, UPI config
+└── types/                  # TypeScript interfaces
+```
+
+### Key Principles
+- **Separation of Concerns**: Services handle data, contexts handle state, components handle UI
+- **Privacy by Design**: No network calls for user data
+- **Offline First**: Works without internet
+- **Type Safety**: Full TypeScript coverage
+
+---
+
+## 🛡️ Permissions
+
+SpentSmart requires minimal permissions:
+
+| Permission | Purpose | When Asked |
+|------------|---------|------------|
+| Camera | Scan UPI QR codes | When you open Scanner |
+| Biometrics | Secure app access | When you enable App Lock |
+| Contacts | Pick payees for manual entry | When you tap "Pick Contact" |
+
+**What we DON'T access:** SMS, Location, Storage, Internet (for user data)
+
+---
+
+## 📄 Privacy Policy
+
+See [PRIVACY.md](PRIVACY.md) for our complete privacy policy.
+
+**TL;DR**: Your data never leaves your device. We can't see it, we don't want it, we don't collect it.
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please ensure:
+1. **Privacy First** — No changes that send user data externally
+2. **Offline First** — Features must work without internet
+3. **Type Safe** — All code must be TypeScript
+
+---
+
+## 📄 License
+
+MIT License — See [LICENSE](LICENSE) for details.
+
+---
+
+<p align="center">
+  <strong>Made with ❤️ for privacy-conscious Indians</strong><br/>
+  <sub>Your money. Your data. Your control.</sub>
+</p>

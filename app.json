@@ -2,7 +2,7 @@
   "expo": {
     "name": "SpentSmart",
     "slug": "spentsmart",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "spentsmart",
@@ -29,10 +29,24 @@
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.USE_BIOMETRIC",
-        "android.permission.READ_CONTACTS",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.READ_CONTACTS"
       ],
-      "package": "com.ujjwaljain.spentsmart"
+      "package": "com.ujjwaljain.spentsmart",
+      "intentFilters": [
+        {
+          "action": "android.intent.action.VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "upi"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
     },
     "web": {
       "output": "static",
@@ -57,18 +71,23 @@
         {
           "cameraPermission": "ExpenseTracker needs camera access to scan UPI QR codes for payment tracking."
         }
-      ]
+      ],
+      "./modules/upi-intent/app.plugin.js"
     ],
-    "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
+    "reactCompiler": true,
+    "updates": {
+      "url": "https://u.expo.dev/14d0fdab-c65f-4488-9356-a157d43b5c37",
+      "fallbackToCacheTimeout": 0
     },
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "921b03ee-d272-469d-81d5-161813173ce9"
+        "projectId": "14d0fdab-c65f-4488-9356-a157d43b5c37"
       }
     },
-    "owner": "ujjwaljain16"
+    "owner": "ujjwaljain1609s-organization",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    }
   }
 }

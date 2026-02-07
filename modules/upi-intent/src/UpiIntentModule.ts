@@ -6,6 +6,7 @@ declare class UpiIntentModule extends NativeModule<UpiIntentModuleEvents> {
   launchAppByPackage(packageName: string): Promise<boolean>;
   launchUPI(upiUrl: string): Promise<boolean>;
   getUPIApps(): Promise<Array<{ packageName: string, name: string }>>;
+  shareBase64(packageName: string, base64Data: string): Promise<boolean>;
 }
 
 // This call loads the native module object from the JSI.

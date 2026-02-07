@@ -58,7 +58,7 @@ export const parseUPIQRCode = (qrData: string): UPIPaymentData | null => {
     }
 
     // Clean up payee name: trim and normalize whitespace
-    payeeName = payeeName.trim().replace(/\s+/g, ' ');
+    payeeName = extractMerchantName(payeeName, upiId);
 
     // Extract amount if present (am)
     const amountStr = params.get('am');
@@ -108,6 +108,42 @@ export const parseUPIQRCode = (qrData: string): UPIPaymentData | null => {
     console.error('Failed to parse UPI QR code:', error);
     return null;
   }
+};
+
+/**
+ * Smartly extract/derive merchant name
+ */
+export const extractMerchantName = (rawName: string, vpa?: string | null): string => {
+  let name = rawName.trim().replace(/\s+/g, ' ');
+
+  // 1. If name looks like a VPA, treat it as VPA for derivation
+  if (name.includes('@') && !vpa) {
+    vpa = name;
+    name = 'Unknown';
+  }
+
+  // 2. Detect Generic Names
+  const isGenericName = /^(merchant|google merchant|phonepe merchant|paytm merchant|bharatpe merchant|upi merchant|unknown)$/i.test(name);
+
+  // 3. Try to derive from VPA if name is generic/unknown
+  if ((isGenericName || name === 'Unknown') && vpa) {
+    const vpaUsername = vpa.split('@')[0];
+    // Convert "nandini.milk" -> "Nandini Milk"
+    const derivedName = vpaUsername
+      .replace(/[._-]/g, ' ') // Replace separators with spaces
+      .replace(/[0-9]/g, '')  // Remove numbers (often phone nums)
+      .trim();
+
+    if (derivedName.length > 2) {
+      // Capitalize Words
+      name = derivedName.replace(/\b\w/g, l => l.toUpperCase());
+    }
+  }
+
+  // 4. Clean up specific suffixes
+  name = name.replace(/\s+(Merchant|Store|Shop)$/i, '');
+
+  return name;
 };
 
 /**

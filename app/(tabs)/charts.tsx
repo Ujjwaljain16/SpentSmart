@@ -45,18 +45,13 @@ export default function ChartsScreen() {
             // Get appropriate trend data based on period
             let trendData;
             if (period === 'week') {
-                // Show last 7 days
                 trendData = await getDailyTrend(7);
             } else if (period === 'month') {
-                // Show current month's weeks (from start of month to today)
                 const now = new Date();
                 const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
                 const daysSinceMonthStart = Math.floor((now.getTime() - monthStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-
-                // Get daily data for current month
                 const dailyData = await getDailyTrend(daysSinceMonthStart);
 
-                // Group into weeks
                 trendData = [];
                 const weeksCount = Math.ceil(daysSinceMonthStart / 7);
 
@@ -72,7 +67,6 @@ export default function ChartsScreen() {
                     }
                 }
             } else {
-                // Year: Show last 12 months
                 const allTxs = await getAllTransactions();
                 const now = new Date();
                 trendData = [];
@@ -86,7 +80,6 @@ export default function ChartsScreen() {
                         tx => tx.timestamp >= monthStart.getTime() && tx.timestamp <= monthEnd.getTime() && tx.type !== 'income'
                     );
                     const monthAmount = monthTxs.reduce((sum, tx) => sum + tx.amount, 0);
-
                     const monthName = new Intl.DateTimeFormat('en-US', { month: 'short' }).format(monthDate);
 
                     trendData.push({
@@ -118,25 +111,17 @@ export default function ChartsScreen() {
     };
 
     const handlePeriodChange = (newPeriod: Period) => {
-        // Don't reload if clicking same period
-        if (newPeriod === period) {
-            return;
-        }
+        if (newPeriod === period) return;
         setPeriod(newPeriod);
         setLoading(true);
     };
 
-    const backgroundColor = colorScheme === 'dark' ? '#1E3A8A' : '#3B82F6';
-
-    // Calculate max for chart scaling
     const maxDailyAmount = Math.max(...dailyTrend.map(d => d.amount), 1);
-
-    // Chart title based on period
     const chartTitle = period === 'week' ? 'Daily Spending' : period === 'month' ? 'Weekly Spending' : 'Monthly Spending';
 
     return (
-        <View style={[styles.container, { backgroundColor }]}>
-            <StatusBar style="light" />
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
+            <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
 
             <ScrollView
                 contentContainerStyle={[
@@ -147,15 +132,15 @@ export default function ChartsScreen() {
                     <RefreshControl
                         refreshing={refreshing}
                         onRefresh={onRefresh}
-                        tintColor="#FFF"
-                        colors={['#3B82F6']}
-                        progressBackgroundColor="#FFF"
+                        tintColor={colors.tint}
+                        colors={[colors.tint]}
+                        progressBackgroundColor={colors.card}
                     />
                 }
             >
                 {loading ? (
                     <View style={styles.loadingContainer}>
-                        <ActivityIndicator size="large" color="#FFF" />
+                        <ActivityIndicator size="large" color={colors.tint} />
                     </View>
                 ) : insights ? (
                     <>
@@ -172,10 +157,9 @@ export default function ChartsScreen() {
 
                         {/* Category Breakdown */}
                         {insights.categoryBreakdown.length > 0 ? (
-                            <View style={styles.card}>
-                                <Text style={styles.cardTitle}>Category Breakdown</Text>
+                            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                                <Text style={[styles.cardTitle, { color: colors.text }]}>Category Breakdown</Text>
 
-                                {/* Simple Pie Chart Representation */}
                                 <View style={styles.categoryList}>
                                     {insights.categoryBreakdown.slice(0, 5).map((item: any) => {
                                         const catInfo = DEFAULT_CATEGORIES.find(c => c.key === item.category) || DEFAULT_CATEGORIES[4];
@@ -183,11 +167,11 @@ export default function ChartsScreen() {
                                             <View key={item.category} style={styles.categoryRow}>
                                                 <View style={styles.categoryLeft}>
                                                     <View style={[styles.categoryDot, { backgroundColor: catInfo.color }]} />
-                                                    <Text style={styles.categoryLabel}>{catInfo.label}</Text>
+                                                    <Text style={[styles.categoryLabel, { color: colors.text }]}>{catInfo.label}</Text>
                                                 </View>
                                                 <View style={styles.categoryRight}>
-                                                    <Text style={styles.categoryPercent}>{item.percent}%</Text>
-                                                    <Text style={styles.categoryAmount}>₹{item.amount.toLocaleString('en-IN')}</Text>
+                                                    <Text style={[styles.categoryPercent, { color: colors.text }]}>{item.percent}%</Text>
+                                                    <Text style={[styles.categoryAmount, { color: colors.textSecondary }]}>₹{item.amount.toLocaleString('en-IN')}</Text>
                                                 </View>
                                             </View>
                                         );
@@ -221,8 +205,8 @@ export default function ChartsScreen() {
 
                         {/* Trend Bar Chart */}
                         {dailyTrend.length > 0 && dailyTrend.some(d => d.amount > 0) ? (
-                            <View style={styles.card}>
-                                <Text style={styles.cardTitle}>{chartTitle}</Text>
+                            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                                <Text style={[styles.cardTitle, { color: colors.text }]}>{chartTitle}</Text>
 
                                 <View style={styles.barChart}>
                                     {dailyTrend.map((day, index) => {
@@ -235,12 +219,12 @@ export default function ChartsScreen() {
                                                             styles.bar,
                                                             {
                                                                 height: barHeight,
-                                                                backgroundColor: day.amount > 0 ? '#EC4899' : 'rgba(255,255,255,0.1)',
+                                                                backgroundColor: day.amount > 0 ? colors.tint : colors.surface,
                                                             }
                                                         ]}
                                                     />
                                                 </View>
-                                                <Text style={styles.barLabel}>{day.day}</Text>
+                                                <Text style={[styles.barLabel, { color: colors.textSecondary }]}>{day.day}</Text>
                                             </View>
                                         );
                                     })}
@@ -249,9 +233,9 @@ export default function ChartsScreen() {
                         ) : null}
                     </>
                 ) : (
-                    <View style={styles.emptyState}>
-                        <Text style={styles.emptyTitle}>No data available</Text>
-                        <Text style={styles.emptySubtitle}>Start tracking to see analytics</Text>
+                    <View style={[styles.emptyState, { backgroundColor: colors.card }]}>
+                        <Text style={[styles.emptyTitle, { color: colors.text }]}>No data available</Text>
+                        <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>Start tracking to see analytics</Text>
                     </View>
                 )}
             </ScrollView>
@@ -273,8 +257,6 @@ const styles = StyleSheet.create({
         paddingVertical: 100,
     },
     card: {
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-        borderColor: 'rgba(255, 255, 255, 0.2)',
         borderWidth: 1,
         borderRadius: BorderRadius.lg,
         padding: Spacing.lg,
@@ -283,7 +265,6 @@ const styles = StyleSheet.create({
     cardTitle: {
         fontSize: FontSizes.lg,
         fontWeight: '600',
-        color: '#FFF',
         marginBottom: Spacing.md,
     },
     categoryList: {
@@ -309,7 +290,6 @@ const styles = StyleSheet.create({
     categoryLabel: {
         fontSize: FontSizes.md,
         fontWeight: '500',
-        color: '#FFF',
     },
     categoryRight: {
         alignItems: 'flex-end',
@@ -317,11 +297,9 @@ const styles = StyleSheet.create({
     categoryPercent: {
         fontSize: FontSizes.lg,
         fontWeight: '600',
-        color: 'rgba(255, 255, 255, 0.95)',
     },
     categoryAmount: {
         fontSize: FontSizes.sm,
-        color: 'rgba(255, 255, 255, 0.7)',
     },
     pieVisual: {
         flexDirection: 'row',
@@ -358,20 +336,18 @@ const styles = StyleSheet.create({
     },
     barLabel: {
         fontSize: FontSizes.xs,
-        color: 'rgba(255, 255, 255, 0.7)',
     },
     emptyState: {
         alignItems: 'center',
         paddingVertical: 60,
+        borderRadius: BorderRadius.lg,
     },
     emptyTitle: {
         fontSize: 20,
         fontWeight: '600',
-        color: '#FFF',
         marginBottom: 8,
     },
     emptySubtitle: {
         fontSize: 14,
-        color: 'rgba(255, 255, 255, 0.7)',
     },
 });

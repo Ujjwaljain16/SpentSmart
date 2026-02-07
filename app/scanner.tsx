@@ -24,6 +24,7 @@ const SCAN_AREA_SIZE = SCREEN_WIDTH * 0.7;
 export default function ScannerScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
+  const [torch, setTorch] = useState(false);
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'dark'];
   const insets = useSafeAreaInsets();
@@ -96,28 +97,28 @@ export default function ScannerScreen() {
 
   if (!permission.granted) {
     return (
-      <View style={[styles.container, { backgroundColor: '#1E3A8A' }]}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.permissionContainer}>
-          <View style={[styles.shieldContainer, { backgroundColor: 'rgba(255, 255, 255, 0.1)' }]}>
-            <Ionicons name="camera-outline" size={64} color="#FFF" />
+          <View style={[styles.shieldContainer, { backgroundColor: colors.surface }]}>
+            <Ionicons name="camera-outline" size={64} color={colors.text} />
           </View>
-          <Text style={[styles.title, { color: '#FFF' }]}>
+          <Text style={[styles.title, { color: colors.text }]}>
             Camera Access Required
           </Text>
-          <Text style={[styles.message, { color: 'rgba(255, 255, 255, 0.7)' }]}>
+          <Text style={[styles.message, { color: colors.textSecondary }]}>
             Please allow camera access to scan UPI QR codes
           </Text>
           <TouchableOpacity
-            style={[styles.permissionButton, { backgroundColor: '#3B82F6' }]}
+            style={[styles.permissionButton, { backgroundColor: colors.tint }]}
             onPress={requestPermission}
           >
             <Text style={styles.permissionButtonText}>Grant Permission</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.cancelButton, { borderColor: 'rgba(255, 255, 255, 0.3)' }]}
+            style={[styles.cancelButton, { borderColor: colors.border }]}
             onPress={handleClose}
           >
-            <Text style={[styles.cancelButtonText, { color: 'rgba(255, 255, 255, 0.7)' }]}>
+            <Text style={[styles.cancelButtonText, { color: colors.textSecondary }]}>
               Go Back
             </Text>
           </TouchableOpacity>
@@ -135,6 +136,7 @@ export default function ScannerScreen() {
           barcodeScannerSettings={{
             barcodeTypes: ['qr'],
           }}
+          enableTorch={torch}
           onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
         />
       )}
@@ -142,12 +144,19 @@ export default function ScannerScreen() {
       {/* Overlay */}
       <View style={styles.overlay}>
         {/* Top section */}
-        <View style={[styles.overlaySection, { paddingTop: insets.top }]}>
+        <View style={[styles.overlaySection, { paddingTop: insets.top, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, alignItems: 'flex-start' }]}>
           <TouchableOpacity
             style={styles.closeButton}
             onPress={handleClose}
           >
             <Ionicons name="close" size={28} color="#fff" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.torchButton}
+            onPress={() => setTorch((p) => !p)}
+          >
+            <Ionicons name={torch ? "flash" : "flash-off"} size={24} color="#fff" />
           </TouchableOpacity>
         </View>
 
@@ -171,7 +180,7 @@ export default function ScannerScreen() {
           </Text>
           {scanned && (
             <TouchableOpacity
-              style={styles.rescanButton}
+              style={[styles.rescanButton, { backgroundColor: colors.tint }]}
               onPress={() => setScanned(false)}
             >
               <Text style={styles.rescanButtonText}>Tap to Scan Again</Text>
@@ -257,7 +266,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 30,
     height: 30,
-    borderColor: '#3B82F6',
+    borderColor: '#3B82F6', // Keep blue for visibility or use tint if bright enough
     borderWidth: 4,
   },
   topLeft: {
@@ -289,9 +298,9 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 12,
   },
   closeButton: {
-    position: 'absolute',
-    top: 16,
-    left: 16,
+    // position: 'absolute', // Removed for flex layout
+    // top: 16,
+    // left: 16,
     width: 44,
     height: 44,
     borderRadius: 22,
@@ -309,13 +318,20 @@ const styles = StyleSheet.create({
     marginTop: Spacing.lg,
     paddingVertical: Spacing.md,
     paddingHorizontal: Spacing.xl,
-    backgroundColor: '#3B82F6',
     borderRadius: BorderRadius.md,
   },
   rescanButtonText: {
     color: '#fff',
     fontSize: FontSizes.md,
     fontWeight: '600',
+  },
+  torchButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 

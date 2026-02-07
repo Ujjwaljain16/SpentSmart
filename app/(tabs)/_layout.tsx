@@ -18,8 +18,8 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#EC4899', // Pink accent
-        tabBarInactiveTintColor: 'rgba(255, 255, 255, 0.5)',
+        tabBarActiveTintColor: colors.tint, // Teal accent from theme
+        tabBarInactiveTintColor: colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.5)',
         tabBarShowLabel: false, // Icons only for minimalism
         tabBarButton: HapticTab,
         tabBarStyle: {
@@ -34,16 +34,16 @@ export default function TabLayout() {
         tabBarBackground: () => (
           <BlurView
             intensity={25}
-            tint="dark"
+            tint={colorScheme === 'dark' ? 'dark' : 'light'}
             style={{
               position: 'absolute',
               top: 0,
               left: 0,
               right: 0,
               bottom: 0,
-              backgroundColor: 'rgba(0, 0, 0, 0.3)', // Fallback for Expo Go
+              backgroundColor: colorScheme === 'dark' ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.8)',
               borderTopWidth: 1,
-              borderTopColor: 'rgba(255, 255, 255, 0.1)',
+              borderTopColor: colorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
             }}
           />
         ),

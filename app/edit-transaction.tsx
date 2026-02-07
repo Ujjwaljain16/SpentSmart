@@ -95,11 +95,11 @@ export default function EditTransactionScreen() {
     };
 
     // Match home/charts background
-    const backgroundColor = colorScheme === 'dark' ? '#1E3A8A' : '#3B82F6';
+    const isDark = colorScheme === 'dark';
 
     return (
         <KeyboardAvoidingView
-            style={[styles.container, { backgroundColor }]}
+            style={[styles.container, { backgroundColor: colors.background }]}
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
             <StatusBar style="light" />
@@ -115,10 +115,10 @@ export default function EditTransactionScreen() {
                     },
                 ]}
             >
-                <TouchableOpacity onPress={handleCancel} style={styles.headerButton}>
-                    <Ionicons name="close" size={24} color="#FFF" />
+                <TouchableOpacity onPress={handleCancel} style={[styles.headerButton, { backgroundColor: colors.card, borderRadius: BorderRadius.full, width: 40, height: 40 }]}>
+                    <Ionicons name="close" size={24} color={colors.text} />
                 </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: '#FFF' }]}>
+                <Text style={[styles.headerTitle, { color: colors.text }]}>
                     Edit Transaction
                 </Text>
                 <TouchableOpacity
@@ -130,7 +130,7 @@ export default function EditTransactionScreen() {
                         style={[
                             styles.saveText,
                             {
-                                color: canSave && !isLoading ? '#FFF' : 'rgba(255, 255, 255, 0.5)',
+                                color: canSave && !isLoading ? colors.tint : colors.textSecondary,
                             },
                         ]}
                     >
@@ -146,83 +146,84 @@ export default function EditTransactionScreen() {
                 keyboardShouldPersistTaps="handled"
             >
                 {/* Type Toggle */}
-                <View style={[styles.typeToggleContainer, { backgroundColor: 'rgba(255,255,255,0.1)' }]}>
+                <View style={[styles.typeToggleContainer, { backgroundColor: colors.card, gap: 8 }]}>
                     <TouchableOpacity
                         style={[
                             styles.typeOption,
                             type === 'expense' && styles.typeOptionActive,
-                            { backgroundColor: type === 'expense' ? '#EF4444' : 'transparent' }
+                            { backgroundColor: type === 'expense' ? colors.error : 'transparent' }
                         ]}
                         onPress={() => {
                             setType('expense');
                             if (category === 'income') setCategory('food');
                         }}
                     >
-                        <Text style={[styles.typeText, type === 'expense' && styles.typeTextActive]}>Expense</Text>
+                        <Text style={[styles.typeText, { color: type === 'expense' ? '#FFF' : colors.textSecondary }]}>Expense</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={[
                             styles.typeOption,
                             type === 'income' && styles.typeOptionActive,
-                            { backgroundColor: type === 'income' ? '#10B981' : 'transparent' }
+                            { backgroundColor: type === 'income' ? colors.success : 'transparent' }
                         ]}
                         onPress={() => {
                             setType('income');
                             setCategory('income');
                         }}
                     >
-                        <Text style={[styles.typeText, type === 'income' && styles.typeTextActive]}>Income</Text>
+                        <Text style={[styles.typeText, { color: type === 'income' ? '#FFF' : colors.textSecondary }]}>Income</Text>
                     </TouchableOpacity>
                 </View>
 
                 {/* Payee Info (Read-only) */}
-                <View style={[styles.card, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1 }]}>
-                    <Text style={[styles.label, { color: 'rgba(255, 255, 255, 0.7)' }]}>
+                <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
+                    <Text style={[styles.label, { color: colors.textSecondary }]}>
                         {type === 'income' ? 'Payer' : 'Payee'}
                     </Text>
-                    <Text style={[styles.payeeText, { color: '#FFF' }]}>
+                    <Text style={[styles.payeeText, { color: colors.text }]}>
                         {params.payeeName}
                     </Text>
-                    <Text style={[styles.upiText, { color: 'rgba(255, 255, 255, 0.5)' }]}>
+                    <Text style={[styles.upiText, { color: colors.textSecondary }]}>
                         {params.upiId === 'manual' ? 'Manual Record' : params.upiId}
                     </Text>
                 </View>
 
                 {/* Amount Input */}
-                <View style={[styles.card, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1 }]}>
-                    <Text style={[styles.label, { color: 'rgba(255, 255, 255, 0.7)' }]}>
+                <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
+                    <Text style={[styles.label, { color: colors.textSecondary }]}>
                         Amount *
                     </Text>
                     <View style={styles.amountInputContainer}>
-                        <Text style={[styles.currencySymbol, { color: '#FFF' }]}>
+                        <Text style={[styles.currencySymbol, { color: colors.text }]}>
                             ₹
                         </Text>
                         <TextInput
-                            style={[styles.amountInput, { color: '#FFF' }]}
+                            style={[styles.amountInput, { color: colors.text }]}
                             value={amount}
                             onChangeText={setAmount}
                             keyboardType="numeric"
                             placeholder="0.00"
-                            placeholderTextColor="rgba(255, 255, 255, 0.3)"
+                            placeholderTextColor={colors.textSecondary}
                             selectTextOnFocus
                         />
                     </View>
                 </View>
 
                 {/* Category Picker */}
-                <View style={[styles.card, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1 }]}>
-                    <Text style={[styles.label, { color: 'rgba(255, 255, 255, 0.7)' }]}>
+                <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
+                    <Text style={[styles.label, { color: colors.textSecondary }]}>
                         Category *
                     </Text>
                     <CategoryPicker
                         selectedCategory={category}
                         onSelectCategory={setCategory}
+                        mode="chips"
                     />
                 </View>
 
                 {/* Payment Method */}
-                <View style={[styles.card, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1 }]}>
-                    <Text style={[styles.label, { color: 'rgba(255, 255, 255, 0.7)' }]}>
+                <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
+                    <Text style={[styles.label, { color: colors.textSecondary }]}>
                         Payment Method
                     </Text>
                     <View style={styles.methodRow}>
@@ -232,11 +233,17 @@ export default function EditTransactionScreen() {
                                 style={[
                                     styles.methodChip,
                                     paymentMethod === m && styles.methodChipActive,
-                                    { backgroundColor: paymentMethod === m ? '#FFF' : 'rgba(255,255,255,0.1)' }
+                                    {
+                                        backgroundColor: paymentMethod === m ? colors.tint : colors.surface,
+                                        borderColor: paymentMethod === m ? colors.tint : colors.border
+                                    }
                                 ]}
                                 onPress={() => setPaymentMethod(m)}
                             >
-                                <Text style={[styles.methodText, paymentMethod === m && styles.methodTextActive]}>
+                                <Text style={[
+                                    styles.methodText,
+                                    { color: paymentMethod === m ? '#FFF' : colors.textSecondary }
+                                ]}>
                                     {m.toUpperCase()}
                                 </Text>
                             </TouchableOpacity>
@@ -245,23 +252,23 @@ export default function EditTransactionScreen() {
                 </View>
 
                 {/* Reason Input */}
-                <View style={[styles.card, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1 }]}>
-                    <Text style={[styles.label, { color: 'rgba(255, 255, 255, 0.7)' }]}>
+                <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
+                    <Text style={[styles.label, { color: colors.textSecondary }]}>
                         Note (Optional)
                     </Text>
                     <TextInput
                         style={[
                             styles.reasonInput,
                             {
-                                color: '#FFF',
-                                borderColor: 'rgba(255, 255, 255, 0.2)',
-                                backgroundColor: 'rgba(0, 0, 0, 0.1)',
+                                color: colors.text,
+                                borderColor: colors.border,
+                                backgroundColor: colors.surface,
                             },
                         ]}
                         value={reason}
                         onChangeText={setReason}
                         placeholder="Add a note about this transaction"
-                        placeholderTextColor="rgba(255, 255, 255, 0.3)"
+                        placeholderTextColor={colors.textSecondary}
                         multiline
                         numberOfLines={3}
                     />
@@ -271,11 +278,11 @@ export default function EditTransactionScreen() {
                 <View
                     style={[
                         styles.infoCard,
-                        { backgroundColor: 'rgba(255, 255, 255, 0.05)', borderColor: 'rgba(255, 255, 255, 0.1)', borderWidth: 1 },
+                        { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 },
                     ]}
                 >
-                    <Ionicons name="information-circle" size={20} color="rgba(255, 255, 255, 0.7)" />
-                    <Text style={[styles.infoText, { color: 'rgba(255, 255, 255, 0.9)' }]}>
+                    <Ionicons name="information-circle" size={20} color={colors.textSecondary} />
+                    <Text style={[styles.infoText, { color: colors.textSecondary }]}>
                         You can edit the amount, category, and note. The payee and date cannot be changed.
                     </Text>
                 </View>
@@ -294,11 +301,8 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         paddingHorizontal: Spacing.md,
         paddingBottom: Spacing.md,
-        borderBottomWidth: 1,
     },
     headerButton: {
-        width: 60,
-        height: 40,
         justifyContent: 'center',
         alignItems: 'center',
     },

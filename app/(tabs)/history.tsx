@@ -23,8 +23,10 @@ import {
   deleteTransaction,
 } from '@/services/storage';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { DEFAULT_CATEGORIES } from '@/services/category-storage';
+import { DEFAULT_CATEGORIES, getCategories } from '@/services/category-storage';
 import { useSecurity } from '@/contexts/security-context';
+import { CategoryPicker } from '@/components/transactions/category-picker';
+import { CategoryInfo } from '@/types/transaction';
 
 type DateFilter = 'all' | 'today' | 'week' | 'month' | 'year';
 
@@ -35,22 +37,22 @@ export default function HistoryScreen() {
   const insets = useSafeAreaInsets();
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [categories, setCategories] = useState<CategoryInfo[]>(DEFAULT_CATEGORIES);
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<CategoryType | 'all'>('all');
   const [selectedDateRange, setSelectedDateRange] = useState<DateFilter>('all');
-  const [showCategoryFilter, setShowCategoryFilter] = useState(false);
-  const [showDateFilter, setShowDateFilter] = useState(false);
 
-  const loadTransactions = useCallback(async () => {
+  const loadData = useCallback(async () => {
     try {
-      let results: Transaction[];
+      const [txResults, catResults] = await Promise.all([
+        searchQuery.trim() ? searchTransactions(searchQuery) : getAllTransactions(),
+        getCategories()
+      ]);
 
-      if (searchQuery.trim()) {
-        results = await searchTransactions(searchQuery);
-      } else {
-        results = await getAllTransactions();
-      }
+      setCategories(catResults);
+
+      let results = txResults;
 
       // Apply category filter
       if (selectedCategory !== 'all') {
@@ -83,19 +85,19 @@ export default function HistoryScreen() {
 
       setTransactions(results);
     } catch (error) {
-      console.error('Error loading transactions:', error);
+      console.error('Error loading data:', error);
     }
   }, [searchQuery, selectedCategory, selectedDateRange]);
 
   useFocusEffect(
     useCallback(() => {
-      loadTransactions();
-    }, [loadTransactions])
+      loadData();
+    }, [loadData])
   );
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadTransactions();
+    await loadData();
     setRefreshing(false);
   };
 
@@ -114,7 +116,7 @@ export default function HistoryScreen() {
           style: 'destructive',
           onPress: async () => {
             await deleteTransaction(id);
-            loadTransactions();
+            loadData();
           },
         },
       ]
@@ -122,7 +124,6 @@ export default function HistoryScreen() {
   };
 
   const handleEdit = (transaction: Transaction) => {
-    // Navigate to edit screen with transaction data
     const { router } = require('expo-router');
     router.push({
       pathname: '/edit-transaction',
@@ -154,16 +155,16 @@ export default function HistoryScreen() {
   );
 
   const renderEmptyState = () => (
-    <View style={[styles.emptyState, { backgroundColor: 'transparent' }]}>
+    <View style={[styles.emptyState, { backgroundColor: colors.card }]}>
       <Ionicons
         name={searchQuery ? 'search-outline' : 'receipt-outline'}
         size={48}
-        color="rgba(255, 255, 255, 0.5)"
+        color={colors.textSecondary}
       />
-      <Text style={[styles.emptyText, { color: 'rgba(255, 255, 255, 0.9)' }]}>
+      <Text style={[styles.emptyText, { color: colors.text }]}>
         {searchQuery ? 'No matching transactions' : 'No transactions yet'}
       </Text>
-      <Text style={[styles.emptySubtext, { color: 'rgba(255, 255, 255, 0.6)' }]}>
+      <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>
         {searchQuery
           ? 'Try a different search term'
           : 'Your payment history will appear here'}
@@ -175,12 +176,9 @@ export default function HistoryScreen() {
     return tx.type === 'income' ? sum + tx.amount : sum - tx.amount;
   }, 0);
 
-  // Match home/charts background
-  const backgroundColor = colorScheme === 'dark' ? '#1E3A8A' : '#3B82F6';
-
   return (
-    <View style={[styles.container, { backgroundColor }]}>
-      <StatusBar style="light" />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
 
       {/* Header */}
       <View
@@ -188,32 +186,31 @@ export default function HistoryScreen() {
           styles.header,
           {
             paddingTop: insets.top + Spacing.md,
-            backgroundColor: 'transparent',
           },
         ]}
       >
-        <Text style={[styles.title, { color: '#FFF' }]}>History</Text>
+        <Text style={[styles.title, { color: colors.text }]}>History</Text>
 
         {/* Search Bar */}
         <View
           style={[
             styles.searchContainer,
             {
-              backgroundColor: 'rgba(255, 255, 255, 0.1)',
-              borderColor: 'rgba(255, 255, 255, 0.2)',
+              backgroundColor: colors.card,
+              borderColor: colors.border,
             },
           ]}
         >
           <Ionicons
             name="search"
             size={20}
-            color="rgba(255, 255, 255, 0.7)"
+            color={colors.textSecondary}
             style={styles.searchIcon}
           />
           <TextInput
-            style={[styles.searchInput, { color: '#FFF' }]}
+            style={[styles.searchInput, { color: colors.text }]}
             placeholder="Search by reason, payee, category..."
-            placeholderTextColor="rgba(255, 255, 255, 0.5)"
+            placeholderTextColor={colors.textSecondary}
             value={searchQuery}
             onChangeText={handleSearch}
             returnKeyType="search"
@@ -224,7 +221,7 @@ export default function HistoryScreen() {
               <Ionicons
                 name="close-circle"
                 size={20}
-                color="rgba(255, 255, 255, 0.7)"
+                color={colors.textSecondary}
               />
             </TouchableOpacity>
           )}
@@ -232,23 +229,21 @@ export default function HistoryScreen() {
 
         {/* Filters */}
         <View style={styles.filterRow}>
-          <TouchableOpacity
-            style={styles.filterButton}
-            onPress={() => {
-              const categories: (CategoryType | 'all')[] = ['all', 'food', 'utility', 'college', 'rent', 'other'];
-              const currentIndex = categories.indexOf(selectedCategory);
-              const nextIndex = (currentIndex + 1) % categories.length;
-              setSelectedCategory(categories[nextIndex]);
-            }}
-          >
-            <Text style={styles.filterText}>
-              {selectedCategory === 'all' ? 'All Categories' : DEFAULT_CATEGORIES.find(c => c.key === selectedCategory)?.label || 'Other'}
-            </Text>
-            <Ionicons name="chevron-down" size={16} color="rgba(255, 255, 255, 0.7)" />
-          </TouchableOpacity>
+          <View style={{ flex: 1 }}>
+            <CategoryPicker
+              selectedCategory={selectedCategory}
+              onSelectCategory={(category) => setSelectedCategory(category)}
+              mode="dropdown"
+              compact
+              customCategories={[
+                { key: 'all', label: 'All Categories', icon: 'apps', color: colors.text } as CategoryInfo,
+                ...categories
+              ]}
+            />
+          </View>
 
           <TouchableOpacity
-            style={styles.filterButton}
+            style={[styles.filterButton, { backgroundColor: colors.card, borderColor: colors.border }]}
             onPress={() => {
               const ranges: DateFilter[] = ['all', 'today', 'week', 'month', 'year'];
               const currentIndex = ranges.indexOf(selectedDateRange);
@@ -256,22 +251,22 @@ export default function HistoryScreen() {
               setSelectedDateRange(ranges[nextIndex]);
             }}
           >
-            <Text style={styles.filterText}>
+            <Text style={[styles.filterText, { color: colors.text }]}>
               {selectedDateRange === 'all' ? 'All Time' :
                 selectedDateRange === 'today' ? 'Today' :
                   selectedDateRange === 'week' ? 'This Week' :
                     selectedDateRange === 'month' ? 'This Month' : 'This Year'}
             </Text>
-            <Ionicons name="chevron-down" size={16} color="rgba(255, 255, 255, 0.7)" />
+            <Ionicons name="chevron-down" size={16} color={colors.textSecondary} />
           </TouchableOpacity>
         </View>
 
         {/* Summary */}
         {transactions.length > 0 && (
           <View style={styles.summary}>
-            <Text style={[styles.summaryText, { color: 'rgba(255, 255, 255, 0.7)' }]}>
+            <Text style={[styles.summaryText, { color: colors.textSecondary }]}>
               {transactions.length} transaction{transactions.length !== 1 ? 's' : ''} •{' '}
-              <Text style={{ color: '#FFF', fontWeight: '600' }}>
+              <Text style={{ color: colors.text, fontWeight: '600' }}>
                 {isPrivacyModeEnabled ? '•••••' : `₹${totalAmount.toLocaleString('en-IN')}`}
               </Text>
             </Text>
@@ -292,13 +287,16 @@ export default function HistoryScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#FFF"
-            colors={['#3B82F6']}
-            progressBackgroundColor="#FFF"
+            tintColor={colors.tint}
+            colors={[colors.tint]}
+            progressBackgroundColor={colors.card}
           />
         }
         ListEmptyComponent={renderEmptyState}
         showsVerticalScrollIndicator={false}
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        windowSize={5}
       />
     </View>
   );
@@ -345,21 +343,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Spacing.sm,
     marginTop: Spacing.sm,
+    zIndex: 100, // Ensure dropdown appears above list
   },
   filterButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
     borderRadius: BorderRadius.md,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
   },
   filterText: {
-    color: 'rgba(255, 255, 255, 0.9)',
     fontSize: FontSizes.sm,
     fontWeight: '500',
   },
@@ -387,4 +383,3 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
-

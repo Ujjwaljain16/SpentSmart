@@ -28,6 +28,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { PendingManager } from '@/services/pending-manager';
 import { SlideToPay } from '@/components/ui/SlideToPay';
 import { ConfirmationModal } from '@/components/ui/ConfirmationModal';
+import { shareQRToGPay } from '@/services/silent-qr-share';
 
 export default function PaymentScreen() {
   /* Updated Params to accept Category */
@@ -53,6 +54,7 @@ export default function PaymentScreen() {
     : undefined;
 
   const [amount, setAmount] = useState(paymentData.amount || '');
+  const [transactionNote, setTransactionNote] = useState(paymentData.transactionNote || '');
   /* Initialize with param or default */
   const [category, setCategory] = useState<CategoryType>(params.initialCategory as CategoryType || 'food');
   const [isLoading, setIsLoading] = useState(false);
@@ -65,6 +67,29 @@ export default function PaymentScreen() {
   const colors = Colors[colorScheme ?? 'dark'];
 
   const { showConfirmation, confidenceScore, hideConfirmation } = usePaymentConfirmation();
+
+  /* Restore state from pending if available (handles app restart) */
+  useEffect(() => {
+    const restoreState = async () => {
+      try {
+        const activePendings = await PendingManager.getPendings();
+        if (activePendings.length > 0) {
+          // Get most recent
+          const recent = activePendings[0];
+          // Only restore if less than 5 minutes old
+          if (Date.now() - recent.timestamp < 5 * 60 * 1000) {
+            // console.log('🔄 Restoring state from pending transaction');
+            if (recent.paymentData.amount) setAmount(recent.paymentData.amount.toString());
+            if (recent.reason) setTransactionNote(recent.reason);
+            if (recent.category) setCategory(recent.category);
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to restore pending state', e);
+      }
+    };
+    restoreState();
+  }, []);
 
   useEffect(() => {
     loadApps();
@@ -99,34 +124,57 @@ export default function PaymentScreen() {
 
       const pendingId = `pending_${Date.now()}`;
 
-      // Save pending transaction CORRECTLY
+      // Save pending transaction with user's note
       await PendingManager.savePending({
         id: pendingId,
         paymentData: {
           upiId: paymentData.upiId,
           payeeName: paymentData.payeeName,
           amount: currentAmount,
-          transactionNote: paymentData.transactionNote,
+          transactionNote: transactionNote || paymentData.transactionNote,
           rawParams: rawParams
         },
         category: category,
-        reason: paymentData.transactionNote,
+        reason: transactionNote || paymentData.transactionNote,
         timestamp: Date.now(),
         status: 'pending',
         launchedApp: appId
       });
 
+      // Check if GPay - use silent QR share method
+      const isGPay = appId.includes('gpay') || appId.includes('tez') || appId === 'com.google.android.apps.nbu.paisa.user';
 
-      // Construct UPI Intent URL
-      const upiUrl = buildUPIUrl({
-        upiId: paymentData.upiId,
-        payeeName: paymentData.payeeName,
-        amount: currentAmount,
-        transactionNote: paymentData.transactionNote,
-        rawParams: rawParams,
-      });
+      if (isGPay) {
+        // Use silent QR image share for GPay
+        const success = await shareQRToGPay({
+          upiId: paymentData.upiId,
+          payeeName: paymentData.payeeName,
+          amount: currentAmount,
+          transactionNote: transactionNote || paymentData.transactionNote,
+        });
 
-      await openUPIApp(appId, upiUrl);
+        if (!success) {
+          // Fallback to standard UPI intent if QR share fails
+          const upiUrl = buildUPIUrl({
+            upiId: paymentData.upiId,
+            payeeName: paymentData.payeeName,
+            amount: currentAmount,
+            transactionNote: transactionNote || paymentData.transactionNote,
+            rawParams: rawParams,
+          });
+          await openUPIApp(appId, upiUrl);
+        }
+      } else {
+        // For other apps, use standard UPI intent
+        const upiUrl = buildUPIUrl({
+          upiId: paymentData.upiId,
+          payeeName: paymentData.payeeName,
+          amount: currentAmount,
+          transactionNote: transactionNote || paymentData.transactionNote,
+          rawParams: rawParams,
+        });
+        await openUPIApp(appId, upiUrl);
+      }
 
       // Tracking is handled by AppState in the hook automatically
 
@@ -144,6 +192,12 @@ export default function PaymentScreen() {
       if (activePendings.length > 0) {
         // Find matching pending
         const pending = activePendings.find(p => Math.abs((p.paymentData.amount || 0) - currentAmount) < 0.1);
+        const targetPending = pending || activePendings[0];
+
+        // Prefer the NOTE from the pending transaction, as component state might have reset if app restarted
+        const finalNote = targetPending.reason || targetPending.paymentData.transactionNote || transactionNote;
+        // Prefer the CATEGORY from the pending transaction
+        const finalCategory = targetPending.category || category;
 
         // Save using CORRECT positional arguments
         // saveTransaction(paymentData, category, reason, amount, launchedAt)
@@ -152,21 +206,17 @@ export default function PaymentScreen() {
             upiId: paymentData.upiId,
             payeeName: paymentData.payeeName,
             amount: currentAmount,
-            transactionNote: paymentData.transactionNote,
+            transactionNote: finalNote || paymentData.transactionNote, // Persist note in data
             rawParams
           },
-          category,
-          paymentData.transactionNote || `Paid to ${paymentData.payeeName}`,
+          finalCategory,
+          finalNote || paymentData.transactionNote || `Paid to ${paymentData.payeeName}`, // Reason field
           currentAmount,
-          pending ? pending.timestamp : Date.now()
+          targetPending.timestamp
         );
 
         // Resolve pending state
-        if (pending) {
-          await PendingManager.resolvePending(pending.id, 'confirmed');
-        } else {
-          await PendingManager.resolvePending(activePendings[0].id, 'confirmed');
-        }
+        await PendingManager.resolvePending(targetPending.id, 'confirmed');
       } else {
         // Even if no pending found (rare), still save tx
         await saveTransaction(
@@ -174,11 +224,11 @@ export default function PaymentScreen() {
             upiId: paymentData.upiId,
             payeeName: paymentData.payeeName,
             amount: currentAmount,
-            transactionNote: paymentData.transactionNote,
+            transactionNote: transactionNote || paymentData.transactionNote,
             rawParams
           },
           category,
-          paymentData.transactionNote || `Paid to ${paymentData.payeeName}`,
+          transactionNote || paymentData.transactionNote || `Paid to ${paymentData.payeeName}`,
           currentAmount,
           Date.now()
         );
@@ -239,10 +289,9 @@ export default function PaymentScreen() {
     );
   };
 
-  const primaryApp = preferredApp ? installedApps.find(a => a.id === preferredApp) || installedApps[0] : installedApps[0];
-  const secondaryApps = installedApps.filter(a => a.id !== primaryApp?.id);
-  const showMoreApps = secondaryApps.length > 2;
-  const visibleSecondaryApps = showMoreApps ? secondaryApps.slice(0, 1) : secondaryApps.slice(0, 2);
+  // Default to GPay for slide-to-pay
+  const gpayApp = installedApps.find(a => a.id.includes('gpay') || a.id.includes('tez') || a.name.toLowerCase().includes('google'));
+  const primaryApp = gpayApp || installedApps[0];
 
   // Helper to get brand icon
   const getAppIcon = (app: UPIAppInfo, size = 24) => {
@@ -253,32 +302,31 @@ export default function PaymentScreen() {
     return <Ionicons name="wallet-outline" size={size * 0.75} color={colors.text} />;
   };
 
-  // Match home/charts background
-  const backgroundColor = colorScheme === 'dark' ? '#1E3A8A' : '#3B82F6';
+  // Use theme background
 
   return (
     <>
-      <View style={[styles.container, { backgroundColor }]}>
-        <StatusBar style="light" />
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
 
         {/* 1. Header Section */}
         <View style={[styles.header, { paddingTop: insets.top + Spacing.sm }]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
-            <Ionicons name="close" size={24} color="#FFF" />
+            <Ionicons name="close" size={24} color={colors.text} />
           </TouchableOpacity>
 
           <View style={{ alignItems: 'center' }}>
-            <Text style={[styles.payeeName, { color: '#FFF' }]}>
+            <Text style={[styles.payeeName, { color: colors.text }]}>
               {paymentData.payeeName}
             </Text>
             <TouchableOpacity
               style={styles.vpaContainer}
               onPress={() => Alert.alert('Copied', paymentData.upiId)}
             >
-              <Text style={[styles.vpaText, { color: 'rgba(255, 255, 255, 0.7)' }]}>
+              <Text style={[styles.vpaText, { color: colors.textSecondary }]}>
                 {paymentData.upiId}
               </Text>
-              <Ionicons name="copy-outline" size={12} color="rgba(255, 255, 255, 0.7)" />
+              <Ionicons name="copy-outline" size={12} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
@@ -286,9 +334,9 @@ export default function PaymentScreen() {
         </View>
 
         {/* Secure Mode Banner */}
-        <View style={[styles.secureBanner, { backgroundColor: 'rgba(255,255,255,0.1)', borderColor: 'rgba(255,255,255,0.2)' }]}>
-          <Ionicons name="shield-checkmark" size={14} color="#4ADE80" />
-          <Text style={[styles.secureText, { color: '#FFF' }]}>Secure Payment Mode</Text>
+        <View style={[styles.secureBanner, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Ionicons name="shield-checkmark" size={14} color={colors.success} />
+          <Text style={[styles.secureText, { color: colors.text }]}>Secure Payment Mode</Text>
         </View>
 
         {/* 2. Main Content (Centered) */}
@@ -297,21 +345,16 @@ export default function PaymentScreen() {
           {/* Amount (Centered & Large) */}
           <View style={{ alignItems: 'center', marginBottom: 32 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={[styles.currencySymbol, { color: '#FFF' }]}>₹</Text>
+              <Text style={[styles.currencySymbol, { color: colors.text }]}>₹</Text>
               <TextInput
                 style={[
                   styles.amountInput,
-                  {
-                    color: '#FFF',
-                    textShadowColor: 'rgba(0, 0, 0, 0.2)',
-                    textShadowOffset: { width: 0, height: 2 },
-                    textShadowRadius: 4
-                  }
+                  { color: colors.text }
                 ]}
                 value={amount}
                 onChangeText={setAmount}
                 placeholder="0"
-                placeholderTextColor="rgba(255, 255, 255, 0.3)"
+                placeholderTextColor={colors.textSecondary}
                 keyboardType="decimal-pad"
                 autoFocus
               />
@@ -324,6 +367,18 @@ export default function PaymentScreen() {
               selectedCategory={category}
               onSelectCategory={setCategory}
               mode="chips"
+            />
+          </View>
+
+          {/* Transaction Note (Optional) */}
+          <View style={styles.noteContainer}>
+            <TextInput
+              style={[styles.noteInput, { color: colors.text, backgroundColor: colors.card, borderColor: colors.border }]}
+              value={transactionNote}
+              onChangeText={setTransactionNote}
+              placeholder="Add a note (optional)"
+              placeholderTextColor={colors.textSecondary}
+              maxLength={100}
             />
           </View>
 
@@ -353,40 +408,26 @@ export default function PaymentScreen() {
             )}
           </View>
 
-          {/* Horizontal App Icons Row */}
+          {/* Horizontal App Icons Row - Simplified: PhonePe + QR only */}
           <View style={styles.appIconsRow}>
-            {/* Visible Secondary Apps */}
-            {visibleSecondaryApps.map(app => (
+            {/* PhonePe Button */}
+            {installedApps.find(a => a.id.includes('phonepe')) && (
               <TouchableOpacity
-                key={app.id}
-                style={[styles.iconButton, { backgroundColor: 'rgba(255, 255, 255, 0.15)', borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1 }]}
-                onPress={() => handleOpenUPIApp(app.id)}
+                style={[styles.iconButton, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
+                onPress={() => handleOpenUPIApp('com.phonepe.app')}
               >
-                <View style={{ width: 24, height: 24, justifyContent: 'center', alignItems: 'center' }}>
-                  {getAppIcon(app)}
-                </View>
-                <Text style={[styles.iconLabel, { color: '#FFF' }]}>{app.name}</Text>
-              </TouchableOpacity>
-            ))}
-
-            {/* "More" Button */}
-            {showMoreApps && (
-              <TouchableOpacity
-                style={[styles.iconButton, { backgroundColor: 'rgba(255, 255, 255, 0.15)', borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1 }]}
-                onPress={showManualAppSelector}
-              >
-                <Ionicons name="apps-outline" size={18} color="#FFF" />
-                <Text style={[styles.iconLabel, { color: '#FFF' }]}>More</Text>
+                <PhonePeIcon size={18} />
+                <Text style={[styles.iconLabel, { color: colors.text }]}>PhonePe</Text>
               </TouchableOpacity>
             )}
 
             {/* QR Button */}
             <TouchableOpacity
-              style={[styles.iconButton, { backgroundColor: 'rgba(255, 255, 255, 0.15)', borderColor: 'rgba(255, 255, 255, 0.2)', borderWidth: 1 }]}
+              style={[styles.iconButton, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
               onPress={() => setShowQRGenerator(true)}
             >
               <QRIcon size={18} />
-              <Text style={[styles.iconLabel, { color: '#FFF' }]}>QR</Text>
+              <Text style={[styles.iconLabel, { color: colors.text }]}>QR</Text>
             </TouchableOpacity>
           </View>
 
@@ -398,6 +439,7 @@ export default function PaymentScreen() {
         visible={showConfirmation}
         amount={amount}
         payeeName={paymentData.payeeName}
+        note={transactionNote || paymentData.transactionNote}
         confidenceScore={confidenceScore}
         onConfirm={handleConfirmPayment}
         onCancel={handleCancelPayment}
@@ -523,5 +565,17 @@ const styles = StyleSheet.create({
   iconLabel: {
     fontSize: FontSizes.sm,
     fontWeight: '600',
-  }
+  },
+  noteContainer: {
+    marginTop: Spacing.lg,
+    marginBottom: Spacing.md,
+  },
+  noteInput: {
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    fontSize: FontSizes.md,
+    textAlign: 'center',
+  },
 });

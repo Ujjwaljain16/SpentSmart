@@ -16,6 +16,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { PendingManager } from '@/services/pending-manager';
 import { calculateInsights, Period, PeriodInsights } from '@/services/analytics';
 import { getBudget } from '@/services/storage';
+import { getUserProfile } from '@/services/user-storage';
 
 import { BalanceCard } from '@/components/home/BalanceCard';
 import { InsightsGrid } from '@/components/home/InsightsGrid';
@@ -28,6 +29,10 @@ export default function HomeScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'dark'];
   const insets = useSafeAreaInsets();
+
+  // User profile for greeting
+  const [username, setUsername] = useState<string>('');
+  const [avatarId, setAvatarId] = useState<string>('');
 
   const [period, setPeriod] = useState<Period>('week');
   const [insights, setInsights] = useState<PeriodInsights | null>(null);
@@ -42,6 +47,13 @@ export default function HomeScreen() {
       if (activePendings.length > 0) {
         router.push('/recover-pending');
         return;
+      }
+
+      // Load user profile for greeting
+      const profile = await getUserProfile();
+      if (profile) {
+        setUsername(profile.name);
+        setAvatarId(profile.avatarId);
       }
 
       // Load insights for selected period
@@ -79,12 +91,9 @@ export default function HomeScreen() {
     setLoading(true);
   };
 
-  // Solid background color
-  const backgroundColor = colorScheme === 'dark' ? '#1E3A8A' : '#3B82F6';
-
   return (
-    <View style={[styles.container, { backgroundColor }]}>
-      <StatusBar style="light" />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
 
       <ScrollView
         contentContainerStyle={[
@@ -95,18 +104,28 @@ export default function HomeScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#FFF"
-            colors={['#3B82F6']} // Use primary blue for the spinner
-            progressBackgroundColor="#FFF" // White circular background for better contrast
+            tintColor={colors.tint}
+            colors={[colors.tint]}
+            progressBackgroundColor={colors.card}
           />
         }
       >
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#FFF" />
+            <ActivityIndicator size="large" color={colors.tint} />
           </View>
         ) : insights ? (
           <>
+            {/* Greeting Header */}
+            <View style={styles.greetingHeader}>
+              <Text style={[styles.greeting, { color: colors.text }]}>
+                hey, {username.toLowerCase() || 'there'}
+              </Text>
+              <View style={[styles.avatarCircle, { backgroundColor: colors.surface }]}>
+                <Text style={styles.avatarText}>{avatarId || '🐼'}</Text>
+              </View>
+            </View>
+
             {/* Balance Card */}
             <BalanceCard
               balance={insights.balance}
@@ -121,23 +140,23 @@ export default function HomeScreen() {
             {/* Quick Actions Row */}
             <View style={styles.quickActionsRow}>
               <TouchableOpacity
-                style={[styles.quickAction, { backgroundColor: 'rgba(255,255,255,0.1)' }]}
+                style={[styles.quickAction, { backgroundColor: colors.card }]}
                 onPress={() => router.push('/manual-entry')}
               >
-                <View style={[styles.actionIcon, { backgroundColor: '#1E40AF' }]}>
+                <View style={[styles.actionIcon, { backgroundColor: colors.tint }]}>
                   <Ionicons name="send-outline" size={20} color="#FFF" />
                 </View>
-                <Text style={styles.actionLabel}>Transfer</Text>
+                <Text style={[styles.actionLabel, { color: colors.text }]}>Transfer</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.quickAction, { backgroundColor: 'rgba(255,255,255,0.1)' }]}
+                style={[styles.quickAction, { backgroundColor: colors.card }]}
                 onPress={() => router.push('/receive')}
               >
-                <View style={[styles.actionIcon, { backgroundColor: '#065F46' }]}>
+                <View style={[styles.actionIcon, { backgroundColor: colors.success }]}>
                   <Ionicons name="download-outline" size={20} color="#FFF" />
                 </View>
-                <Text style={styles.actionLabel}>Receive</Text>
+                <Text style={[styles.actionLabel, { color: colors.text }]}>Receive</Text>
               </TouchableOpacity>
             </View>
 
@@ -148,18 +167,18 @@ export default function HomeScreen() {
                 topPayees={insights.topPayees}
               />
             ) : (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyTitle}>No spending data</Text>
-                <Text style={styles.emptySubtitle}>
+              <View style={[styles.emptyState, { backgroundColor: colors.card }]}>
+                <Text style={[styles.emptyTitle, { color: colors.text }]}>No spending data</Text>
+                <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
                   Scan first UPI → Auto track everything
                 </Text>
               </View>
             )}
           </>
         ) : (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyTitle}>Unable to load data</Text>
-            <Text style={styles.emptySubtitle}>Pull to refresh</Text>
+          <View style={[styles.emptyState, { backgroundColor: colors.card }]}>
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>Unable to load data</Text>
+            <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>Pull to refresh</Text>
           </View>
         )}
       </ScrollView>
@@ -221,8 +240,29 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   actionLabel: {
-    color: '#FFF',
     fontSize: FontSizes.md,
     fontWeight: '600',
+  },
+  greetingHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.lg,
+  },
+  greeting: {
+    fontSize: FontSizes.xxl,
+    fontWeight: 'bold',
+    color: '#FFF',
+  },
+  avatarCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
+    fontSize: 24,
   },
 });

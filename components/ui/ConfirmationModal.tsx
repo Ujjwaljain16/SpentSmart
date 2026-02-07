@@ -9,6 +9,7 @@ interface ConfirmationModalProps {
     visible: boolean;
     amount: string;
     payeeName: string;
+    note?: string; // Add note prop
     confidenceScore: number;
     onConfirm: () => void;
     onCancel: () => void;
@@ -19,6 +20,7 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
     visible,
     amount,
     payeeName,
+    note,
     confidenceScore,
     onConfirm,
     onCancel,
@@ -67,6 +69,15 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                         Did you pay <Text style={{ fontWeight: '700', color: colors.text }}>₹{amount}</Text> to {payeeName}?
                     </Text>
 
+                    {note ? (
+                        <View style={[styles.noteContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                            <Text style={[styles.noteLabel, { color: colors.textSecondary }]}>Note:</Text>
+                            <Text style={[styles.noteText, { color: colors.text }]} numberOfLines={2}>
+                                "{note}"
+                            </Text>
+                        </View>
+                    ) : null}
+
 
 
                     <View style={styles.buttonContainer}>
@@ -111,10 +122,14 @@ const styles = StyleSheet.create({
         borderRadius: BorderRadius.xl,
         padding: Spacing.xl,
         alignItems: 'center',
-        backgroundColor: 'rgba(30, 58, 138, 0.95)', // Deep blue modal
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.2)',
-        boxShadow: '0px 10px 20px rgba(0, 0, 0, 0.3)',
+        shadowColor: "#000",
+        shadowOffset: {
+            width: 0,
+            height: 5,
+        },
+        shadowOpacity: 0.3,
+        shadowRadius: 10,
         elevation: 10,
     },
     iconContainer: {
@@ -180,5 +195,25 @@ const styles = StyleSheet.create({
     smallButtonText: {
         fontSize: FontSizes.sm,
         fontWeight: '500',
+    },
+    noteContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: Spacing.md,
+        paddingVertical: Spacing.sm,
+        borderRadius: BorderRadius.lg,
+        borderWidth: 1,
+        marginBottom: Spacing.lg,
+        gap: Spacing.sm,
+        maxWidth: '100%',
+    },
+    noteLabel: {
+        fontSize: FontSizes.sm,
+        fontWeight: '600',
+    },
+    noteText: {
+        fontSize: FontSizes.md,
+        fontStyle: 'italic',
+        flex: 1,
     },
 });

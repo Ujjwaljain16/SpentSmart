@@ -11,34 +11,34 @@ const tintColorDark = '#14B8A6';
 
 export const Colors = {
   light: {
-    text: '#11181C',
-    textSecondary: '#687076',
-    background: '#FFFFFF',
-    surface: '#F8FAFC',
-    card: '#FFFFFF',
-    tint: tintColorLight,
-    icon: '#687076',
-    tabIconDefault: '#687076',
-    tabIconSelected: tintColorLight,
-    border: '#E2E8F0',
-    success: '#10B981',
-    error: '#EF4444',
-    warning: '#F59E0B',
+    text: '#2C2C2C', // Deep near-black with soft warmth
+    textSecondary: '#6B6B6B', // Muted secondary text
+    background: '#F8F6E3', // Warm cream
+    surface: '#F5F3E0', // Slightly darker cream for surfaces
+    card: '#FCFAF5', // Light cream for cards
+    tint: 'rgb(34, 151, 153)', // Calm teal accent
+    icon: '#6B6B6B', // Muted icons
+    tabIconDefault: '#9A9A9A', // Subtle inactive tab icons
+    tabIconSelected: 'rgb(34, 151, 153)', // Teal for active tabs
+    border: '#E8E6D8', // Barely visible, warm borders
+    success: '#4A9B8E', // Muted teal-green
+    error: '#D67B7B', // Soft muted red
+    warning: '#D4A574', // Warm muted orange
   },
   dark: {
-    text: '#F5F5F5',
-    textSecondary: '#9CA3AF',
-    background: '#0A0A0A',
-    surface: '#111111',
-    card: '#1A1A1A',
-    tint: tintColorDark,
-    icon: '#9CA3AF',
-    tabIconDefault: '#6B7280',
-    tabIconSelected: tintColorDark,
-    border: '#27272A',
-    success: '#10B981',
-    error: '#EF4444',
-    warning: '#F59E0B',
+    text: '#F5F2E7', // Warm off-white
+    textSecondary: '#A8A5A0', // Warm gray
+    background: '#1A1916', // Warm charcoal (not pure black)
+    surface: '#242320', // Warm dark surface
+    card: '#2D2B27', // Warm dark card
+    tint: '#2DD4BF', // Brighter teal for dark mode visibility
+    icon: '#A8A5A0', // Warm gray icons
+    tabIconDefault: '#6B6965', // Muted warm gray
+    tabIconSelected: '#2DD4BF', // Teal active
+    border: '#3D3A35', // Warm border
+    success: '#34D399', // Bright teal-green
+    error: '#F87171', // Warm coral red
+    warning: '#FBBF24', // Warm amber
   },
 };
 

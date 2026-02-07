@@ -64,7 +64,7 @@ function TransactionCardComponent({
   const formattedTime = format(new Date(transaction.timestamp), 'h:mm a');
 
   return (
-    <View style={[styles.container, { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.2)' }]}>
+    <View style={[styles.container, { backgroundColor: colors.card, borderColor: colors.border }]}>
       {/* Category Icon */}
       <View
         style={[
@@ -81,17 +81,17 @@ function TransactionCardComponent({
 
       {/* Transaction Details */}
       <View style={styles.details}>
-        <Text style={[styles.reason, { color: '#FFF' }]} numberOfLines={1}>
+        <Text style={[styles.reason, { color: colors.text }]} numberOfLines={1}>
           {transaction.reason || transaction.category}
         </Text>
         <Text
-          style={[styles.payee, { color: 'rgba(255, 255, 255, 0.7)' }]}
+          style={[styles.payee, { color: colors.textSecondary }]}
           numberOfLines={1}
         >
           {transaction.payeeName}
         </Text>
         <View style={styles.metaRow}>
-          <Text style={[styles.date, { color: 'rgba(255, 255, 255, 0.6)' }]}>
+          <Text style={[styles.date, { color: colors.textSecondary }]}>
             {formattedDate} • {formattedTime}
           </Text>
         </View>
@@ -101,7 +101,7 @@ function TransactionCardComponent({
       <View style={styles.rightSection}>
         <Text style={[
           styles.amount,
-          { color: transaction.type === 'income' ? '#10B981' : '#FFF' }
+          { color: transaction.type === 'income' ? colors.success : colors.text }
         ]}>
           {transaction.type === 'income' ? '+' : '-'}
           {isPrivacyModeEnabled ? '•••••' : `₹${transaction.amount.toLocaleString('en-IN', {

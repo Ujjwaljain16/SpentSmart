@@ -69,7 +69,19 @@ Most expense apps in India require invasive permissions:
 
 ---
 
-## 🚀 Getting Started
+## � Demo
+
+| Home | History | Confirmation Modal |
+|:---:|:---:|:---:|
+| <img src="assets/demo/demo-4.jpeg" width="200" /> | <img src="assets/demo/demo-2.jpeg" width="200" /> | <img src="assets/demo/demo-3.jpeg" width="200" /> |
+
+| Analytics | Payment + Expense Logger | Settings |
+|:---:|:---:|:---:|
+| <img src="assets/demo/demo-1.jpeg" width="200" /> | <img src="assets/demo/demo-5.jpeg" width="200" /> | <img src="assets/demo/demo-6.jpeg" width="200" /> |
+
+---
+
+## �🚀 Getting Started
 
 ### Prerequisites
 - Node.js >= 18
@@ -79,8 +91,8 @@ Most expense apps in India require invasive permissions:
 
 ```bash
 # Clone the repository
-git clone https://github.com/Ujjwaljain16/ExpenseTracker.git
-cd ExpenseTracker/upi-tracker-react-native
+git clone https://github.com/Ujjwaljain16/SpentSmart.git
+cd SpentSmart
 
 # Install dependencies
 npm install

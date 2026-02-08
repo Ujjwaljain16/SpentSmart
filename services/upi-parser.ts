@@ -11,7 +11,7 @@ export const parseUPIQRCode = (qrData: string): UPIPaymentData | null => {
   try {
     if (!qrData) return null;
 
-    console.log('🔍 Original QR Code:', qrData);
+
 
     // BHARAT QR DETECTION: EMV format QRs (TLV encoded)
     // These start with digits, not "upi://"
@@ -20,7 +20,7 @@ export const parseUPIQRCode = (qrData: string): UPIPaymentData | null => {
       qrData.toLowerCase().startsWith('upi:');
 
     if (!isUpiFormat) {
-      console.log('🏛️ Bharat QR / EMV format detected - passing raw to UPI app');
+
       return null; // Signal to handle as raw QR
     }
 
@@ -94,8 +94,8 @@ export const parseUPIQRCode = (qrData: string): UPIPaymentData | null => {
       }
     });
 
-    console.log('📦 Parsed QR with all params:', Object.keys(rawParams));
-    console.log('🔍 pn raw value:', rawParams['pn']); // Debug what we're storing
+
+
 
     return {
       upiId,

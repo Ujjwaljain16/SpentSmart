@@ -30,7 +30,7 @@ export class PendingManager {
             pendings = pendings.slice(0, MAX_PENDING);
 
             await AsyncStorage.setItem(PENDING_TX_KEY, JSON.stringify(pendings));
-            console.log('📝 Pending transaction saved:', tx.id);
+
         } catch (error) {
             console.error('Failed to save pending transaction:', error);
         }
@@ -72,7 +72,7 @@ export class PendingManager {
             if (index !== -1) {
                 pendings[index].status = status;
                 await AsyncStorage.setItem(PENDING_TX_KEY, JSON.stringify(pendings));
-                console.log(`✅ Pending transaction ${id} resolved as ${status}`);
+
             }
         } catch (error) {
             console.error('Failed to resolve pending transaction:', error);

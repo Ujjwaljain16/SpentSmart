@@ -16,7 +16,7 @@
 
 ## 📖 What is SpentSmart?
 
-**SpentSmart** is a mobile expense tracking app designed specifically for the Indian UPI ecosystem. Scan any UPI QR code, track your spending, and get insights — all while keeping your data **100% local** on your device.
+**SpentSmart** is a mobile expense tracking app designed specifically for the Indian UPI ecosystem. Scan any UPI QR code, track your spending, and get insights all while keeping your data **100% local** on your device.
 
 No cloud. No SMS access. No bank linking. Just pure, private expense tracking.
 
@@ -69,7 +69,7 @@ Most expense apps in India require invasive permissions:
 
 ---
 
-## � Demo
+## Demo
 
 | Home | History | Confirmation Modal |
 |:---:|:---:|:---:|
@@ -79,9 +79,13 @@ Most expense apps in India require invasive permissions:
 |:---:|:---:|:---:|
 | <img src="assets/demo/demo-1.jpeg" width="200" /> | <img src="assets/demo/demo-5.jpeg" width="200" /> | <img src="assets/demo/demo-6.jpeg" width="200" /> |
 
+| Manual Entry | Category Management | Instant QR Recieve and Logging|
+|:---:|:---:|:---:|
+| <img src="assets/demo/demo7.jpeg" width="200" /> | <img src="assets/demo/demo8.jpeg" width="200" /> | <img src="assets/demo/demo9.jpeg" width="200" /> |
+
 ---
 
-## �🚀 Getting Started
+## 🚀 Getting Started
 
 ### Prerequisites
 - Node.js >= 18
@@ -166,21 +170,6 @@ SpentSmart requires minimal permissions:
 See [PRIVACY.md](PRIVACY.md) for our complete privacy policy.
 
 **TL;DR**: Your data never leaves your device. We can't see it, we don't want it, we don't collect it.
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please ensure:
-1. **Privacy First** — No changes that send user data externally
-2. **Offline First** — Features must work without internet
-3. **Type Safe** — All code must be TypeScript
-
----
-
-## 📄 License
-
-MIT License — See [LICENSE](LICENSE) for details.
 
 ---
 

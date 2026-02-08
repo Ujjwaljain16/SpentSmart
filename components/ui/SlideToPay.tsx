@@ -90,18 +90,11 @@ export const SlideToPay: React.FC<SlideToPayProps> = ({
 
     const animatedBackgroundStyle = useAnimatedStyle(() => {
         const max = Math.max(containerWidth.value - (height - BUTTON_PADDING * 2) - BUTTON_PADDING * 2, 1);
-        const opacity = interpolate(
-            translateX.value,
-            [0, max],
-            [0, 1],
-            Extrapolate.CLAMP
-        );
-
         return {
             backgroundColor: interpolateColor(
                 translateX.value,
                 [0, max],
-                [colors.card, colors.tint + '20'] // 20% opacity tint
+                [colors.card, colors.tint + '15'] // 15% opacity tint for background fill
             )
         };
     });
@@ -113,8 +106,8 @@ export const SlideToPay: React.FC<SlideToPayProps> = ({
                 {
                     height,
                     width,
-                    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-                    borderColor: 'rgba(255, 255, 255, 0.2)',
+                    backgroundColor: colors.card,
+                    borderColor: colors.border,
                     borderWidth: 1
                 }
             ]}
@@ -122,10 +115,10 @@ export const SlideToPay: React.FC<SlideToPayProps> = ({
                 containerWidth.value = e.nativeEvent.layout.width;
             }}
         >
-            <Animated.View style={[styles.background, animatedBackgroundStyle, { backgroundColor: '#3B82F6' }]} />
+            <Animated.View style={[styles.background, animatedBackgroundStyle, { backgroundColor: colors.tint }]} />
 
             <Animated.View style={[styles.textContainer, animatedTextStyle]}>
-                <Text style={[styles.text, { color: '#FFF' }]}>
+                <Text style={[styles.text, { color: colors.textSecondary }]}>
                     Slide to open {appName} {'>>'}
                 </Text>
             </Animated.View>
@@ -170,7 +163,6 @@ const styles = StyleSheet.create({
         ...StyleSheet.absoluteFillObject,
         justifyContent: 'center',
         alignItems: 'center',
-        paddingLeft: 40,
     },
     text: {
         fontSize: FontSizes.md,

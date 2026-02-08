@@ -16,7 +16,7 @@ let UpiIntent: any = null;
 try {
     UpiIntent = requireNativeModule('UpiIntent');
 } catch (e) {
-    console.warn('⚠️ UpiIntent native module not available (Expo Go)');
+    console.warn('UpiIntent native module not available (Expo Go)');
 }
 
 // Load UpiAppLauncher (development build only) - needs to be loaded dynamically
@@ -28,7 +28,7 @@ try {
     UpiAppLauncher = launcher.default;
     LaunchResult = launcher.LaunchResult || LaunchResult;
 } catch (e) {
-    console.warn('⚠️ UpiAppLauncher not available (Expo Go - requires dev build)');
+    console.warn('UpiAppLauncher not available (Expo Go - requires dev build)');
 }
 
 interface QRGeneratorProps {
@@ -165,7 +165,7 @@ export function QRPaymentGenerator({
 
                 // Don't use deep linking - just open the app
                 Alert.alert(
-                    'QR Code Saved! 📸',
+                    'QR Code Saved!',
                     'Open your UPI app and scan the QR from gallery. Mark as pending to track this expense.',
                     [
                         {

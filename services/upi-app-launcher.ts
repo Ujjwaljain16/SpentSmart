@@ -8,7 +8,7 @@ let UpiIntent: any = null;
 try {
     UpiIntent = requireNativeModule('UpiIntent');
 } catch (e) {
-    console.log('⚠️ UpiIntent native module not found via requireNativeModule');
+
 }
 
 export interface UPIAppInfo {
@@ -49,23 +49,23 @@ const PREFERRED_APP_KEY = 'preferred_upi_app';
  * Show system UPI chooser for any other installed apps
  */
 export async function launchUPIFallback(upiUrl: string = 'upi://pay'): Promise<boolean> {
-    console.log(`🔍 launchUPIFallback called with: ${upiUrl}`);
+
     try {
         if (Platform.OS === 'android') {
             // Try our custom native module first (best: Intent.createChooser)
             if (UpiIntent && UpiIntent.launchUPI) {
                 try {
-                    console.log(`🚀 Tier 1: Launching native custom chooser...`);
+
                     await UpiIntent.launchUPI(upiUrl);
-                    console.log(`✅ Tier 1 success`);
+
                     return true;
                 } catch (e) {
-                    console.log(`⚠️ Tier 1 failed:`, e);
+
                 }
             }
 
             // Fallback to Expo IntentLauncher (Better than standard Linking for choosers)
-            console.log(`🎯 Tier 2: Using IntentLauncher fallback...`);
+
             try {
                 // Use a simpler approach for IntentLauncher to avoid flag issues
                 await IntentLauncher.startActivityAsync(
@@ -74,7 +74,7 @@ export async function launchUPIFallback(upiUrl: string = 'upi://pay'): Promise<b
                         data: upiUrl,
                     }
                 );
-                console.log(`✅ Tier 2 success`);
+
                 return true;
             } catch (intentErr) {
                 console.error('Tier 2 failed:', intentErr);
@@ -82,20 +82,20 @@ export async function launchUPIFallback(upiUrl: string = 'upi://pay'): Promise<b
         }
 
         // Standard Linking fallback (iOS or Android if others fail)
-        console.log(`🌐 Tier 3: Final Linking fallback: ${upiUrl}`);
+
         const canOpen = await Linking.canOpenURL(upiUrl);
         if (canOpen) {
             await Linking.openURL(upiUrl);
-            console.log(`✅ Tier 3 success`);
+
             return true;
         }
 
         // Total fallback to generic
-        console.log(`🛑 All specialized attempts failed, trying generic upi://pay`);
+
         await Linking.openURL('upi://pay');
         return true;
     } catch (error) {
-        console.error('❌ Total failure in fallback chooser:', error);
+        console.error('Fallback chooser error:', error);
         Alert.alert('Error', 'No UPI apps could be opened. Please install a UPI app.');
         return false;
     }
@@ -122,31 +122,31 @@ export async function openUPIApp(appId: string, url?: string): Promise<boolean> 
 
     try {
         // Debug: Check if native module is available
-        console.log('🔍 Platform:', Platform.OS);
-        console.log('🔍 UpiIntent module:', UpiIntent ? 'Available' : 'NOT AVAILABLE');
+
+
 
         // Use native module to launch by package (like tapping icon)
         if (Platform.OS === 'android' && UpiIntent && UpiIntent.launchAppByPackage) {
             try {
-                console.log(`🚀 Launching ${app.name} by package: ${app.packageName}`);
+
                 await UpiIntent.launchAppByPackage(app.packageName);
-                console.log(`✅ Opened ${app.name} by package`);
+
                 return true;
             } catch (error) {
-                console.error(`❌ Native package launch failed for ${app.name}:`, error);
+                console.error(`Native package launch failed for ${app.name}:`, error);
                 // Fall through to scheme fallback
             }
         }
 
         // Fallback to scheme for iOS or if native module unavailable
-        console.log(`⚠️ Falling back to scheme launch for ${app.name} using ${app.scheme}`);
+
         const canOpen = await Linking.canOpenURL(app.scheme);
         if (canOpen) {
             await Linking.openURL(app.scheme);
-            console.log(`✅ Opened ${app.name} by scheme`);
+
             return true;
         } else {
-            console.log(`❌ Scheme not supported for ${app.name}: ${app.scheme}`);
+            console.log(`Scheme not supported for ${app.name}: ${app.scheme}`);
             Alert.alert(
                 'Launch Issue',
                 `${app.name} could not be opened directly. Would you like to try the standard system picker instead?`,
@@ -195,12 +195,12 @@ export async function setPreferredUPIApp(appId: string): Promise<void> {
  * Check which UPI apps are installed (Unified & Reliable)
  */
 export async function getInstalledUPIApps(): Promise<UPIAppInfo[]> {
-    console.log('🔍 Checking installed UPI apps...');
+
 
     // TIER 1: Native System Discovery (Most Accurate - Requires EAS Build)
-    // 🔍 DEBUG: Inspect what methods are actually available on the native module
+
     if (UpiIntent) {
-        console.log('🔍 NATIVE MODULE INSPECTION:');
+
         try {
             // Log keys of the native module object to see exposed methods
             console.log('Keys:', Object.keys(UpiIntent));
@@ -212,9 +212,9 @@ export async function getInstalledUPIApps(): Promise<UPIAppInfo[]> {
 
     if (Platform.OS === 'android' && UpiIntent && UpiIntent.getUPIApps) {
         try {
-            console.log('📡 Tier 1: Querying Android System natively...');
+
             const nativeApps = await UpiIntent.getUPIApps();
-            console.log(`✅ Tier 1 found ${nativeApps.length} apps installed`);
+
 
             const nativePackages = new Set(nativeApps.map((a: any) => a.packageName));
 
@@ -234,12 +234,12 @@ export async function getInstalledUPIApps(): Promise<UPIAppInfo[]> {
 
             return [...confirmedKnown, ...others];
         } catch (e) {
-            console.error('❌ Tier 1 Discovery Failed:', e);
+            console.error('Tier 1 Discovery Failed:', e);
         }
     }
 
     // TIER 2: Legacy Fallback (Used before EAS build is complete)
-    console.log('⚠️ Tier 2: Using legacy Linking fallback (Less accurate)');
+
     const installed: UPIAppInfo[] = [];
 
     for (const app of UPI_APPS) {

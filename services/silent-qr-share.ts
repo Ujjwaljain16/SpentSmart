@@ -6,7 +6,7 @@ let UpiIntent: any = null;
 try {
     UpiIntent = requireNativeModule('UpiIntent');
 } catch (e) {
-    console.log('⚠️ UpiIntent not available');
+
 }
 
 const GPAY_PACKAGE = 'com.google.android.apps.nbu.paisa.user';
@@ -81,29 +81,29 @@ export async function shareQRToGPay(options: SilentQRShareOptions): Promise<bool
     try {
         // 1. Build UPI URL
         const upiUrl = buildUPIUrl(options);
-        console.log('📱 Built UPI URL for QR:', upiUrl);
+
 
         // 2. Generate QR as data URL (base64)
         const dataUrl = await generateAndDownloadQR(upiUrl);
         if (!dataUrl) {
-            console.log('❌ Failed to generate QR');
+
             return false;
         }
-        console.log('✅ Generated QR data URL');
+
 
         // 3. Try to share via native module
         if (UpiIntent.shareBase64) {
             const success = await UpiIntent.shareBase64(GPAY_PACKAGE, dataUrl);
-            console.log('📤 Share result:', success);
+
             return success;
         } else if (UpiIntent.shareDataUrl) {
             const success = await UpiIntent.shareDataUrl(GPAY_PACKAGE, dataUrl);
-            console.log('📤 Share result:', success);
+
             return success;
         } else if (UpiIntent.shareTo) {
             // Fallback - native module expects file URI
             // For now, we'll return false and let the fallback kick in
-            console.log('⚠️ shareDataUrl not available, fallback to standard intent');
+
             return false;
         }
 

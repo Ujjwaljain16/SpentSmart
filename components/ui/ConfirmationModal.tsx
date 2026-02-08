@@ -85,7 +85,7 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                             style={[styles.button, { backgroundColor: colors.tint }]}
                             onPress={onConfirm}
                         >
-                            <Text style={styles.buttonText}>Yes, Paid ✓</Text>
+                            <Text style={styles.buttonText}>Yes, Paid</Text>
                         </TouchableOpacity>
 
                         <View style={styles.secondaryButtons}>

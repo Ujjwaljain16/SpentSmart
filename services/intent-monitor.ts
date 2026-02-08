@@ -12,7 +12,7 @@ export const initIntentMonitor = () => {
     if (isListening) return;
     isListening = true;
 
-    console.log('👀 Initializing Intent Monitor (Layer 2)...');
+
 
     // 1. Listen for Deep Links (upi://)
     Linking.addEventListener('url', handleDeepLink);
@@ -33,14 +33,14 @@ const handleDeepLink = async ({ url }: { url: string }) => {
     // e.g., spentsmart://upi/callback?tr=...&status=...
     // OR upi://pay?tr=...&response=... (some apps return original scheme)
     if (url.includes('tr=') || url.includes('response=') || url.includes('Status=')) {
-        console.log('🔄 Possible UPI Callback detected:', url);
+
         await LocalUpiTracker.handleCallback(url);
         return; // specific callback handled, do not treat as new scan
     }
 
     if (!url.includes('upi://')) return;
 
-    console.log('🔗 Deep Link Detected:', url);
+
     processUPIIntent(url, 'link');
 };
 

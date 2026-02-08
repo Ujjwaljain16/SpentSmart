@@ -30,7 +30,7 @@ export function usePaymentConfirmation() {
                 nextAppState.match(/inactive|background/)
             ) {
                 appOpenTimeRef.current = Date.now();
-                console.log('📱 User left app (likely opened UPI app)');
+
             }
 
             // App came back to foreground (user returned from UPI app)

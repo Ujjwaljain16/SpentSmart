@@ -12,7 +12,7 @@ class UpiIntentModule extends NativeModule<UpiIntentModuleEvents> {
     this.emit('onChange', { value });
   }
   hello() {
-    return 'Hello world! 👋';
+    return 'Hello world!';
   }
 };
 

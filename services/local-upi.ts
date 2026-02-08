@@ -32,7 +32,7 @@ export class LocalUpiTracker {
             timestamp: Date.now()
         });
 
-        console.log(`🔗 Generated Tracked Link [${txnId}] for ₹${amount} to ${merchant}`);
+
 
         // Construct UPI Deep Link
         // tr = Transaction Ref ID (Crucial for callback tracking)
@@ -83,13 +83,13 @@ export class LocalUpiTracker {
             const txnId = params.get('tr');
             const response = params.get('response') || params.get('Status') || params.get('status');
 
-            console.log(`🔄 UPI Callback: ID=${txnId}, Status=${response}`);
+
 
             if (txnId && pendingTxns.has(txnId)) {
                 const txn = pendingTxns.get(txnId)!;
 
                 if (response?.toLowerCase() === 'success' || response?.toLowerCase() === 'submitted') {
-                    console.log('✅ Tracked Transaction SUCCESS');
+
                     txn.status = 'confirmed';
 
                     // Confirm in Storage
@@ -112,7 +112,7 @@ export class LocalUpiTracker {
                     // Notify UI
                     DeviceEventEmitter.emit('onTransactionUpdate');
                 } else if (response?.toLowerCase() === 'failure' || response?.toLowerCase() === 'failed') {
-                    console.warn('❌ Tracked Transaction FAILED');
+                    console.warn('Tracked Transaction FAILED');
                     txn.status = 'failed';
                 }
 

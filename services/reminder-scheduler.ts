@@ -55,7 +55,7 @@ export async function scheduleDailyReminders() {
         // Schedule Morning Reminder (10:00 AM)
         await Notifications.scheduleNotificationAsync({
             content: {
-                title: "Good Morning! ☀️",
+                title: "Good Morning",
                 body: "Don't forget to log your expenses from last night.",
             },
             trigger: {
@@ -69,7 +69,7 @@ export async function scheduleDailyReminders() {
         // Schedule Evening Reminder (8:00 PM)
         await Notifications.scheduleNotificationAsync({
             content: {
-                title: "Evening Check-in 🌙",
+                title: "Evening Check-in",
                 body: "Did you spend money today? Log it now to stay on track!",
             },
             trigger: {

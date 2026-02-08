@@ -42,15 +42,10 @@ export default function ScannerScreen() {
     setScanned(true);
     const qrData = result.data;
 
-    // Parse the UPI QR code
+
     const paymentData = parseUPIQRCode(qrData);
 
     if (paymentData) {
-      // Base64 encode rawParams to prevent Expo Router from decoding URL params
-      const rawParamsB64 = paymentData.rawParams
-        ? btoa(JSON.stringify(paymentData.rawParams))
-        : '';
-
       // Navigate to payment screen with parsed data
       router.replace({
         pathname: '/payment',
@@ -59,7 +54,7 @@ export default function ScannerScreen() {
           payeeName: paymentData.payeeName,
           amount: paymentData.amount?.toString() || '',
           transactionNote: paymentData.transactionNote || '',
-          rawParams: rawParamsB64, // Pass as Base64 to preserve encoding
+          rawParams: paymentData.rawParams ? btoa(JSON.stringify(paymentData.rawParams)) : '',
         },
       });
     } else {
@@ -141,9 +136,9 @@ export default function ScannerScreen() {
         />
       )}
 
-      {/* Overlay */}
+
       <View style={styles.overlay}>
-        {/* Top section */}
+
         <View style={[styles.overlaySection, { paddingTop: insets.top, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, alignItems: 'flex-start' }]}>
           <TouchableOpacity
             style={styles.closeButton}
@@ -160,11 +155,11 @@ export default function ScannerScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Middle section with scan area */}
+
         <View style={styles.middleSection}>
           <View style={styles.overlaySection} />
           <View style={styles.scanArea}>
-            {/* Corner markers */}
+
             <View style={[styles.corner, styles.topLeft]} />
             <View style={[styles.corner, styles.topRight]} />
             <View style={[styles.corner, styles.bottomLeft]} />
@@ -173,7 +168,7 @@ export default function ScannerScreen() {
           <View style={styles.overlaySection} />
         </View>
 
-        {/* Bottom section */}
+
         <View style={styles.overlaySection}>
           <Text style={styles.instructionText}>
             Point your camera at a UPI QR code

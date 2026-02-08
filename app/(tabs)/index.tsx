@@ -122,7 +122,7 @@ export default function HomeScreen() {
                 hey, {username.toLowerCase() || 'there'}
               </Text>
               <View style={[styles.avatarCircle, { backgroundColor: colors.surface }]}>
-                <Text style={styles.avatarText}>{avatarId || '🐼'}</Text>
+                <Ionicons name={(avatarId || 'person-circle') as any} size={32} color={colors.text} />
               </View>
             </View>
 
@@ -263,6 +263,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   avatarText: {
-    fontSize: 24,
+    // fontSize: 24,
   },
 });

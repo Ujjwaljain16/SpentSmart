@@ -19,8 +19,8 @@ import { BorderRadius, Colors, FontSizes, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { getUserProfile, saveUserProfile } from '@/services/user-storage';
 
-// Avatar options - matching onboarding
-const AVATAR_OPTIONS = ['🐱', '🐶', '🐭', '🐹', '🐰', '🐻', '🐼', '🐨', '🐯'];
+// Avatar options - Ionicons names
+const AVATAR_OPTIONS = ['person', 'happy', 'star', 'heart', 'paw', 'leaf', 'rocket', 'shield', 'flash'];
 
 export default function EditProfileScreen() {
     const colorScheme = useColorScheme();
@@ -115,7 +115,9 @@ export default function EditProfileScreen() {
                 >
                     {/* Welcome Text */}
                     <View style={styles.introSection}>
-                        <Text style={[styles.emoji]}>✨</Text>
+                        <View style={{ marginBottom: Spacing.sm }}>
+                            <Ionicons name="sparkles" size={48} color={colors.text} />
+                        </View>
                         <Text style={[styles.title, { color: colors.text }]}>
                             Update your look
                         </Text>
@@ -168,7 +170,7 @@ export default function EditProfileScreen() {
                                     onPress={() => setSelectedAvatarId(avatarId)}
                                     activeOpacity={0.7}
                                 >
-                                    <Text style={styles.avatarEmoji}>{avatarId}</Text>
+                                    <Ionicons name={avatarId as any} size={32} color={colors.text} />
                                 </TouchableOpacity>
                             ))}
                         </View>
@@ -233,7 +235,6 @@ const styles = StyleSheet.create({
         marginBottom: Spacing.xl,
     },
     emoji: {
-        fontSize: 48,
         marginBottom: Spacing.sm,
     },
     title: {
@@ -274,7 +275,6 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     avatarEmoji: {
-        fontSize: 32,
     },
     buttonContainer: {
         paddingHorizontal: Spacing.xl,

@@ -136,7 +136,7 @@ export default function PrivacyDashboardScreen() {
 
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.md }}>
                             <View style={[styles.avatarContainer, { backgroundColor: colors.surface }]}>
-                                <Text style={{ fontSize: 24 }}>{profile.avatarId || '👤'}</Text>
+                                <Ionicons name={(profile.avatarId || 'person') as any} size={32} color={colors.text} />
                             </View>
                             <View style={{ flex: 1 }}>
                                 <Text style={[styles.label, { color: colors.textSecondary, marginBottom: 4 }]}>Name</Text>
@@ -353,16 +353,32 @@ export default function PrivacyDashboardScreen() {
                         <Text
                             style={[styles.guaranteeTitle, { color: colors.success }]}
                         >
-                            ✓ Privacy Guarantee
+                            Privacy Guarantee
                         </Text>
-                        <Text style={[styles.guaranteeText, { color: colors.text }]}>
-                            ✓ No SMS access {'\n'}
-                            ✓ No contacts access {'\n'}
-                            ✓ No location tracking {'\n'}
-                            ✓ No cloud sync required {'\n'}
-                            ✓ No user accounts {'\n'}
-                            ✓ No analytics or tracking
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                            <Ionicons name="checkmark-circle" size={16} color={colors.text} style={{ marginRight: 8 }} />
+                            <Text style={{ color: colors.text }}>No SMS access</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                            <Ionicons name="checkmark-circle" size={16} color={colors.text} style={{ marginRight: 8 }} />
+                            <Text style={{ color: colors.text }}>No contacts access</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                            <Ionicons name="checkmark-circle" size={16} color={colors.text} style={{ marginRight: 8 }} />
+                            <Text style={{ color: colors.text }}>No location tracking</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                            <Ionicons name="checkmark-circle" size={16} color={colors.text} style={{ marginRight: 8 }} />
+                            <Text style={{ color: colors.text }}>No cloud sync required</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                            <Ionicons name="checkmark-circle" size={16} color={colors.text} style={{ marginRight: 8 }} />
+                            <Text style={{ color: colors.text }}>No user accounts</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <Ionicons name="checkmark-circle" size={16} color={colors.text} style={{ marginRight: 8 }} />
+                            <Text style={{ color: colors.text }}>No analytics or tracking</Text>
+                        </View>
                     </View>
                 </View>
 
@@ -470,7 +486,7 @@ export default function PrivacyDashboardScreen() {
                     </TouchableOpacity>
 
                     <Text style={[styles.dangerWarning, { color: colors.textSecondary }]}>
-                        ⚠️ Data deletion is permanent and immediate. Make sure to export
+                        Data deletion is permanent and immediate. Make sure to export
                         your data first if you want to keep a backup.
                     </Text>
                 </View>

@@ -20,7 +20,7 @@ export const unstable_settings = {
   anchor: '(tabs)',
 };
 
-// Custom dark theme matching our app design
+
 const CustomDarkTheme = {
   ...DarkTheme,
   colors: {
@@ -52,21 +52,18 @@ function RootLayoutNav() {
   const [isCheckingOnboarding, setIsCheckingOnboarding] = useState(true);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
 
-  // Handle locking when app goes to background
+
   React.useEffect(() => {
-    // Grace period reference to track when we backgrounded
     let backgroundTime: number | null = null;
 
     const subscription = AppState.addEventListener('change', nextAppState => {
       if (nextAppState === 'background' || nextAppState === 'inactive') {
-        // Mark the time we went to background
+
         backgroundTime = Date.now();
       } else if (nextAppState === 'active') {
-        // App came back to foreground
+
         if (backgroundTime) {
           const timeInBackground = Date.now() - backgroundTime;
-          // Only lock if we were gone for more than 2 minutes (120000ms)
-          // This prevents locking during "Pick Contact" or "Permission Requests"
           if (timeInBackground > 120000) {
             lockApp();
           }
@@ -80,7 +77,7 @@ function RootLayoutNav() {
     };
   }, [lockApp]);
 
-  // Check onboarding status
+
   useEffect(() => {
     const checkOnboarding = async () => {
       try {
@@ -98,7 +95,7 @@ function RootLayoutNav() {
     checkOnboarding();
   }, []);
 
-  // Initial authentication
+
   React.useEffect(() => {
     if (isBioLockEnabled && !isUnlocked) {
       authenticate();
@@ -106,10 +103,8 @@ function RootLayoutNav() {
 
 
 
-    // Initialize Intent Monitor (Automation Layer 2)
     initIntentMonitor();
 
-    // Schedule Daily Reminders
     scheduleDailyReminders();
   }, [isBioLockEnabled, isUnlocked]);
 

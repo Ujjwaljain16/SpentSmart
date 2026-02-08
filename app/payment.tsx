@@ -31,17 +31,15 @@ import { ConfirmationModal } from '@/components/ui/ConfirmationModal';
 import { shareQRToGPay } from '@/services/silent-qr-share';
 
 export default function PaymentScreen() {
-  /* Updated Params to accept Category */
   const params = useLocalSearchParams<{
     upiId: string;
     payeeName: string;
     amount: string;
     transactionNote: string;
     rawParams?: string;
-    initialCategory?: CategoryType; /* Added Param */
+    initialCategory?: CategoryType;
   }>();
 
-  // Helper to safely parse params
   const paymentData = {
     upiId: params.upiId || 'unknown@upi',
     payeeName: params.payeeName || 'Unknown Payee',
@@ -55,7 +53,6 @@ export default function PaymentScreen() {
 
   const [amount, setAmount] = useState(paymentData.amount || '');
   const [transactionNote, setTransactionNote] = useState(paymentData.transactionNote || '');
-  /* Initialize with param or default */
   const [category, setCategory] = useState<CategoryType>(params.initialCategory as CategoryType || 'food');
   const [isLoading, setIsLoading] = useState(false);
   const [installedApps, setInstalledApps] = useState<UPIAppInfo[]>([]);
@@ -68,17 +65,13 @@ export default function PaymentScreen() {
 
   const { showConfirmation, confidenceScore, hideConfirmation } = usePaymentConfirmation();
 
-  /* Restore state from pending if available (handles app restart) */
   useEffect(() => {
     const restoreState = async () => {
       try {
         const activePendings = await PendingManager.getPendings();
         if (activePendings.length > 0) {
-          // Get most recent
           const recent = activePendings[0];
-          // Only restore if less than 5 minutes old
           if (Date.now() - recent.timestamp < 5 * 60 * 1000) {
-            // console.log('🔄 Restoring state from pending transaction');
             if (recent.paymentData.amount) setAmount(recent.paymentData.amount.toString());
             if (recent.reason) setTransactionNote(recent.reason);
             if (recent.category) setCategory(recent.category);
@@ -124,7 +117,6 @@ export default function PaymentScreen() {
 
       const pendingId = `pending_${Date.now()}`;
 
-      // Save pending transaction with user's note
       await PendingManager.savePending({
         id: pendingId,
         paymentData: {
@@ -141,11 +133,9 @@ export default function PaymentScreen() {
         launchedApp: appId
       });
 
-      // Check if GPay - use silent QR share method
       const isGPay = appId.includes('gpay') || appId.includes('tez') || appId === 'com.google.android.apps.nbu.paisa.user';
 
       if (isGPay) {
-        // Use silent QR image share for GPay
         const success = await shareQRToGPay({
           upiId: paymentData.upiId,
           payeeName: paymentData.payeeName,
@@ -154,7 +144,6 @@ export default function PaymentScreen() {
         });
 
         if (!success) {
-          // Fallback to standard UPI intent if QR share fails
           const upiUrl = buildUPIUrl({
             upiId: paymentData.upiId,
             payeeName: paymentData.payeeName,
@@ -165,7 +154,6 @@ export default function PaymentScreen() {
           await openUPIApp(appId, upiUrl);
         }
       } else {
-        // For other apps, use standard UPI intent
         const upiUrl = buildUPIUrl({
           upiId: paymentData.upiId,
           payeeName: paymentData.payeeName,
@@ -176,8 +164,6 @@ export default function PaymentScreen() {
         await openUPIApp(appId, upiUrl);
       }
 
-      // Tracking is handled by AppState in the hook automatically
-
     } catch (error) {
       console.error('Payment failed:', error);
       Alert.alert('Error', 'Could not open UPI app');
@@ -187,38 +173,31 @@ export default function PaymentScreen() {
 
   const handleConfirmPayment = async () => {
     try {
-      const activePendings = await PendingManager.getPendings(); // Correct method: getPendings
+      const activePendings = await PendingManager.getPendings();
 
       if (activePendings.length > 0) {
-        // Find matching pending
         const pending = activePendings.find(p => Math.abs((p.paymentData.amount || 0) - currentAmount) < 0.1);
         const targetPending = pending || activePendings[0];
 
-        // Prefer the NOTE from the pending transaction, as component state might have reset if app restarted
         const finalNote = targetPending.reason || targetPending.paymentData.transactionNote || transactionNote;
-        // Prefer the CATEGORY from the pending transaction
         const finalCategory = targetPending.category || category;
 
-        // Save using CORRECT positional arguments
-        // saveTransaction(paymentData, category, reason, amount, launchedAt)
         await saveTransaction(
           {
             upiId: paymentData.upiId,
             payeeName: paymentData.payeeName,
             amount: currentAmount,
-            transactionNote: finalNote || paymentData.transactionNote, // Persist note in data
+            transactionNote: finalNote || paymentData.transactionNote,
             rawParams
           },
           finalCategory,
-          finalNote || paymentData.transactionNote || `Paid to ${paymentData.payeeName}`, // Reason field
+          finalNote || paymentData.transactionNote || `Paid to ${paymentData.payeeName}`,
           currentAmount,
           targetPending.timestamp
         );
 
-        // Resolve pending state
         await PendingManager.resolvePending(targetPending.id, 'confirmed');
       } else {
-        // Even if no pending found (rare), still save tx
         await saveTransaction(
           {
             upiId: paymentData.upiId,
@@ -250,8 +229,8 @@ export default function PaymentScreen() {
       await PendingManager.resolvePending(idToResolve, 'cancelled');
     }
 
-    hideConfirmation(); // Correct hook method
-    router.replace('/'); // Go home
+    hideConfirmation();
+    router.replace('/');
   };
 
   if (showQRGenerator) {
@@ -274,7 +253,6 @@ export default function PaymentScreen() {
     );
   }
 
-  // Fallback for "Select App" manual click or "More" button
   const showManualAppSelector = () => {
     Alert.alert(
       'Select Payment App',
@@ -289,11 +267,9 @@ export default function PaymentScreen() {
     );
   };
 
-  // Default to GPay for slide-to-pay
   const gpayApp = installedApps.find(a => a.id.includes('gpay') || a.id.includes('tez') || a.name.toLowerCase().includes('google'));
   const primaryApp = gpayApp || installedApps[0];
 
-  // Helper to get brand icon
   const getAppIcon = (app: UPIAppInfo, size = 24) => {
     const id = app.id.toLowerCase();
     const name = app.name.toLowerCase();
@@ -302,14 +278,11 @@ export default function PaymentScreen() {
     return <Ionicons name="wallet-outline" size={size * 0.75} color={colors.text} />;
   };
 
-  // Use theme background
-
   return (
     <>
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
 
-        {/* 1. Header Section */}
         <View style={[styles.header, { paddingTop: insets.top + Spacing.sm }]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
             <Ionicons name="close" size={24} color={colors.text} />
@@ -333,16 +306,12 @@ export default function PaymentScreen() {
           <View style={{ width: 40 }} />
         </View>
 
-        {/* Secure Mode Banner */}
         <View style={[styles.secureBanner, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Ionicons name="shield-checkmark" size={14} color={colors.success} />
           <Text style={[styles.secureText, { color: colors.text }]}>Secure Payment Mode</Text>
         </View>
 
-        {/* 2. Main Content (Centered) */}
         <View style={styles.mainContent}>
-
-          {/* Amount (Centered & Large) */}
           <View style={{ alignItems: 'center', marginBottom: 32 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Text style={[styles.currencySymbol, { color: colors.text }]}>₹</Text>
@@ -361,7 +330,6 @@ export default function PaymentScreen() {
             </View>
           </View>
 
-          {/* Category Chips (Horizontal Scroll) */}
           <View style={{ height: 50 }}>
             <CategoryPicker
               selectedCategory={category}
@@ -370,7 +338,6 @@ export default function PaymentScreen() {
             />
           </View>
 
-          {/* Transaction Note (Optional) */}
           <View style={styles.noteContainer}>
             <TextInput
               style={[styles.noteInput, { color: colors.text, backgroundColor: colors.card, borderColor: colors.border }]}
@@ -384,10 +351,7 @@ export default function PaymentScreen() {
 
         </View>
 
-        {/* 3. Footer Actions (Bottom Pinned) */}
         <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.lg }]}>
-
-          {/* Primary Slide Action */}
           <View style={styles.slideContainer}>
             {installedApps.length > 0 ? (
               <SlideToPay
@@ -397,7 +361,6 @@ export default function PaymentScreen() {
                 width="100%"
               />
             ) : (
-              /* Fallback Button if no apps detected */
               <TouchableOpacity
                 style={[styles.fallbackButton, { backgroundColor: canPay ? colors.tint : colors.border }]}
                 onPress={showManualAppSelector}
@@ -408,9 +371,7 @@ export default function PaymentScreen() {
             )}
           </View>
 
-          {/* Horizontal App Icons Row - Simplified: PhonePe + QR only */}
           <View style={styles.appIconsRow}>
-            {/* PhonePe Button */}
             {installedApps.find(a => a.id.includes('phonepe')) && (
               <TouchableOpacity
                 style={[styles.iconButton, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
@@ -421,7 +382,6 @@ export default function PaymentScreen() {
               </TouchableOpacity>
             )}
 
-            {/* QR Button */}
             <TouchableOpacity
               style={[styles.iconButton, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
               onPress={() => setShowQRGenerator(true)}

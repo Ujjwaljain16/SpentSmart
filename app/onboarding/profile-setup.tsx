@@ -13,13 +13,14 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
 import { BorderRadius, Colors, FontSizes, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { completeOnboardingWithProfile } from '@/services/user-storage';
 
-// Avatar options - emoji animals
-const AVATAR_OPTIONS = ['🐱', '🐶', '🐭', '🐹', '🐰', '🐻', '🐼', '🐨', '🐯'];
+// Avatar options - Ionicons names
+const AVATAR_OPTIONS = ['person', 'happy', 'star', 'heart', 'paw', 'leaf', 'rocket', 'shield', 'flash'];
 
 export default function ProfileSetupScreen() {
     const colorScheme = useColorScheme();
@@ -72,7 +73,9 @@ export default function ProfileSetupScreen() {
                 >
                     {/* Header */}
                     <View style={styles.header}>
-                        <Text style={[styles.emoji]}>👋</Text>
+                        <View style={{ marginBottom: Spacing.md }}>
+                            <Ionicons name="hand-right" size={48} color={colors.text} />
+                        </View>
                         <Text style={[styles.title, { color: colors.text }]}>
                             What should we call you?
                         </Text>
@@ -120,7 +123,7 @@ export default function ProfileSetupScreen() {
                                     onPress={() => setSelectedAvatarId(avatarId)}
                                     activeOpacity={0.7}
                                 >
-                                    <Text style={styles.avatarEmoji}>{avatarId}</Text>
+                                    <Ionicons name={avatarId as any} size={32} color={colors.text} />
                                 </TouchableOpacity>
                             ))}
                         </View>
@@ -172,7 +175,6 @@ const styles = StyleSheet.create({
         marginTop: Spacing.lg,
     },
     emoji: {
-        fontSize: 48,
         marginBottom: Spacing.md,
     },
     title: {
@@ -221,7 +223,6 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     avatarEmoji: {
-        fontSize: 32,
     },
     buttonContainer: {
         paddingHorizontal: Spacing.xl,

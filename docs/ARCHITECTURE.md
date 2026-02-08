@@ -125,19 +125,24 @@ interface SecurityState {
 ### 2. Automation Hybrid Stack (The Core)
 **Role**: Ensuring 100% Transaction Coverage.
 
-#### Layer 1: Notification Listener (Passive)
-- **Module**: `modules/notification-listener` (Native Kotlin)
-- **Function**: Listens for `com.google.android.apps.nbu.paisa` (GPay) and others.
-- **Verification**: Auto-deduplicates against manual entries.
+#### Layer 1: Native Intent Module (Active)
+- **Module**: `modules/upi-intent` (Native Kotlin)
+- **Function**: Bridges the gap between JS and Android Intents.
+- **Capabilities**: Launches specific UPI apps directly, bypassing the system chooser for a faster UX.
 
-#### Layer 2: LocalSetu / Intent Monitor (Active)
-- **Module**: `services/local-upi.ts` & `services/intent-monitor.ts`
-- **Function**: Generates tracked UPI links -> Listens for specific `tr` (Transaction Ref) callbacks.
-- **Result**: Instant confirmation for "Quick Pay" presets.
+#### Layer 2: Intent Monitor (The Watcher)
+- **Module**: `services/intent-monitor.ts`
+- **Function**: Generates tracked UPI links (`tr` param) -> Listens for app returns.
+- **Result**: Attempts to auto-confirm if the payment app sends back a success callback.
 
-#### Layer 3: Voice Commander (Fallback)
-- **Module**: `components/voice/VoiceInput.tsx`
-- **Function**: Parses natural language ("Paid 50 to Raju") to fill gaps.
+#### Layer 3: Smart Pending Verification (The Safety Net)
+- **Module**: `services/pending-manager.ts`
+- **Function**: detailed heuristic analysis.
+- **Logic**:
+    1.  Records intent to pay *before* app launch.
+    2.  Detects app return via `AppState`.
+    3.  Presents a non-intrusive "Did this go through?" modal.
+    4.  Allows one-tap confirmation or modification.
 
 ### 4. Custom Charting (`components/home/InsightsGrid.tsx`)
 **Role**: High-performance visualization.
@@ -147,25 +152,27 @@ interface SecurityState {
 
 ## 📱 Sequence Diagrams
 
-### 1. The "Scan & Pay" Flow
+### 1. The "Scan & Pay" Flow with Verification
 
 ```mermaid
 sequenceDiagram
     participant User
-    participant Camera
-    participant Parser
+    participant App
+    participant PendingMgr
     participant NativeModule
     participant UPI_App
     participant Storage
 
-    User->>Camera: Scans QR Code
-    Camera->>Parser: Extract `pa`, `pn`, `am`
-    Parser->>User: Show Confirmation Dialog
-    User->>NativeModule: Confirm & Select App
+    User->>App: Scans QR Code
+    App->>App: Parse `pa`, `pn`, `am`
+    App->>PendingMgr: Register Pending Intent
+    User->>NativeModule: Confirm & Pay
     NativeModule->>UPI_App: Launch Android Intent
     Note over User, UPI_App: User completes payment externally
-    UPI_App->>User: Returns to App
-    User->>Storage: App Resume -> Save "Pending" Tx
+    UPI_App->>User: Returns to App (AppState: Active)
+    App->>PendingMgr: Check for Pending Intents
+    PendingMgr->>User: Show "Did this go through?" Modal
+    User->>Storage: Confirm -> Save Transaction
 ```
 
 ### 2. Privacy Mode Toggle
@@ -213,5 +220,5 @@ Uses `LocalAuthentication.authenticateAsync()`.
 ---
 
 **Author**: Ujjwal Jain
-**Last Updated**: Jan 2026
-**Version**: 1.0.0 (Production Release)
+**Last Updated**: Feb 2026
+**Version**: 2.0.1 (Production Release)

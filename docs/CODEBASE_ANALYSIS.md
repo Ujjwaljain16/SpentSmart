@@ -27,53 +27,46 @@
 
 ## 🔍 Module-Level Analysis
 
-### 1. `modules/notification-listener` (Layer 1: The Brain) 🧠
+### 1. `modules/upi-intent` (The Native Bridge) 🌉
 **Type**: Custom Expo Native Module (Kotlin)
-**Path**: `modules/notification-listener`
+**Path**: `modules/upi-intent`
 
-The crown jewel of automation.
-- **Function**: Intercepts `StatusBarNotification` events from Android System.
-- **Logic**: Filters for financial apps (GPay, PhonePe, Banks). Parses regex `Pattern.compile("Paid... (\\d+)")`.
-- **Privacy**: Processing happens 100% on-device in the native layer before passing sanitised data to JS.
+The core native interface for Android integration.
+- **Function**: Bridges React Native with Android's `Intent` system.
+- **Capabilities**:
+    - `getUPIApps()`: Discovers installed UPI apps (GPay, PhonePe, Paytm, etc.) by package query.
+    - `launchAppByPackage(packageName)`: Direct launch of specific apps, bypassing system chooser.
+    - `launchUPI(url)`: Robust handling of `upi://pay` intents with fallback to system picker.
 
-### 2. `services/local-upi.ts` (Layer 2: LocalSetu Handler) ⚡
-**Type**: TypeScript Service + Intent Monitor
-**Path**: `services/local-upi.ts`
+### 2. `services/intent-monitor.ts` & `local-upi.ts` (The Watcher) 👀
+**Type**: Background Monitor & Link Generator
+**Path**: `services/intent-monitor.ts`
 
-Implements a self-hosted "Payment Gateway" logic.
-- **Mechanism**: Generates unique Transaction IDs (`tr` param) in UPI Intent Links.
-- **Tracking**: `IntentMonitor` listens for the specific callback URL containing the success/failure token.
-- **Result**: Zero-effort confirmation for pre-set merchants ("Quick Pay").
+Implements the "Payment Gateway" logic locally.
+- **Mechanism**:
+    1. Generates unique transaction IDs (`tr` param) for every payment link.
+    2. Stores pending transaction metadata in-memory (`LocalUpiTracker`).
+    3. Listens for app deep links (`Linking.addEventListener`) returning from payment apps.
+- **Result**: auto-confirms transactions if the payment app returns a success specific callback or token (app-dependent).
 
-### 3. `services/voice-parser.ts` (Layer 3: The Commander) 🎙️
-**Type**: NLP Logic Service
-**Path**: `services/voice-parser.ts`
+### 3. `services/pending-manager.ts` (The Verifier) ✅
+**Type**: Heuristic State Manager
+**Path**: `services/pending-manager.ts`
 
-Provides a frictionless fallback for cash or untracked payments.
-- **Logic**: Distinguishes Intent.
-    - "Pay..." -> Launches UPI (Triggering Layer 2).
-    - "Paid..." -> Records historical expense.
-- **Tech**: Uses `expo-speech-recognition` (or native voice fallback) for high-accuracy transcription.
+Solves the "Did it go through?" problem without reading SMS.
+- **Logic**:
+    1. **Pre-Payment**: Captures intent details (Payee, Amount) before launching external app.
+    2. **App Switch**: Detects when user returns to SpentSmart via `AppState`.
+    3. **Verification UI**: Presents a non-blocking "Pending Transaction" modal or card.
+    4. **User Confirmation**: Simple "Yes/No" prompt to finalize the record, ensuring data accuracy without invasive permissions.
+    5. **Persistence**: Failed/Unconfirmed transactions are stored for later review.
 
 ### 4. `contexts/security-context.tsx` (The Gatekeeper) 🛡️
 **Type**: React Context + AppState Listener
 
 Implements the "Trust No One" model.
 - **Auto-Lock**: Listens to `AppState`. If `background` detected, sets `isLocked = true`. On resume, forces `LocalAuthentication`.
-- **Privacy Veil**: Broadcasts `isPrivacyMode` boolean. Consumed by `ThemedText` to apply a CSS-like blur: ``filter: 'blur(10px)'``.
-
-### 3. `services/payment-verification.ts` (The Brain)
-**Type**: Heuristic Logic Service
-
-Solves the "How do we know if payment succeeded without reading SMS?" problem.
-- **Logic**:
-    1. User clicks Pay.
-    2. App records timestamp $T_start$.
-    3. App goes background (Native Intent launches).
-    4. User returns. App records $T_end$.
-    5. Delta $\Delta T = T_end - T_start$.
-    6. If $\Delta T > 15s$, assume **High Confidence Success**.
-    7. If $\Delta T < 5s$, assume **User Cancelled**.
+- **Privacy Veil**: Broadcasts `isPrivacyMode` boolean. Consumed by `ThemedText` to apply a CSS-like blur: `filter: 'blur(10px)'`.
 
 ---
 
@@ -121,14 +114,3 @@ We aggressively authorized `victory-native` and Skia.
 - **EAS Build**: "Preview" profile verified (APK generation successful).
 
 ---
-
-## ✅ Recommendation
-
-The codebase is presently in a **Gold Candidate** state.
-- **Stability**: High. Native crashes are handled safe-guards.
-- **Maintainability**: High. Service-Repository pattern decouples UI from Data.
-- **Privacy**: Best-in-class for this category.
-
-**Next Engineering Steps**:
-1.  Implement **Database Migration System** (for v2 updates).
-2.  Add **Unit Tests** for the Native Intent Module (Java/Kotlin tests).

@@ -1,35 +1,59 @@
 # Privacy Policy
 
-**Last updated: February 08, 2026**
+**Last updated: 20 October 2026**
 
-This Privacy Policy describes how SpentSmart ("we", "us", or "our") handles your personal information when you use our mobile application.
+SpentSmart is built so that your financial data never leaves your phone. This policy says exactly what the
+app does with data and permissions.
 
-## 1. Data Collection and Usage
+## 1. Your data
 
-**We are a privacy-first application.** We do not collect, transmit, or store your personal financial data on our servers. All your transaction data, notes, and categories are stored locally on your device.
+Transactions, categories, budgets, your name and avatar, and settings are stored **only on your device**, in
+an encrypted database (SQLCipher, AES-256). The encryption key is generated on your device and kept in the
+Android Keystore. There is no SpentSmart account, server or cloud sync. The developer cannot see your data.
 
-### 1.1 Financial Data
-Your transaction history and budget information are stored securely on your device using local storage technologies. We do not have access to this data.
+Android Auto Backup is disabled for the app, so your data is not copied to your Google account backup.
 
-### 1.2 Permissions
-We request the following permissions to provide core functionality:
+## 2. Permissions
 
-- **Camera**: Used solely for scanning UPI QR codes to facilitate payments. No images or videos are saved or transmitted to us.
-- **Contacts**: Used to help you easily select payees for manual transactions. Your contact list is not uploaded to any server.
-- **Biometrics (Fingerprint/FaceID)**: Used to secure access to the app. Biometric data remains on your device and is not accessible to us.
+| Permission | Why | When |
+|---|---|---|
+| Camera | Read UPI QR codes | Only while the scanner screen is open. Images are not saved or sent. |
+| Contacts | Fill in a payee name | Only when you tap "Pick contact". Only the contact you choose is read; nothing is stored. |
+| Notifications | Optional daily reminders | Only if you switch reminders on in Settings. |
+| Photos (save only) | Save a QR code to your gallery | Only when you choose "Save QR to gallery". The app cannot read your photos. |
+| Biometrics / screen lock | Optional app lock | Only if you switch the app lock on. Handled by Android; SpentSmart never sees biometric data. |
 
-## 2. Third-Party Services
-We may use third-party services for app stability and updates (e.g., Expo). These services may collect anonymous usage data to help us improve the app stability.
+SpentSmart does **not** access your SMS, location, bank accounts or clipboard.
 
-## 3. Data Retention
-Since we do not store your data on our servers, you have full control over your data retention. Uninstalling the app effectively deletes all your transaction history from the device, unless you have created a manual backup (e.g., PDF export).
+## 3. Network use and third parties
 
-## 4. Children's Privacy
-Our app is not directed to children under the age of 13. We do not knowingly collect personal information from children.
+SpentSmart does not send your transactions anywhere. The app uses **Expo (EAS Update)** to download app
+updates; that request contains technical information such as app version and platform, not your financial data.
+Payments are made inside the UPI app you choose (Google Pay, PhonePe, etc.); those apps have their own privacy
+policies and receive the payee and amount you pay.
 
-## 5. Changes to This Policy
-We may update our Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page.
+When you share a QR image or an export, you choose where it goes. Exports are created in temporary storage and
+deleted right after the share sheet closes.
 
-## 6. Contact Us
-If you have any questions about this Privacy Policy, please contact us at:
-[Link to GitHub Issues](https://github.com/Ujjwaljain16/ExpenseTracker/issues)
+## 4. Diagnostics
+
+Warnings and errors are kept only in memory for the current session, with UPI IDs and amounts removed. You can
+view them in Settings → Diagnostics. Nothing is uploaded.
+
+## 5. Retention and deletion
+
+Your data stays until you delete it. **Settings → Delete all data** (or the Privacy dashboard) removes every
+transaction, category, setting and pending payment. Uninstalling the app removes everything. Back up first with
+Settings → Export CSV if you want a copy.
+
+## 6. Children
+
+SpentSmart is not directed at children under 13 and does not knowingly collect their information.
+
+## 7. Changes
+
+If this policy changes, the new version is published in this repository and the date above is updated.
+
+## 8. Contact
+
+Open an issue: https://github.com/Ujjwaljain16/SpentSmart/issues

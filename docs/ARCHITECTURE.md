@@ -1,224 +1,81 @@
-# SpentSmart - Technical Architecture Documentation 🛡️
+# Architecture
 
-## 📋 Table of Contents
-
-1. [Project Overview](#project-overview)
-2. [Technology Stack](#technology-stack)
-3. [Application Architecture](#application-architecture)
-4. [Data Models & Types](#data-models--types)
-5. [Core Services & Business Logic](#core-services--business-logic)
-6. [Native Modules](#native-modules)
-7. [Security & Privacy](#security--privacy)
-8. [Sequence Diagrams](#sequence-diagrams)
-9. [Deployment & Build](#deployment--build)
-
-## 🎯 Project Overview
-
-**SpentSmart** is a privacy-first, offline financial tracker designed for the Indian UPI ecosystem. Unlike traditional trackers that scrape SMS or bank data, SpentSmart uses a "Scan & Verify" model where users scan UPI QR codes, confirming payments via a native intent flow, and verify them later via a "Smart Pending" system.
-
-### Core Philosophy
-- **Zero Knowledge**: We don't know who you are. No servers, no accounts.
-- **Local First**: All data lives in `AsyncStorage` on the device.
-- **Native Performance**: Custom native modules for seamless UPI integration.
-
-## 🛠️ Technology Stack
-
-### Core Framework
-- **React Native 0.81.5** (New Architecture Enabled)
-- **Expo SDK 54**
-- **TypeScript 5.9**
-
-### Key Dependencies
-- **Navigation**: `expo-router` (File-based routing)
-- **Storage**: `@react-native-async-storage/async-storage`
-- **Security**: `expo-local-authentication` (Biometrics), `expo-crypto` (UUIDs)
-- **Hardware**: `expo-camera` (QR Scanning), `expo-contacts` (Payee selection)
-- **Graphics**: `react-native-svg` (Custom optimized charts)
-- **Animation**: `react-native-reanimated`
-
-### Removed Dependencies
-- `victory-native` / `react-native-skia` (Removed for bundle size optimization)
-- `react-native-chart-kit` (Replaced by custom lightweight SVG components)
-
-## 🏗️ Application Architecture
-
-### High-Level Architecture
-
-```mermaid
-graph TD
-    User -->|Biometrics| SecurityLayer
-    SecurityLayer -->|Authenticated| AppLayer
-
-    %% UI Layer
-    subgraph UILayer["UI Layer"]
-        HomeScreen
-        ScannerScreen
-        PaymentModules
-        AnalyticsDashboard
-    end
-
-    %% Service Layer
-    subgraph ServiceLayer["Service Layer"]
-        Storage
-        Auth
-        UPI
-        Stats
-    end
-
-    %% Data Layer
-    subgraph DataLayer["Data Layer"]
-        AsyncStore["AsyncStorage (JSON)"]
-        SecureStore["SecureStore (Keys)"]
-    end
-
-    %% Connections
-    AppLayer --> HomeScreen
-    AppLayer --> ScannerScreen
-    AppLayer --> PaymentModules
-    AppLayer --> AnalyticsDashboard
-
-    HomeScreen --> Storage
-    ScannerScreen --> Auth
-    PaymentModules --> UPI
-    AnalyticsDashboard --> Stats
-
-    Storage --> AsyncStore
-    Auth --> SecureStore
+SpentSmart is an Android-only Expo (SDK 54) / React Native app. Everything is stored in an encrypted SQLite
+database on the device. There is no backend.
 
 ```
-
-## 📊 Data Models & Types
-
-### Transaction Entity
-```typescript
-interface Transaction {
-  id: string;              // UUID
-  amount: number;          // Stored as float
-  type: 'debit' | 'credit';
-  category: CategoryKey;   // e.g., 'food', 'travel'
-  payeeName: string;       // Verified from UPI / Contact
-  payeeVpa?: string;       // Encrypted VPA
-  timestamp: number;
-  status: 'pending' | 'completed' | 'failed'; // Payment lifecycle
-  note?: string;
-  isManual: boolean;       // True if manually entered
-}
+app/                 screens (expo-router). Thin: read via hooks, write via repositories
+components/          UI pieces, no storage access
+contexts/            Database, Settings, Theme, Security, Categories providers
+hooks/               useLiveQuery, usePagedTransactions, debounce, theme colours
+services/            side-effects: payments (launch UPI app), export (PDF/CSV), reminders
+db/                  SQL driver, migrations, repositories, SQLCipher client + key
+domain/              pure logic: money, UPI parse/build/response, periods, categories, reports
+modules/upi-intent/  Kotlin Expo module (startActivityForResult, app discovery, QR image share)
+lib/                 logger (redacting), routes, payment-draft hand-off
+tests, **/*.test.ts  vitest
 ```
 
-### Security State
-```typescript
-interface SecurityState {
-  isLocked: boolean;       // Global app lock state
-  privacyMode: boolean;    // Content masking (Blur amounts)
-  biometricsEnabled: boolean;
-}
-```
+## Layers and rules
 
-## 🔧 Core Services & Business Logic
+1. **`domain/` is pure.** No React Native, no storage. Everything in it has unit tests.
+2. **`db/` is the only code that touches SQL.** Screens never build queries. Repositories take a `SqlDriver`,
+   so the same code runs on-device (expo-sqlite + SQLCipher) and in tests (Node's built-in SQLite).
+3. **Screens do not import `db/` internals**; they use `useRepos()` and the hooks.
+4. **No `console.*`** (lint-enforced). Use `lib/logger`, which redacts UPI IDs and amounts.
 
-### 1. Security Context (`contexts/security-context.tsx`)
-**Role**: The "Gatekeeper" of the app.
-- Manages biometric authentication via `expo-local-authentication`.
-- Controls `privacyMode`: When active, all currency components blur their content.
-- Auto-locks app when put in background (AppState monitoring).
+## Data
 
-### 2. Automation Hybrid Stack (The Core)
-**Role**: Ensuring 100% Transaction Coverage.
+* **Money is integer paise.** `domain/money.ts` parses user input strictly (no negatives, exponents, > 2
+  decimals, zero, or > ₹1 crore). The database `CHECK`s the same rule.
+* **Schema** (`db/migrations.ts`, versioned with `PRAGMA user_version`, append-only):
+  `transactions`, `categories`, `payment_attempts`, `settings`. Indexes serve time-ordered paging, category
+  filters and type filters.
+* **Encryption:** SQLCipher, 256-bit random key generated on first launch and stored in Android Keystore via
+  `expo-secure-store`. Release builds refuse to open an unencrypted database. A database that cannot be
+  opened is never overwritten; the user is shown a recovery screen with an explicit "erase" option.
+* **Concurrency:** one connection, all calls serialised in `createSerializedDriver`; transactions are real
+  `BEGIN IMMEDIATE … COMMIT`. (expo-sqlite "exclusive" transactions open a second connection that would not
+  have the key.)
+* **Reads scale:** history is keyset-paginated; analytics are `GROUP BY` queries, not "load everything".
+  Measured with 100,000 rows (Node SQLite, see `db/db.test.ts` "scale"): first page ≈ 0.2 ms, deep page ≈ 2 ms,
+  text search ≈ 11 ms, a year of insights ≈ 26 ms.
+* **UI freshness:** repositories call `notify()` after writes; `useLiveQuery` re-runs while a screen is
+  focused. No polling, no per-row storage reads.
 
-#### Layer 1: Native Intent Module (Active)
-- **Module**: `modules/upi-intent` (Native Kotlin)
-- **Function**: Bridges the gap between JS and Android Intents.
-- **Capabilities**: Launches specific UPI apps directly, bypassing the system chooser for a faster UX.
+## Payments
 
-#### Layer 2: Intent Monitor (The Watcher)
-- **Module**: `services/intent-monitor.ts`
-- **Function**: Generates tracked UPI links (`tr` param) -> Listens for app returns.
-- **Result**: Attempts to auto-confirm if the payment app sends back a success callback.
+See [UPI-INTEGRATION.md](UPI-INTEGRATION.md). In short: persist an attempt → launch the UPI app for a result →
+store the response → ask the user to confirm with the response pre-selected → record idempotently.
 
-#### Layer 3: Smart Pending Verification (The Safety Net)
-- **Module**: `services/pending-manager.ts`
-- **Function**: detailed heuristic analysis.
-- **Logic**:
-    1.  Records intent to pay *before* app launch.
-    2.  Detects app return via `AppState`.
-    3.  Presents a non-intrusive "Did this go through?" modal.
-    4.  Allows one-tap confirmation or modification.
+## Security model
 
-### 4. Custom Charting (`components/home/InsightsGrid.tsx`)
-**Role**: High-performance visualization.
-- Built using raw `react-native-svg` paths.
-- **Optimization**: Calculates SVG paths on the JS thread using `react-native-worklets` functionality (via Reanimated) to prevent UI thread blocking.
-- **Features**: Interactive touch handling without heavy libraries.
+* App lock (biometric / device credential): enabling or disabling requires authenticating; the app starts
+  locked (no content flash); lock timeout is configurable; while on, screenshots and the recents thumbnail are
+  blocked (`FLAG_SECURE`). If the device later has no screen lock, the app lock turns itself off rather than
+  locking the user out.
+* Privacy mode masks amounts everywhere through one `Money` component.
+* Deep links are untrusted: the payment screen only accepts a draft that passes `draftFromParams`
+  (valid UPI ID, strict amount); no deep link can create a transaction. There is no `upi://` intent filter
+  and the clipboard is never read.
+* Native module: one private FileProvider folder (`cache/qr_share/`), images deleted after an hour, no
+  arbitrary file sharing.
+* Android Auto Backup is disabled so the database and its key cannot be restored separately or leave the device.
+* Exports (PDF/CSV) are written to cache, shared, then deleted; all report content is escaped (HTML) or
+  neutralised (CSV formula injection).
 
-## 📱 Sequence Diagrams
+## Release
 
-### 1. The "Scan & Pay" Flow with Verification
+`eas.json` has `development`, `preview`, `production` profiles with matching update channels. `runtimeVersion`
+follows `version`; **bump `version` whenever native code or native config changes** so OTA updates only reach
+compatible builds. CI (`.github/workflows/ci.yml`) runs typecheck, lint, tests, an Android bundle build and a
+production-dependency audit.
 
-```mermaid
-sequenceDiagram
-    participant User
-    participant App
-    participant PendingMgr
-    participant NativeModule
-    participant UPI_App
-    participant Storage
+## Known limitations
 
-    User->>App: Scans QR Code
-    App->>App: Parse `pa`, `pn`, `am`
-    App->>PendingMgr: Register Pending Intent
-    User->>NativeModule: Confirm & Pay
-    NativeModule->>UPI_App: Launch Android Intent
-    Note over User, UPI_App: User completes payment externally
-    UPI_App->>User: Returns to App (AppState: Active)
-    App->>PendingMgr: Check for Pending Intents
-    PendingMgr->>User: Show "Did this go through?" Modal
-    User->>Storage: Confirm -> Save Transaction
-```
-
-### 2. Privacy Mode Toggle
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant Context
-    participant Storage
-    participant UI
-
-    User->>Context: Toggle Privacy Mode
-    Context->>Storage: Persist Preference
-    Context->>UI: Emit State Change
-    UI->>UI: Re-render with `filter: blur(8px)`
-```
-
-## 🔒 Security & Privacy
-
-### Privacy Mode
-Built directly into the core `ThemedText` component. If `isPrivacyMode` is true and type is `currency`, the text component applies a masking layer.
-
-### Biometric Lock
-Uses `LocalAuthentication.authenticateAsync()`.
-- **Fallbacks**: Device PIN/Pattern if biometrics fail.
-- **Trigger**: App launch and returning from background (if enabled).
-
-### Android Permissions
-- `android.permission.CAMERA`: For QR scanning.
-- `android.permission.USE_BIOMETRIC`: For app lock.
-- `android.permission.READ_CONTACTS`: For manual entry (Contact Picker).
-- **REMOVED**: `READ_SMS`, `ACCESS_FINE_LOCATION` (We strictly do NOT use these).
-
-## 📦 Deployment & Build
-
-### EAS Configuration (`eas.json`)
-- **Development**: Debug builds for simulator/device testing.
-- **Preview**: Optimized APK (Production logic, local install).
-- **Production**: AAB bundles for Play Store submission.
-
-### Environment
-- **Project ID**: `spentsmart` (slug matching `app.json`)
-- **Package Name**: `com.ujjwaljain.spentsmart`
-
----
-
-**Author**: Ujjwal Jain
-**Last Updated**: Feb 2026
-**Version**: 2.0.1 (Production Release)
+* Not verified on a physical device in this pass: the Kotlin module, SQLCipher, biometric prompts, and each
+  UPI app's behaviour (see the device test matrix).
+* UPI response is a hint, not proof (no server).
+* Update code-signing for OTA is not configured (needs a certificate).
+* Remaining `npm audit` findings (24 high / 21 moderate) are transitive build-tooling packages of Expo SDK 54;
+  they clear with an SDK upgrade, which should be done and device-tested separately.

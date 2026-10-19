@@ -1,15 +1,20 @@
-// Export the native UPI Intent module
-export { default } from './src/UpiIntentModule';
-export * from './src/UpiIntent.types';
+import { Platform } from 'react-native';
+import type { UpiIntentNativeModule } from './src/UpiIntent.types';
 
-// Convenience function for launching UPI payments
-import UpiIntentModule from './src/UpiIntentModule';
+export type { InstalledUpiApp, PayWithUpiResult, UpiIntentNativeModule } from './src/UpiIntent.types';
 
-export async function launchUPI(upiUrl: string): Promise<boolean> {
-    try {
-        return await UpiIntentModule.launchUPI(upiUrl);
-    } catch (error) {
-        console.error('UPI Intent Error:', error);
-        throw error;
-    }
+/**
+ * The native module, or `null` when it is unavailable (non-Android platforms, Expo Go, or a build made
+ * without it). Callers must handle `null` and fall back to plain Linking.
+ */
+export function loadUpiIntent(): UpiIntentNativeModule | null {
+  if (Platform.OS !== 'android') return null;
+  try {
+    // Required lazily so that merely importing this file never throws where the module is missing.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { requireNativeModule } = require('expo') as typeof import('expo');
+    return requireNativeModule<UpiIntentNativeModule>('UpiIntent');
+  } catch {
+    return null;
+  }
 }

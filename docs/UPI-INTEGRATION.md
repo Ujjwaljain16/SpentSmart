@@ -16,7 +16,8 @@ payment happened, without SMS access, bank linking or a server. What is availabl
 | `upi://pay?...` link / `Linking.openURL` | any payee | **No** | Android shows a chooser. Fire and forget. |
 | Explicit intent to one app (`ACTION_VIEW` + `setPackage`) | any payee | **No** (if started with `startActivity`) | Skips the chooser. |
 | Same intent via **`startActivityForResult`** | any payee | **Yes, when the UPI app returns one** | The NPCI linking spec defines the response (`txnId`, `responseCode`, `Status`, `txnRef`, `ApprovalRefNo`). NPCI also requires PSP apps to answer intent calls on the same phone. This is what the app now uses first. |
-| Share a QR image to Google Pay (`ACTION_SEND`) | any payee | No | Works because Google Pay reads QR images. Kept as a fallback ("Send QR to GPay"), now rendered locally. |
+| Save a QR to the gallery, user imports it with "scan from gallery" | any payee | No | To the UPI app this is an ordinary QR scan, so it is accepted for personal UPI IDs. **This is the main route for personal payees.** |
+| Share a QR image to Google Pay (`ACTION_SEND`) | – | – | **Tried and removed:** field test showed Google Pay just opens its home screen. |
 | Show a QR for the user to scan | any payee | No | Always available. |
 
 Google's own in-app payments guide documents exactly this pattern for Google Pay: build a `upi://pay` URI,
@@ -38,6 +39,20 @@ response. It also tells merchants to confirm `Submitted`/`Success` with their PS
 4. **Response availability.** Some apps return nothing, return only `SUBMITTED`, or a cancelled result with no
    data. All of these map to "unsure" and the user is asked.
 
+## Field test (20 Oct 2026, one Android phone: PhonePe, BHIM, Google Pay)
+
+Paying a **personal** UPI ID by intent with `startActivityForResult`:
+
+* every UPI app opened and showed the payee and amount, **but would not continue** (no UPI PIN screen, "request type
+  not supported", PhonePe unresponsive). The apps refuse payments to personal IDs that are started by another app.
+* SpentSmart handled it correctly: the app came back and showed "Did this payment go through?" with Retry options.
+* Sharing the QR image to Google Pay only opened Google Pay's home screen.
+* Saving the QR to the gallery and importing it in PhonePe/BHIM **worked**.
+
+Consequence: personal payees default to the gallery-QR route; direct intent stays the default for shops (merchant
+QRs), where it is the intended mechanism, and is offered as "Try direct" for personal payees. Merchant intents are
+**not yet field-tested**.
+
 ## Design decisions
 
 * **Result first, hint not proof.** `payWithUpi` (Kotlin, `startActivityForResult`) → `interpretLaunchResult`
@@ -47,7 +62,7 @@ response. It also tells merchants to confirm `Submitted`/`Success` with their PS
   1. chosen app, with result →
   2. system chooser, with result (if the chosen app cannot handle the URI) →
   3. plain `Linking.openURL`, no result (if the native module is missing, e.g. Expo Go).
-  Beyond that: show a QR code, or send the QR image to Google Pay.
+  Beyond that: show a QR code, or pay via the gallery-QR route (which is the default for personal payees).
 * **Attempts are persisted before launching** (`payment_attempts`). If Android kills SpentSmart while the UPI
   app is open, the attempt is still there; Home shows a "waiting for confirmation" banner. "Decide later"
   snoozes it (fixes the previous redirect loop).
@@ -56,8 +71,8 @@ response. It also tells merchants to confirm `Submitted`/`Success` with their PS
 * **Never alter signed QRs; never trust scanned text.** `domain/upi/parse.ts` validates VPA, amount and
   currency, keeps the exact raw query, and splits parameters on the *first* `=` (the old parser truncated
   signatures that end in `=`).
-* **No network.** The QR image for Google Pay is drawn on the device. The old implementation sent the payee
-  UPI ID and amount to a third-party QR web service; that is gone.
+* **No network.** The payment QR is drawn on the device. The old implementation sent the payee UPI ID and amount
+  to a third-party QR web service; that is gone.
 
 ## Device test matrix (to run before a release)
 

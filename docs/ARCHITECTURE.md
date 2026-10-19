@@ -11,7 +11,7 @@ hooks/               useLiveQuery, usePagedTransactions, debounce, theme colours
 services/            side-effects: payments (launch UPI app), export (PDF/CSV), reminders
 db/                  SQL driver, migrations, repositories, SQLCipher client + key
 domain/              pure logic: money, UPI parse/build/response, periods, categories, reports
-modules/upi-intent/  Kotlin Expo module (startActivityForResult, app discovery, QR image share)
+modules/upi-intent/  Kotlin Expo module (startActivityForResult, app discovery, app launch)
 lib/                 logger (redacting), routes, payment-draft hand-off
 tests, **/*.test.ts  vitest
 ```
@@ -45,8 +45,9 @@ tests, **/*.test.ts  vitest
 
 ## Payments
 
-See [UPI-INTEGRATION.md](UPI-INTEGRATION.md). In short: persist an attempt → launch the UPI app for a result →
-store the response → ask the user to confirm with the response pre-selected → record idempotently.
+See [UPI-INTEGRATION.md](UPI-INTEGRATION.md). In short: persist an attempt → pay (direct intent for shops, gallery-QR
+for personal payees, which UPI apps refuse to pay by intent) → ask the user to confirm, with the UPI app's answer
+pre-selected when there is one → record idempotently.
 
 ## Security model
 
@@ -58,8 +59,8 @@ store the response → ask the user to confirm with the response pre-selected �
 * Deep links are untrusted: the payment screen only accepts a draft that passes `draftFromParams`
   (valid UPI ID, strict amount); no deep link can create a transaction. There is no `upi://` intent filter
   and the clipboard is never read.
-* Native module: one private FileProvider folder (`cache/qr_share/`), images deleted after an hour, no
-  arbitrary file sharing.
+* Native module: no file access at all (no FileProvider); it only discovers UPI apps, starts a payment for a result
+  and opens an app.
 * Android Auto Backup is disabled so the database and its key cannot be restored separately or leave the device.
 * Exports (PDF/CSV) are written to cache, shared, then deleted; all report content is escaped (HTML) or
   neutralised (CSV formula injection).

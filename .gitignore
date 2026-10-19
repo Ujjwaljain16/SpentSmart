@@ -36,8 +36,9 @@ prebuild_error.log
 .env.local
 .env.*.local
 
-# TypeScript
+# TypeScript / tests
 *.tsbuildinfo
+coverage/
 
 # IDE/Editors
 .vscode/

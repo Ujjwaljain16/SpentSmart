@@ -1,332 +1,140 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Alert,
-  Dimensions,
-} from 'react-native';
-import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
-import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { StatusBar } from 'expo-status-bar';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useIsFocused } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
+import { BarcodeScanningResult, CameraView, useCameraPermissions } from 'expo-camera';
+import { router } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import React, { useEffect, useRef, useState } from 'react';
+import { Alert, Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Button } from '@/components/ui/Button';
+import { BorderRadius, FontSizes, Spacing } from '@/constants/theme';
+import { draftFromParsed } from '@/domain/payment-draft';
+import { PARSE_FAILURE_MESSAGES, parseUpiUri } from '@/domain/upi/parse';
+import { useThemeColors } from '@/hooks/use-theme-colors';
+import { setPaymentDraft } from '@/lib/payment-draft-store';
+import { routes } from '@/lib/routes';
 
-import { Colors, BorderRadius, FontSizes, Spacing } from '@/constants/theme';
-import { parseUPIQRCode } from '@/services/upi-parser';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const SCAN_AREA_SIZE = SCREEN_WIDTH * 0.7;
+const SCAN_AREA = Dimensions.get('window').width * 0.7;
 
 export default function ScannerScreen() {
-  const [permission, requestPermission] = useCameraPermissions();
-  const [scanned, setScanned] = useState(false);
-  const [torch, setTorch] = useState(false);
-  const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? 'dark'];
+  const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
+  const [permission, requestPermission] = useCameraPermissions();
+  const [torch, setTorch] = useState(false);
+  const handling = useRef(false);
 
   useEffect(() => {
-    if (!permission?.granted) {
-      requestPermission();
+    if (permission && !permission.granted && permission.canAskAgain) void requestPermission();
+  }, [permission, requestPermission]);
+
+  const handleScan = (result: BarcodeScanningResult) => {
+    if (handling.current) return;
+    handling.current = true;
+
+    const parsed = parseUpiUri(result.data);
+    if (parsed.ok) {
+      setPaymentDraft(draftFromParsed(parsed.data));
+      router.replace(routes.payment);
+      return;
     }
-  }, [permission]);
-
-  const handleBarCodeScanned = (result: BarcodeScanningResult) => {
-    if (scanned) return;
-
-    setScanned(true);
-    const qrData = result.data;
-
-
-    const paymentData = parseUPIQRCode(qrData);
-
-    if (paymentData) {
-      // Navigate to payment screen with parsed data
-      router.replace({
-        pathname: '/payment',
-        params: {
-          upiId: paymentData.upiId,
-          payeeName: paymentData.payeeName,
-          amount: paymentData.amount?.toString() || '',
-          transactionNote: paymentData.transactionNote || '',
-          rawParams: paymentData.rawParams ? btoa(JSON.stringify(paymentData.rawParams)) : '',
-        },
-      });
-    } else {
-      Alert.alert(
-        'Invalid QR Code',
-        'This QR code is not a valid UPI payment code. Please try scanning another code.',
-        [
-          {
-            text: 'Try Again',
-            onPress: () => setScanned(false),
-          },
-          {
-            text: 'Go Back',
-            onPress: () => router.back(),
-            style: 'cancel',
-          },
-        ]
-      );
-    }
-  };
-
-  const handleClose = () => {
-    router.back();
+    Alert.alert('Can’t use this QR code', PARSE_FAILURE_MESSAGES[parsed.reason], [
+      { text: 'Scan again', onPress: () => (handling.current = false) },
+      { text: 'Close', style: 'cancel', onPress: () => router.back() },
+    ]);
   };
 
   if (!permission) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <Text style={[styles.message, { color: colors.text }]}>
-          Requesting camera permission...
-        </Text>
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
+        <Text style={[styles.message, { color: colors.text }]}>Checking camera permission…</Text>
       </View>
     );
   }
 
   if (!permission.granted) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={styles.permissionContainer}>
-          <View style={[styles.shieldContainer, { backgroundColor: colors.surface }]}>
-            <Ionicons name="camera-outline" size={64} color={colors.text} />
-          </View>
-          <Text style={[styles.title, { color: colors.text }]}>
-            Camera Access Required
-          </Text>
-          <Text style={[styles.message, { color: colors.textSecondary }]}>
-            Please allow camera access to scan UPI QR codes
-          </Text>
-          <TouchableOpacity
-            style={[styles.permissionButton, { backgroundColor: colors.tint }]}
-            onPress={requestPermission}
-          >
-            <Text style={styles.permissionButtonText}>Grant Permission</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.cancelButton, { borderColor: colors.border }]}
-            onPress={handleClose}
-          >
-            <Text style={[styles.cancelButtonText, { color: colors.textSecondary }]}>
-              Go Back
-            </Text>
-          </TouchableOpacity>
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
+        <View style={[styles.shield, { backgroundColor: colors.surface }]}>
+          <Ionicons name="camera-outline" size={64} color={colors.text} />
         </View>
+        <Text style={[styles.title, { color: colors.text }]} accessibilityRole="header">
+          Camera access needed
+        </Text>
+        <Text style={[styles.message, { color: colors.textSecondary }]}>
+          SpentSmart uses the camera only to read UPI QR codes. Images are never saved or sent anywhere.
+        </Text>
+        <Button label="Allow camera" onPress={() => void requestPermission()} style={styles.wide} />
+        <Button label="Go back" variant="secondary" onPress={() => router.back()} style={styles.wide} />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.camera}>
       <StatusBar style="light" />
       {isFocused && (
         <CameraView
           style={StyleSheet.absoluteFillObject}
-          barcodeScannerSettings={{
-            barcodeTypes: ['qr'],
-          }}
+          barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
           enableTorch={torch}
-          onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+          onBarcodeScanned={handleScan}
         />
       )}
 
-
-      <View style={styles.overlay}>
-
-        <View style={[styles.overlaySection, { paddingTop: insets.top, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, alignItems: 'flex-start' }]}>
-          <TouchableOpacity
-            style={styles.closeButton}
-            onPress={handleClose}
-          >
-            <Ionicons name="close" size={28} color="#fff" />
+      <View style={styles.overlay} pointerEvents="box-none">
+        <View style={[styles.shade, styles.topBar, { paddingTop: insets.top }]}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close scanner" style={styles.roundButton} onPress={() => router.back()}>
+            <Ionicons name="close" size={28} color="#FFFFFF" />
           </TouchableOpacity>
-
           <TouchableOpacity
-            style={styles.torchButton}
-            onPress={() => setTorch((p) => !p)}
+            accessibilityRole="button"
+            accessibilityLabel={torch ? 'Turn flashlight off' : 'Turn flashlight on'}
+            style={styles.roundButton}
+            onPress={() => setTorch((v) => !v)}
           >
-            <Ionicons name={torch ? "flash" : "flash-off"} size={24} color="#fff" />
+            <Ionicons name={torch ? 'flash' : 'flash-off'} size={24} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
 
-
-        <View style={styles.middleSection}>
-          <View style={styles.overlaySection} />
+        <View style={styles.middle}>
+          <View style={styles.shade} />
           <View style={styles.scanArea}>
-
-            <View style={[styles.corner, styles.topLeft]} />
-            <View style={[styles.corner, styles.topRight]} />
-            <View style={[styles.corner, styles.bottomLeft]} />
-            <View style={[styles.corner, styles.bottomRight]} />
+            {(['topLeft', 'topRight', 'bottomLeft', 'bottomRight'] as const).map((corner) => (
+              <View key={corner} style={[styles.corner, styles[corner]]} />
+            ))}
           </View>
-          <View style={styles.overlaySection} />
+          <View style={styles.shade} />
         </View>
 
-
-        <View style={styles.overlaySection}>
-          <Text style={styles.instructionText}>
-            Point your camera at a UPI QR code
-          </Text>
-          {scanned && (
-            <TouchableOpacity
-              style={[styles.rescanButton, { backgroundColor: colors.tint }]}
-              onPress={() => setScanned(false)}
-            >
-              <Text style={styles.rescanButtonText}>Tap to Scan Again</Text>
-            </TouchableOpacity>
-          )}
+        <View style={[styles.shade, styles.bottom]}>
+          <Text style={styles.instruction}>Point your camera at a UPI QR code</Text>
         </View>
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#000',
-  },
-  permissionContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Spacing.xl,
-  },
-  shieldContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: Spacing.xl,
-  },
-  title: {
-    fontSize: FontSizes.xl,
-    fontWeight: '600',
-    marginTop: Spacing.lg,
-    marginBottom: Spacing.sm,
-    textAlign: 'center',
-  },
-  message: {
-    fontSize: FontSizes.md,
-    textAlign: 'center',
-    marginBottom: Spacing.xl,
-  },
-  permissionButton: {
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.xl,
-    borderRadius: BorderRadius.md,
-    marginBottom: Spacing.md,
-  },
-  permissionButtonText: {
-    color: '#fff',
-    fontSize: FontSizes.md,
-    fontWeight: '600',
-  },
-  cancelButton: {
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.xl,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-  },
-  cancelButtonText: {
-    fontSize: FontSizes.md,
-  },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'space-between',
-  },
-  overlaySection: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  middleSection: {
-    flexDirection: 'row',
-    height: SCAN_AREA_SIZE,
-  },
-  scanArea: {
-    width: SCAN_AREA_SIZE,
-    height: SCAN_AREA_SIZE,
-    position: 'relative',
-  },
-  corner: {
-    position: 'absolute',
-    width: 30,
-    height: 30,
-    borderColor: '#3B82F6', // Keep blue for visibility or use tint if bright enough
-    borderWidth: 4,
-  },
-  topLeft: {
-    top: 0,
-    left: 0,
-    borderRightWidth: 0,
-    borderBottomWidth: 0,
-    borderTopLeftRadius: 12,
-  },
-  topRight: {
-    top: 0,
-    right: 0,
-    borderLeftWidth: 0,
-    borderBottomWidth: 0,
-    borderTopRightRadius: 12,
-  },
-  bottomLeft: {
-    bottom: 0,
-    left: 0,
-    borderRightWidth: 0,
-    borderTopWidth: 0,
-    borderBottomLeftRadius: 12,
-  },
-  bottomRight: {
-    bottom: 0,
-    right: 0,
-    borderLeftWidth: 0,
-    borderTopWidth: 0,
-    borderBottomRightRadius: 12,
-  },
-  closeButton: {
-    // position: 'absolute', // Removed for flex layout
-    // top: 16,
-    // left: 16,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  instructionText: {
-    color: '#fff',
-    fontSize: FontSizes.md,
-    textAlign: 'center',
-    marginTop: Spacing.xl,
-  },
-  rescanButton: {
-    marginTop: Spacing.lg,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.xl,
-    borderRadius: BorderRadius.md,
-  },
-  rescanButtonText: {
-    color: '#fff',
-    fontSize: FontSizes.md,
-    fontWeight: '600',
-  },
-  torchButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-});
+const CORNER = { position: 'absolute' as const, width: 30, height: 30, borderColor: '#3B82F6', borderWidth: 4 };
 
+const styles = StyleSheet.create({
+  camera: { flex: 1, backgroundColor: '#000000' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.xl, gap: Spacing.md },
+  shield: { width: 120, height: 120, borderRadius: 60, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.md },
+  title: { fontSize: FontSizes.xl, fontWeight: '600', textAlign: 'center' },
+  message: { fontSize: FontSizes.md, textAlign: 'center' },
+  wide: { alignSelf: 'stretch' },
+  overlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'space-between' },
+  shade: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.6)', justifyContent: 'center', alignItems: 'center' },
+  topBar: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, alignItems: 'flex-start' },
+  middle: { flexDirection: 'row', height: SCAN_AREA },
+  scanArea: { width: SCAN_AREA, height: SCAN_AREA },
+  bottom: { alignItems: 'center' },
+  roundButton: { width: 48, height: 48, borderRadius: BorderRadius.full, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'center', alignItems: 'center' },
+  instruction: { color: '#FFFFFF', fontSize: FontSizes.md, textAlign: 'center', marginTop: Spacing.xl },
+  corner: CORNER,
+  topLeft: { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 12 },
+  topRight: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 12 },
+  bottomLeft: { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 12 },
+  bottomRight: { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 12 },
+});

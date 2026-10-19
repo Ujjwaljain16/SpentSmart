@@ -1,723 +1,183 @@
-import React, { useState, useCallback } from 'react';
-import {
-    View,
-    Text,
-    StyleSheet,
-    ScrollView,
-    TouchableOpacity,
-    Alert,
-} from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { StatusBar } from 'expo-status-bar';
 import { format } from 'date-fns';
+import { router } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import React from 'react';
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Button } from '@/components/ui/Button';
+import { ScreenHeader } from '@/components/ui/ScreenHeader';
+import { BorderRadius, FontSizes, Spacing } from '@/constants/theme';
+import { useRepos } from '@/contexts/database-context';
+import { useSecurity } from '@/contexts/security-context';
+import { useSettings } from '@/contexts/settings-context';
+import { formatBytes } from '@/domain/format';
+import { useLiveQuery } from '@/hooks/use-live-query';
+import { useThemeColors } from '@/hooks/use-theme-colors';
+import { routes } from '@/lib/routes';
 
-import { Colors, BorderRadius, FontSizes, Spacing } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import {
-    getPrivacyStats,
-    formatBytes,
-    getPermissionStatus,
-    PrivacyStats,
-} from '@/services/privacy-stats';
-import { clearAllData } from '@/services/storage';
-import { getUserProfile, saveUserProfile, UserProfile } from '@/services/user-storage';
+type IconName = keyof typeof Ionicons.glyphMap;
 
+const ACCESS: readonly { icon: IconName; name: string; detail: string }[] = [
+  { icon: 'camera', name: 'Camera', detail: 'Only while the scanner is open, to read UPI QR codes. Images are never saved or sent.' },
+  { icon: 'people', name: 'Contacts', detail: 'Only when you tap “Pick contact”. SpentSmart reads just the name of the contact you choose and stores nothing else.' },
+  { icon: 'notifications', name: 'Notifications', detail: 'Optional. Used only for the daily reminders you can switch on in Settings.' },
+  { icon: 'images', name: 'Photos (save only)', detail: 'Only when you save a QR code to your gallery. SpentSmart cannot read your photos.' },
+  { icon: 'finger-print', name: 'Biometrics', detail: 'Optional app lock. Your fingerprint or face is handled by Android and never reaches SpentSmart.' },
+];
+
+const NEVER: readonly string[] = [
+  'Your SMS messages',
+  'Your location',
+  'Your clipboard',
+  'Your bank accounts',
+  'Analytics, ads or tracking SDKs',
+  'Any server that stores your transactions',
+];
 
 export default function PrivacyDashboardScreen() {
-    const colorScheme = useColorScheme();
-    const colors = Colors[colorScheme ?? 'dark'];
-    const insets = useSafeAreaInsets();
+  const colors = useThemeColors();
+  const insets = useSafeAreaInsets();
+  const repos = useRepos();
+  const { settings, reload } = useSettings();
+  const { isBioLockEnabled, verifyOwner } = useSecurity();
+  const { data: stats } = useLiveQuery((r) => r.storageStats());
 
-    const [stats, setStats] = useState<PrivacyStats | null>(null);
-    const [loading, setLoading] = useState(true);
+  const erase = () => {
+    Alert.alert('Delete all data', 'This permanently deletes every transaction, category and setting on this device. It cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete everything',
+        style: 'destructive',
+        onPress: async () => {
+          if (!(await verifyOwner('Confirm to delete all data'))) return;
+          try {
+            await repos.eraseEverything();
+            await reload();
+            Alert.alert('Done', 'All data has been deleted.');
+          } catch {
+            Alert.alert('Error', 'Data could not be deleted. Please try again.');
+          }
+        },
+      },
+    ]);
+  };
 
-    const loadStats = useCallback(async () => {
-        setLoading(true);
-        try {
-            const privacyStats = await getPrivacyStats();
-            setStats(privacyStats);
-        } catch (error) {
-            console.error('Error loading privacy stats:', error);
-        } finally {
-            setLoading(false);
-        }
-    }, []);
+  const Card = ({ title, icon, children }: { title: string; icon: IconName; children: React.ReactNode }) => (
+    <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View style={styles.cardHeader}>
+        <Ionicons name={icon} size={20} color={colors.tint} />
+        <Text style={[styles.cardTitle, { color: colors.text }]} accessibilityRole="header">
+          {title}
+        </Text>
+      </View>
+      {children}
+    </View>
+  );
 
-    const [profile, setProfile] = useState<UserProfile | null>(null);
+  const Stat = ({ label, value }: { label: string; value: string }) => (
+    <View style={styles.statRow} accessible accessibilityLabel={`${label}: ${value}`}>
+      <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{label}</Text>
+      <Text style={[styles.statValue, { color: colors.text }]}>{value}</Text>
+    </View>
+  );
 
-    const loadProfile = useCallback(async () => {
-        const userProfile = await getUserProfile();
-        if (userProfile) {
-            setProfile(userProfile);
-        }
-    }, []);
+  return (
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar style={colors.isDark ? 'light' : 'dark'} />
+      <ScreenHeader title="Privacy dashboard" />
 
-    useFocusEffect(
-        useCallback(() => {
-            loadStats();
-            loadProfile();
-        }, [loadStats, loadProfile])
-    );
-
-    const handleClose = () => {
-        router.back();
-    };
-
-    const handleClearAllData = () => {
-        Alert.alert(
-            'Delete All Data',
-            `This will permanently delete all ${stats?.transactionCount || 0} transactions and ${stats?.categoryCount || 0} categories. This action cannot be undone.\n\nYour data is stored only on this device. Once deleted, it cannot be recovered.`,
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Delete Everything',
-                    style: 'destructive',
-                    onPress: async () => {
-                        const success = await clearAllData();
-                        if (success) {
-                            await loadStats();
-                            Alert.alert('Success', 'All data has been permanently deleted.');
-                        } else {
-                            Alert.alert('Error', 'Failed to delete data. Please try again.');
-                        }
-                    },
-                },
-            ]
-        );
-    };
-
-    return (
-        <View style={[styles.container, { backgroundColor: colors.background }]}>
-            <StatusBar style="light" />
-
-            {/* Header */}
-            <View
-                style={[
-                    styles.header,
-                    {
-                        paddingTop: insets.top + Spacing.sm,
-                        backgroundColor: 'transparent',
-                        borderBottomColor: colors.border,
-                    },
-                ]}
-            >
-                <TouchableOpacity onPress={handleClose} style={[styles.headerButton, { backgroundColor: colors.card, width: 40, height: 40, borderRadius: 20 }]}>
-                    <Ionicons name="arrow-back" size={24} color={colors.text} />
-                </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: colors.text }]}>
-                    Privacy Dashboard
-                </Text>
-                <View style={styles.headerButton} />
-            </View>
-
-            <ScrollView
-                style={styles.scrollView}
-                contentContainerStyle={styles.scrollContent}
-                showsVerticalScrollIndicator={false}
-            >
-                {/* Profile Section */}
-                {profile && (
-                    <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, marginBottom: Spacing.lg }]}>
-                        <View style={styles.cardHeader}>
-                            <Ionicons name="person-circle" size={24} color={colors.tint} />
-                            <Text style={[styles.cardTitle, { color: colors.text }]}>Profile</Text>
-                            <View style={{ flex: 1 }} />
-                            <TouchableOpacity
-                                onPress={() => router.push('/edit-profile')}
-                                style={{ padding: 4 }}
-                            >
-                                <Text style={{ color: colors.tint, fontWeight: '600' }}>
-                                    Edit
-                                </Text>
-                            </TouchableOpacity>
-                        </View>
-
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.md }}>
-                            <View style={[styles.avatarContainer, { backgroundColor: colors.surface }]}>
-                                <Ionicons name={(profile.avatarId || 'person') as any} size={32} color={colors.text} />
-                            </View>
-                            <View style={{ flex: 1 }}>
-                                <Text style={[styles.label, { color: colors.textSecondary, marginBottom: 4 }]}>Name</Text>
-                                <Text style={[styles.value, { color: colors.text }]}>{profile.name}</Text>
-                            </View>
-                        </View>
-                    </View>
-                )}
-
-                {/* Hero Section */}
-                <View style={styles.heroSection}>
-                    <View
-                        style={[
-                            styles.shieldContainer,
-                            { backgroundColor: colors.card },
-                        ]}
-                    >
-                        <Ionicons name="shield-checkmark" size={64} color={colors.tint} />
-                    </View>
-                    <Text style={[styles.heroTitle, { color: colors.text }]}>
-                        Your Data, Your Control
-                    </Text>
-                    <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-                        100% stored on this device • Zero cloud • Zero tracking
-                    </Text>
-                </View>
-
-                {/* Data Inventory Card */}
-                <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
-                    <View style={styles.cardHeader}>
-                        <Ionicons name="document-text" size={20} color={colors.tint} />
-                        <Text style={[styles.cardTitle, { color: colors.text }]}>
-                            What We Store
-                        </Text>
-                    </View>
-
-                    <View style={styles.statRow}>
-                        <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-                            Transactions
-                        </Text>
-                        <Text style={[styles.statValue, { color: colors.text }]}>
-                            {stats?.transactionCount || 0}
-                        </Text>
-                    </View>
-
-                    <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-                    <View style={styles.statRow}>
-                        <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-                            Categories
-                        </Text>
-                        <Text style={[styles.statValue, { color: colors.text }]}>
-                            {stats?.categoryCount || 0}
-                        </Text>
-                    </View>
-
-                    <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-                    <View style={styles.statRow}>
-                        <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-                            Total Storage
-                        </Text>
-                        <Text style={[styles.statValue, { color: colors.text }]}>
-                            {formatBytes(stats?.totalStorageBytes || 0)}
-                        </Text>
-                    </View>
-                </View>
-
-                {/* Data Timeline Card */}
-                {stats && stats.transactionCount > 0 && (
-                    <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
-                        <View style={styles.cardHeader}>
-                            <Ionicons name="time" size={20} color={colors.tint} />
-                            <Text style={[styles.cardTitle, { color: colors.text }]}>
-                                Data Timeline
-                            </Text>
-                        </View>
-
-                        {stats.oldestTransaction && (
-                            <View style={styles.timelineItem}>
-                                <View style={styles.timelineDot}>
-                                    <View
-                                        style={[
-                                            styles.timelineDotInner,
-                                            { backgroundColor: colors.tint },
-                                        ]}
-                                    />
-                                </View>
-                                <View style={styles.timelineContent}>
-                                    <Text style={[styles.timelineLabel, { color: colors.text }]}>
-                                        First transaction recorded
-                                    </Text>
-                                    <Text
-                                        style={[
-                                            styles.timelineDate,
-                                            { color: colors.textSecondary },
-                                        ]}
-                                    >
-                                        {format(new Date(stats.oldestTransaction), 'MMM d, yyyy')}
-                                    </Text>
-                                </View>
-                            </View>
-                        )}
-
-                        {stats.newestTransaction && (
-                            <View style={styles.timelineItem}>
-                                <View style={styles.timelineDot}>
-                                    <View
-                                        style={[
-                                            styles.timelineDotInner,
-                                            { backgroundColor: colors.tint },
-                                        ]}
-                                    />
-                                </View>
-                                <View style={styles.timelineContent}>
-                                    <Text style={[styles.timelineLabel, { color: colors.text }]}>
-                                        Most recent transaction
-                                    </Text>
-                                    <Text
-                                        style={[
-                                            styles.timelineDate,
-                                            { color: colors.textSecondary },
-                                        ]}
-                                    >
-                                        {format(new Date(stats.newestTransaction), 'MMM d, yyyy')}
-                                    </Text>
-                                </View>
-                            </View>
-                        )}
-
-                        {stats.dataAgeDays !== undefined && (
-                            <View style={styles.timelineItem}>
-                                <View style={styles.timelineDot}>
-                                    <View
-                                        style={[
-                                            styles.timelineDotInner,
-                                            { backgroundColor: colors.tint },
-                                        ]}
-                                    />
-                                </View>
-                                <View style={styles.timelineContent}>
-                                    <Text style={[styles.timelineLabel, { color: colors.text }]}>
-                                        Total history
-                                    </Text>
-                                    <Text
-                                        style={[
-                                            styles.timelineDate,
-                                            { color: colors.textSecondary },
-                                        ]}
-                                    >
-                                        {stats.dataAgeDays} days
-                                    </Text>
-                                </View>
-                            </View>
-                        )}
-                    </View>
-                )}
-
-                {/* Permissions Card */}
-                <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
-                    <View style={styles.cardHeader}>
-                        <Ionicons name="lock-closed" size={20} color={colors.tint} />
-                        <Text style={[styles.cardTitle, { color: colors.text }]}>
-                            Permissions
-                        </Text>
-                    </View>
-
-                    <View style={styles.permissionItem}>
-                        <Ionicons name="camera" size={20} color={colors.textSecondary} />
-                        <View style={styles.permissionText}>
-                            <Text style={[styles.permissionName, { color: colors.text }]}>
-                                Camera
-                            </Text>
-                            <Text
-                                style={[
-                                    styles.permissionStatus,
-                                    { color: colors.textSecondary },
-                                ]}
-                            >
-                                Optional • For QR code scanning only
-                            </Text>
-                        </View>
-                    </View>
-
-                    <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-                    <View style={styles.permissionItem}>
-                        <Ionicons
-                            name="notifications"
-                            size={20}
-                            color={colors.textSecondary}
-                        />
-                        <View style={styles.permissionText}>
-                            <Text style={[styles.permissionName, { color: colors.text }]}>
-                                Notifications
-                            </Text>
-                            <Text
-                                style={[
-                                    styles.permissionStatus,
-                                    { color: colors.textSecondary },
-                                ]}
-                            >
-                                Optional • For budget alerts only
-                            </Text>
-                        </View>
-                    </View>
-
-                    <View
-                        style={[
-                            styles.guaranteeBox,
-                            { backgroundColor: `${colors.success}15` },
-                        ]}
-                    >
-                        <Text
-                            style={[styles.guaranteeTitle, { color: colors.success }]}
-                        >
-                            Privacy Guarantee
-                        </Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                            <Ionicons name="checkmark-circle" size={16} color={colors.text} style={{ marginRight: 8 }} />
-                            <Text style={{ color: colors.text }}>No SMS access</Text>
-                        </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                            <Ionicons name="checkmark-circle" size={16} color={colors.text} style={{ marginRight: 8 }} />
-                            <Text style={{ color: colors.text }}>No contacts access</Text>
-                        </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                            <Ionicons name="checkmark-circle" size={16} color={colors.text} style={{ marginRight: 8 }} />
-                            <Text style={{ color: colors.text }}>No location tracking</Text>
-                        </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                            <Ionicons name="checkmark-circle" size={16} color={colors.text} style={{ marginRight: 8 }} />
-                            <Text style={{ color: colors.text }}>No cloud sync required</Text>
-                        </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                            <Ionicons name="checkmark-circle" size={16} color={colors.text} style={{ marginRight: 8 }} />
-                            <Text style={{ color: colors.text }}>No user accounts</Text>
-                        </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <Ionicons name="checkmark-circle" size={16} color={colors.text} style={{ marginRight: 8 }} />
-                            <Text style={{ color: colors.text }}>No analytics or tracking</Text>
-                        </View>
-                    </View>
-                </View>
-
-                {/* Privacy Promise Card */}
-                <View
-                    style={[styles.promiseCard, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
-                >
-                    <Text style={[styles.promiseTitle, { color: colors.text }]}>
-                        Our Privacy Promise
-                    </Text>
-
-                    <View style={styles.promiseItem}>
-                        <Ionicons
-                            name="checkmark-circle"
-                            size={20}
-                            color={colors.success}
-                        />
-                        <Text style={[styles.promiseText, { color: colors.textSecondary }]}>
-                            Your data never leaves this device
-                        </Text>
-                    </View>
-
-                    <View style={styles.promiseItem}>
-                        <Ionicons
-                            name="checkmark-circle"
-                            size={20}
-                            color={colors.success}
-                        />
-                        <Text style={[styles.promiseText, { color: colors.textSecondary }]}>
-                            No analytics or usage tracking
-                        </Text>
-                    </View>
-
-                    <View style={styles.promiseItem}>
-                        <Ionicons
-                            name="checkmark-circle"
-                            size={20}
-                            color={colors.success}
-                        />
-                        <Text style={[styles.promiseText, { color: colors.textSecondary }]}>
-                            No user accounts or cloud servers
-                        </Text>
-                    </View>
-
-                    <View style={styles.promiseItem}>
-                        <Ionicons
-                            name="checkmark-circle"
-                            size={20}
-                            color={colors.success}
-                        />
-                        <Text style={[styles.promiseText, { color: colors.textSecondary }]}>
-                            Open source and fully auditable
-                        </Text>
-                    </View>
-
-                    <View style={styles.promiseItem}>
-                        <Ionicons
-                            name="checkmark-circle"
-                            size={20}
-                            color={colors.success}
-                        />
-                        <Text style={[styles.promiseText, { color: colors.textSecondary }]}>
-                            You can delete everything, anytime
-                        </Text>
-                    </View>
-                </View>
-
-
-
-                {/* Danger Zone */}
-                <View style={[styles.dangerCard, { backgroundColor: `${colors.error}15`, borderColor: `${colors.error}30`, borderWidth: 1 }]}>
-                    <Text style={[styles.dangerTitle, { color: colors.error }]}>
-                        Danger Zone
-                    </Text>
-
-                    <TouchableOpacity
-                        style={[
-                            styles.dangerButton,
-                            {
-                                backgroundColor: `${colors.error}15`,
-                                borderColor: colors.error,
-                            },
-                        ]}
-                        onPress={handleClearAllData}
-                    >
-                        <Ionicons name="trash" size={20} color={colors.error} />
-                        <View style={styles.dangerButtonText}>
-                            <Text style={[styles.dangerButtonLabel, { color: colors.error }]}>
-                                Delete All Data
-                            </Text>
-                            <Text
-                                style={[
-                                    styles.dangerButtonSubtext,
-                                    { color: colors.textSecondary },
-                                ]}
-                            >
-                                Permanently delete all transactions and categories
-                            </Text>
-                        </View>
-                        <Ionicons
-                            name="chevron-forward"
-                            size={20}
-                            color={colors.textSecondary}
-                        />
-                    </TouchableOpacity>
-
-                    <Text style={[styles.dangerWarning, { color: colors.textSecondary }]}>
-                        Data deletion is permanent and immediate. Make sure to export
-                        your data first if you want to keep a backup.
-                    </Text>
-                </View>
-
-                {/* Bottom Padding */}
-                <View style={{ height: Spacing.xl }} />
-            </ScrollView>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing.xl }]} showsVerticalScrollIndicator={false}>
+        <View style={styles.hero}>
+          <View style={[styles.shield, { backgroundColor: colors.card }]}>
+            <Ionicons name="shield-checkmark" size={56} color={colors.tint} />
+          </View>
+          <Text style={[styles.heroTitle, { color: colors.text }]}>Your data stays on this phone</Text>
+          <Text style={[styles.heroSub, { color: colors.textSecondary }]}>Stored in an encrypted database. There is no account and no SpentSmart server.</Text>
         </View>
-    );
+
+        <Card title="Profile" icon="person-circle">
+          <View style={styles.profileRow}>
+            <View style={[styles.avatar, { backgroundColor: colors.surface }]}>
+              <Ionicons name={settings.avatarId as IconName} size={30} color={colors.text} />
+            </View>
+            <Text style={[styles.profileName, { color: colors.text }]}>{settings.profileName || 'No name set'}</Text>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Edit profile" onPress={() => router.push(routes.editProfile)} style={styles.editButton}>
+              <Text style={{ color: colors.tint, fontWeight: '600' }}>Edit</Text>
+            </TouchableOpacity>
+          </View>
+        </Card>
+
+        <Card title="What is stored" icon="document-text">
+          <Stat label="Transactions" value={String(stats?.transactions ?? '—')} />
+          <Stat label="Categories" value={String(stats?.categories ?? '—')} />
+          <Stat label="Database size" value={stats ? formatBytes(stats.bytes) : '—'} />
+          {stats?.oldest ? <Stat label="First record" value={format(new Date(stats.oldest), 'd MMM yyyy')} /> : null}
+          {stats?.newest ? <Stat label="Latest record" value={format(new Date(stats.newest), 'd MMM yyyy')} /> : null}
+          <Stat label="Encryption" value="AES-256 (SQLCipher)" />
+          <Stat label="App lock" value={isBioLockEnabled ? 'On' : 'Off'} />
+        </Card>
+
+        <Card title="What the app can access" icon="lock-closed">
+          {ACCESS.map((a) => (
+            <View key={a.name} style={styles.accessRow}>
+              <Ionicons name={a.icon} size={20} color={colors.textSecondary} />
+              <View style={styles.flex}>
+                <Text style={[styles.accessName, { color: colors.text }]}>{a.name}</Text>
+                <Text style={[styles.accessDetail, { color: colors.textSecondary }]}>{a.detail}</Text>
+              </View>
+            </View>
+          ))}
+        </Card>
+
+        <Card title="What it never touches" icon="close-circle">
+          {NEVER.map((n) => (
+            <View key={n} style={styles.neverRow}>
+              <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+              <Text style={[styles.neverText, { color: colors.text }]}>{n}</Text>
+            </View>
+          ))}
+          <Text style={[styles.footnote, { color: colors.textSecondary }]}>
+            The only network activity is the app-update check run by Expo, which does not include your transactions. Payments themselves happen inside your UPI app, not SpentSmart.
+          </Text>
+        </Card>
+
+        <View style={[styles.danger, { backgroundColor: `${colors.error}1A`, borderColor: `${colors.error}55` }]}>
+          <Text style={[styles.dangerTitle, { color: colors.error }]} accessibilityRole="header">
+            Danger zone
+          </Text>
+          <Text style={[styles.footnote, { color: colors.textSecondary }]}>Deleting removes every transaction, category, setting and pending payment. Export a CSV first if you want a copy.</Text>
+          <Button label="Delete all data" variant="danger" onPress={erase} />
+        </View>
+      </ScrollView>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: Spacing.md,
-        paddingBottom: Spacing.md,
-        borderBottomWidth: 1,
-    },
-    headerButton: {
-        width: 40,
-        height: 40,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    headerTitle: {
-        fontSize: FontSizes.lg,
-        fontWeight: '600',
-    },
-    scrollView: {
-        flex: 1,
-    },
-    scrollContent: {
-        padding: Spacing.lg,
-    },
-    heroSection: {
-        alignItems: 'center',
-        marginBottom: Spacing.xl,
-    },
-    shieldContainer: {
-        width: 120,
-        height: 120,
-        borderRadius: 60,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: Spacing.md,
-    },
-    heroTitle: {
-        fontSize: FontSizes.xxl,
-        fontWeight: '700',
-        marginBottom: Spacing.xs,
-        textAlign: 'center',
-    },
-    heroSubtitle: {
-        fontSize: FontSizes.sm,
-        textAlign: 'center',
-        lineHeight: 20,
-    },
-    card: {
-        borderRadius: BorderRadius.lg,
-        padding: Spacing.lg,
-        marginBottom: Spacing.lg,
-    },
-    cardHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: Spacing.md,
-        gap: Spacing.sm,
-    },
-    cardTitle: {
-        fontSize: FontSizes.md,
-        fontWeight: '600',
-    },
-    statRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingVertical: Spacing.sm,
-    },
-    statLabel: {
-        fontSize: FontSizes.md,
-    },
-    statValue: {
-        fontSize: FontSizes.md,
-        fontWeight: '600',
-    },
-    divider: {
-        height: 1,
-        marginVertical: Spacing.xs,
-    },
-    timelineItem: {
-        flexDirection: 'row',
-        marginBottom: Spacing.md,
-    },
-    timelineDot: {
-        width: 24,
-        alignItems: 'center',
-        paddingTop: 4,
-    },
-    timelineDotInner: {
-        width: 10,
-        height: 10,
-        borderRadius: 5,
-    },
-    timelineContent: {
-        flex: 1,
-        marginLeft: Spacing.sm,
-    },
-    timelineLabel: {
-        fontSize: FontSizes.md,
-        marginBottom: 2,
-    },
-    timelineDate: {
-        fontSize: FontSizes.sm,
-    },
-    permissionItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: Spacing.sm,
-        gap: Spacing.md,
-    },
-    permissionText: {
-        flex: 1,
-    },
-    permissionName: {
-        fontSize: FontSizes.md,
-        marginBottom: 2,
-    },
-    permissionStatus: {
-        fontSize: FontSizes.sm,
-    },
-    guaranteeBox: {
-        padding: Spacing.md,
-        borderRadius: BorderRadius.md,
-        marginTop: Spacing.md,
-    },
-    guaranteeTitle: {
-        fontSize: FontSizes.md,
-        fontWeight: '600',
-        marginBottom: Spacing.sm,
-    },
-    guaranteeText: {
-        fontSize: FontSizes.sm,
-        lineHeight: 20,
-    },
-    promiseCard: {
-        borderRadius: BorderRadius.lg,
-        padding: Spacing.lg,
-        marginBottom: Spacing.lg,
-    },
-    promiseTitle: {
-        fontSize: FontSizes.lg,
-        fontWeight: '600',
-        marginBottom: Spacing.md,
-    },
-    promiseItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: Spacing.sm,
-        gap: Spacing.sm,
-    },
-    promiseText: {
-        fontSize: FontSizes.md,
-        flex: 1,
-    },
-    dangerCard: {
-        borderRadius: BorderRadius.lg,
-        padding: Spacing.lg,
-        marginBottom: Spacing.lg,
-    },
-    dangerTitle: {
-        fontSize: FontSizes.lg,
-        fontWeight: '600',
-        marginBottom: Spacing.md,
-    },
-    dangerButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: Spacing.md,
-        borderRadius: BorderRadius.md,
-        borderWidth: 1,
-        marginBottom: Spacing.md,
-        gap: Spacing.sm,
-    },
-    dangerButtonText: {
-        flex: 1,
-    },
-    dangerButtonLabel: {
-        fontSize: FontSizes.md,
-        fontWeight: '500',
-        marginBottom: 2,
-    },
-    dangerButtonSubtext: {
-        fontSize: FontSizes.sm,
-    },
-    dangerWarning: {
-        fontSize: FontSizes.sm,
-        lineHeight: 18,
-    },
-    avatarContainer: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    label: {
-        fontSize: FontSizes.xs,
-        fontWeight: '500',
-    },
-    value: {
-        fontSize: FontSizes.lg,
-        fontWeight: '600',
-    },
-    actionButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: Spacing.md,
-        borderRadius: BorderRadius.md,
-        gap: Spacing.md,
-    },
-    actionButtonText: {
-        fontSize: FontSizes.md,
-        fontWeight: '500',
-    },
-    actionButtonSubtext: {
-        fontSize: FontSizes.xs,
-        marginTop: 2,
-    },
+  container: { flex: 1 },
+  flex: { flex: 1 },
+  content: { padding: Spacing.lg, gap: Spacing.lg },
+  hero: { alignItems: 'center', gap: Spacing.sm },
+  shield: { width: 112, height: 112, borderRadius: 56, justifyContent: 'center', alignItems: 'center' },
+  heroTitle: { fontSize: FontSizes.xxl, fontWeight: '700', textAlign: 'center' },
+  heroSub: { fontSize: FontSizes.sm, textAlign: 'center', lineHeight: 20 },
+  card: { borderRadius: BorderRadius.lg, borderWidth: 1, padding: Spacing.lg, gap: Spacing.sm },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.xs },
+  cardTitle: { fontSize: FontSizes.md, fontWeight: '600' },
+  profileRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  avatar: { width: 52, height: 52, borderRadius: 26, justifyContent: 'center', alignItems: 'center' },
+  profileName: { flex: 1, fontSize: FontSizes.lg, fontWeight: '600' },
+  editButton: { minHeight: 44, minWidth: 44, justifyContent: 'center', alignItems: 'center' },
+  statRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 },
+  statLabel: { fontSize: FontSizes.md },
+  statValue: { fontSize: FontSizes.md, fontWeight: '600' },
+  accessRow: { flexDirection: 'row', gap: Spacing.md, paddingVertical: 6 },
+  accessName: { fontSize: FontSizes.md, fontWeight: '500' },
+  accessDetail: { fontSize: FontSizes.sm, lineHeight: 19 },
+  neverRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: 2 },
+  neverText: { fontSize: FontSizes.md },
+  footnote: { fontSize: FontSizes.sm, lineHeight: 19, marginTop: Spacing.xs },
+  danger: { borderRadius: BorderRadius.lg, borderWidth: 1, padding: Spacing.lg, gap: Spacing.sm },
+  dangerTitle: { fontSize: FontSizes.lg, fontWeight: '600' },
 });

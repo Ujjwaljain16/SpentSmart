@@ -1,297 +1,205 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
-  ScrollView,
-} from 'react-native';
-import { router } from 'expo-router';
 import * as Contacts from 'expo-contacts';
-import * as Linking from 'expo-linking';
-import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-
-import { Colors, BorderRadius, FontSizes, Spacing } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { CategoryType, TransactionType, PaymentMethod } from '@/types/transaction';
+import React, { useState } from 'react';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { CategoryPicker } from '@/components/transactions/category-picker';
-import { saveTransaction } from '@/services/storage';
+import { Button } from '@/components/ui/Button';
+import { ScreenHeader } from '@/components/ui/ScreenHeader';
+import { BorderRadius, FontSizes, MIN_TOUCH_TARGET, Spacing } from '@/constants/theme';
+import { useRepos } from '@/contexts/database-context';
+import { DEFAULT_EXPENSE_CATEGORY_KEY, INCOME_CATEGORY_KEY } from '@/domain/categories';
+import { parseRupees } from '@/domain/money';
+import { PAYMENT_METHODS, PaymentMethod, TransactionType } from '@/domain/types';
+import { isValidVpa, normalizeVpa, sanitizeText } from '@/domain/upi/vpa';
+import { useThemeColors } from '@/hooks/use-theme-colors';
+import { log } from '@/lib/logger';
+import { routes } from '@/lib/routes';
+import { setPaymentDraft } from '@/lib/payment-draft-store';
+
+/** Pick one contact with the system picker. Nothing but the chosen name is read, and nothing is stored. */
+async function pickContactName(): Promise<string | null> {
+  try {
+    return (await Contacts.presentContactPickerAsync())?.name ?? null;
+  } catch {
+    const permission = await Contacts.requestPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Permission needed', 'Allow access to contacts to pick a name. SpentSmart only reads the contact you choose.');
+      return null;
+    }
+    return (await Contacts.presentContactPickerAsync())?.name ?? null;
+  }
+}
 
 export default function ManualEntryScreen() {
-  const [amount, setAmount] = useState('');
+  const colors = useThemeColors();
+  const repos = useRepos();
+  const [amountText, setAmountText] = useState('');
   const [payeeName, setPayeeName] = useState('');
   const [upiId, setUpiId] = useState('');
   const [note, setNote] = useState('');
   const [type, setType] = useState<TransactionType>('expense');
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('upi');
-  const [category, setCategory] = useState<CategoryType>('food');
+  const [method, setMethod] = useState<PaymentMethod>('upi');
+  const [categoryKey, setCategoryKey] = useState(DEFAULT_EXPENSE_CATEGORY_KEY);
+  const [saving, setSaving] = useState(false);
 
-  const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? 'dark'];
-  const insets = useSafeAreaInsets();
+  const amount = parseRupees(amountText);
+  const vpaTrimmed = upiId.trim();
+  const vpaError = vpaTrimmed !== '' && !isValidVpa(vpaTrimmed);
+  const name = sanitizeText(payeeName, 60);
 
-  const pickContact = async () => {
-    const { status } = await Contacts.requestPermissionsAsync();
-    if (status === 'granted') {
-      const { data } = await Contacts.getContactsAsync({
-        fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers],
-      });
-
-      if (data.length > 0) {
-        // For simplicity, just pick the first one from a picker if many, 
-        // but here we might need a more complex UI. 
-        // Let's use Contacts.presentContactPickerAsync instead for better UX.
-        try {
-          const contact = await Contacts.presentContactPickerAsync();
-          if (contact) {
-            setPayeeName(contact.name);
-            // We don't have a reliable way to get UPI ID from phone number without NPCI API,
-            // so we leave UPI ID empty for the user to fill or it defaults to 'manual'.
-          }
-        } catch (e) {
-          console.error('Contact picker error:', e);
-        }
-      }
-    } else {
-      Alert.alert('Permission Denied', 'Please enable contact permissions to use this feature.');
+  const validate = (): boolean => {
+    if (amount === null) {
+      Alert.alert('Amount needed', 'Enter an amount greater than zero, like 250 or 250.50.');
+      return false;
     }
+    if (!name) {
+      Alert.alert('Name needed', 'Please enter a name.');
+      return false;
+    }
+    if (vpaError) {
+      Alert.alert('Check the UPI ID', 'It should look like name@bank.');
+      return false;
+    }
+    return true;
   };
 
-
-  const handleSave = async () => {
-    const parsedAmount = parseFloat(amount);
-    if (!parsedAmount || isNaN(parsedAmount)) {
-      Alert.alert('Required', 'Please enter a valid amount');
-      return;
-    }
-
-    if (!payeeName.trim()) {
-      Alert.alert('Required', 'Please enter a name');
-      return;
-    }
-
-    if (type === 'expense' && paymentMethod === 'upi') {
-      Alert.alert(
-        'Transaction Saved',
-        'Would you like to complete the payment now?',
-        [
-          {
-            text: 'Just Save',
-            onPress: async () => {
-              // Save as completed immediately (Manual Entry logic)
-              await saveTransaction(
-                {
-                  upiId: upiId || 'manual',
-                  payeeName: payeeName,
-                  amount: parsedAmount,
-                  transactionNote: note,
-                },
-                category,
-                note || `Paid to ${payeeName}`,
-                parsedAmount,
-                Date.now(),
-                type,
-                paymentMethod
-              );
-              router.replace('/(tabs)');
-            },
-            style: 'cancel'
-          },
-          {
-            text: 'Pay Now',
-            onPress: () => {
-              // Redirect to Payment Screen for full verification flow
-              // We do NOT save it here yet, PaymentScreen will handle "Pending" -> "Completed"
-              router.push({
-                pathname: '/payment',
-                params: {
-                  upiId: upiId || '',
-                  payeeName: payeeName,
-                  amount: parsedAmount.toString(),
-                  transactionNote: note,
-                  initialCategory: category,
-                }
-              });
-            }
-          }
-        ]
-      );
-    } else {
-      // Non-UPI or Income: Save directly
-      await saveTransaction(
-        {
-          upiId: upiId || 'manual',
-          payeeName: payeeName,
-          amount: parsedAmount,
-          transactionNote: note,
-        },
-        category,
-        note || `${type === 'income' ? 'Received from' : 'Paid to'} ${payeeName}`,
-        parsedAmount,
-        Date.now(),
+  const save = async () => {
+    if (!validate() || amount === null) return;
+    setSaving(true);
+    try {
+      await repos.transactions.insert({
+        amountPaise: amount,
         type,
-        paymentMethod
-      );
-      router.replace('/(tabs)');
+        categoryKey: type === 'income' ? INCOME_CATEGORY_KEY : categoryKey,
+        payeeName: name,
+        payeeVpa: vpaTrimmed ? normalizeVpa(vpaTrimmed) : null,
+        paymentMethod: method,
+        note: sanitizeText(note, 80) || null,
+        verifiedBy: 'manual',
+      });
+      router.replace(routes.home);
+    } catch (error) {
+      log.error('Manual entry failed', error);
+      Alert.alert('Error', 'The transaction could not be saved.');
+    } finally {
+      setSaving(false);
     }
-    // Error handling moved to individual catch blocks if needed, 
-    // but here we are wrapping the "Just Save" async call.
   };
 
-  const isDark = colorScheme === 'dark';
+  const payNow = () => {
+    if (!validate() || amount === null) return;
+    if (!vpaTrimmed) {
+      Alert.alert('UPI ID needed', 'Enter the payee’s UPI ID to pay now, or choose “Just save”.');
+      return;
+    }
+    setPaymentDraft({ vpa: normalizeVpa(vpaTrimmed), payeeName: name, amountPaise: amount, note: sanitizeText(note, 80) || undefined, categoryKey, amountEditable: true });
+    router.push(routes.payment);
+  };
+
+  const onSavePressed = () => {
+    if (type === 'expense' && method === 'upi' && vpaTrimmed) {
+      Alert.alert('Add this expense', 'Pay now through your UPI app, or just record a payment you already made.', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Just save', onPress: () => void save() },
+        { text: 'Pay now', onPress: payNow },
+      ]);
+    } else {
+      void save();
+    }
+  };
+
+  const Chip = ({ active, label, onPress, tone }: { active: boolean; label: string; onPress: () => void; tone?: string }) => (
+    <TouchableOpacity
+      accessibilityRole="radio"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: active }}
+      style={[styles.chip, { backgroundColor: active ? tone ?? colors.tint : colors.surface, borderColor: active ? tone ?? colors.tint : colors.border }]}
+      onPress={onPress}
+    >
+      <Text style={{ color: active ? colors.onTint : colors.textSecondary, fontSize: FontSizes.xs, fontWeight: '700' }}>{label}</Text>
+    </TouchableOpacity>
+  );
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
+      <StatusBar style={colors.isDark ? 'light' : 'dark'} />
+      <ScreenHeader title="Add transaction" leading="close" />
 
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + Spacing.sm }]}>
-        <TouchableOpacity onPress={() => router.back()} style={[styles.headerButton, { backgroundColor: colors.card }]}>
-          <Ionicons name="close" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>
-          Manual Entry
-        </Text>
-        <View style={{ width: 40 }} />
-      </View>
-
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
-      >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          {/* Type Toggle */}
-          <View style={styles.typeToggleContainer}>
-            <TouchableOpacity
-              style={[
-                styles.typeOption,
-                type === 'expense' && styles.typeOptionActive,
-                { backgroundColor: type === 'expense' ? colors.error : colors.card }
-              ]}
-              onPress={() => {
-                setType('expense');
-                if (category === 'income') setCategory('food');
-              }}
-            >
-              <Text style={[styles.typeText, { color: type === 'expense' ? '#FFF' : colors.textSecondary }]}>Expense</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.typeOption,
-                type === 'income' && styles.typeOptionActive,
-                { backgroundColor: type === 'income' ? colors.success : colors.card }
-              ]}
-              onPress={() => {
-                setType('income');
-                setCategory('income');
-              }}
-            >
-              <Text style={[styles.typeText, { color: type === 'income' ? '#FFF' : colors.textSecondary }]}>Income</Text>
-            </TouchableOpacity>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex}>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <View style={styles.typeRow}>
+            <Chip active={type === 'expense'} label="Expense" tone={colors.error} onPress={() => setType('expense')} />
+            <Chip active={type === 'income'} label="Income" tone={colors.success} onPress={() => setType('income')} />
           </View>
 
-          {/* Amount Input */}
-          <View style={styles.amountContainer}>
-            <Text style={[styles.currencySymbol, { color: colors.text }]}>₹</Text>
+          <View style={styles.amountRow}>
+            <Text style={[styles.currency, { color: colors.text }]}>₹</Text>
             <TextInput
+              accessibilityLabel="Amount in rupees"
               style={[styles.amountInput, { color: colors.text }]}
-              value={amount}
-              onChangeText={setAmount}
+              value={amountText}
+              onChangeText={setAmountText}
               placeholder="0"
               placeholderTextColor={colors.textSecondary}
               keyboardType="decimal-pad"
               autoFocus
             />
           </View>
+          {amountText !== '' && amount === null ? <Text style={[styles.error, { color: colors.error }]}>Enter an amount like 250 or 250.50</Text> : null}
 
-          {/* Form Fields */}
-          <View style={[styles.formCard, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
+          <View style={[styles.form, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.labelRow}>
-              <Text style={[styles.label, { color: colors.textSecondary }]}>{type === 'income' ? 'Payer Name' : 'Payee Name'}</Text>
-              {type === 'expense' && (
-                <TouchableOpacity onPress={pickContact} style={[styles.contactButton, { backgroundColor: colors.surface }]}>
-                  <Ionicons name="person-add-outline" size={16} color={colors.tint} />
-                  <Text style={[styles.contactButtonText, { color: colors.tint }]}>Pick Contact</Text>
-                </TouchableOpacity>
-              )}
+              <Text style={[styles.label, { color: colors.textSecondary }]}>{type === 'income' ? 'Payer name' : 'Payee name'}</Text>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Pick a name from your contacts"
+                style={[styles.contactButton, { backgroundColor: colors.surface }]}
+                onPress={async () => {
+                  const picked = await pickContactName();
+                  if (picked) setPayeeName(picked);
+                }}
+              >
+                <Ionicons name="person-add-outline" size={16} color={colors.tint} />
+                <Text style={{ color: colors.tint, fontSize: FontSizes.xs, fontWeight: '600' }}>Pick contact</Text>
+              </TouchableOpacity>
             </View>
+            <TextInput accessibilityLabel="Name" style={[styles.input, { color: colors.text, borderColor: colors.border }]} value={payeeName} onChangeText={setPayeeName} placeholder="Name" placeholderTextColor={colors.textSecondary} maxLength={60} />
+
+            <Text style={[styles.label, { color: colors.textSecondary }]}>UPI ID (optional)</Text>
             <TextInput
-              style={[styles.input, { color: colors.text, borderColor: colors.border }]}
-              value={payeeName}
-              onChangeText={setPayeeName}
-              placeholder="Name"
+              accessibilityLabel="UPI ID"
+              style={[styles.input, { color: colors.text, borderColor: vpaError ? colors.error : colors.border }]}
+              value={upiId}
+              onChangeText={setUpiId}
+              placeholder="user@bank"
               placeholderTextColor={colors.textSecondary}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
             />
+            {vpaError ? <Text style={[styles.error, { color: colors.error, textAlign: 'left' }]}>That doesn’t look like a UPI ID (name@bank).</Text> : null}
 
-            <View style={styles.inputGroup}>
-              <Text style={[styles.label, { color: colors.textSecondary }]}>UPI ID (Optional)</Text>
-              <TextInput
-                style={[styles.input, { color: colors.text, borderColor: colors.border }]}
-                value={upiId}
-                onChangeText={setUpiId}
-                placeholder="user@bank"
-                placeholderTextColor={colors.textSecondary}
-                autoCapitalize="none"
-              />
+            <Text style={[styles.label, { color: colors.textSecondary }]}>Note</Text>
+            <TextInput accessibilityLabel="Note" style={[styles.input, { color: colors.text, borderColor: colors.border }]} value={note} onChangeText={setNote} placeholder="What was this for?" placeholderTextColor={colors.textSecondary} maxLength={80} />
+
+            <Text style={[styles.label, { color: colors.textSecondary }]}>Payment method</Text>
+            <View style={styles.chipRow}>
+              {PAYMENT_METHODS.map((m) => (
+                <Chip key={m} active={method === m} label={m.toUpperCase()} onPress={() => setMethod(m)} />
+              ))}
             </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={[styles.label, { color: colors.textSecondary }]}>Note</Text>
-              <TextInput
-                style={[styles.input, { color: colors.text, borderColor: colors.border }]}
-                value={note}
-                onChangeText={setNote}
-                placeholder="What was this for?"
-                placeholderTextColor={colors.textSecondary}
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={[styles.label, { color: colors.textSecondary }]}>Payment Method</Text>
-              <View style={styles.methodRow}>
-                {(['upi', 'cash', 'bank', 'other'] as PaymentMethod[]).map((m) => (
-                  <TouchableOpacity
-                    key={m}
-                    style={[
-                      styles.methodChip,
-                      paymentMethod === m && styles.methodChipActive,
-                      {
-                        backgroundColor: paymentMethod === m ? colors.tint : colors.surface,
-                        borderColor: paymentMethod === m ? colors.tint : colors.border
-                      }
-                    ]}
-                    onPress={() => setPaymentMethod(m)}
-                  >
-                    <Text style={[
-                      styles.methodText,
-                      { color: paymentMethod === m ? '#FFF' : colors.textSecondary }
-                    ]}>
-                      {m.toUpperCase()}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={[styles.label, { color: colors.textSecondary }]}>Category</Text>
-              <CategoryPicker
-                selectedCategory={category}
-                onSelectCategory={setCategory}
-                mode="chips"
-              />
-            </View>
+            {type === 'expense' ? (
+              <>
+                <Text style={[styles.label, { color: colors.textSecondary }]}>Category</Text>
+                <CategoryPicker selectedCategory={categoryKey} onSelectCategory={setCategoryKey} mode="chips" exclude={[INCOME_CATEGORY_KEY]} />
+              </>
+            ) : null}
           </View>
 
-          <TouchableOpacity style={[styles.saveButton, { backgroundColor: colors.tint }]} onPress={handleSave}>
-            <Text style={[styles.saveButtonText, { color: '#FFF' }]}>Save Transaction</Text>
-          </TouchableOpacity>
+          <Button label="Save transaction" onPress={onSavePressed} loading={saving} />
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -299,145 +207,19 @@ export default function ManualEntryScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.md,
-    paddingBottom: Spacing.md,
-  },
-  headerButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-  },
-  headerTitle: {
-    fontSize: FontSizes.lg,
-    fontWeight: '700',
-  },
-  scrollContent: {
-    padding: Spacing.lg,
-  },
-  typeToggleContainer: {
-    flexDirection: 'row',
-    borderRadius: BorderRadius.lg,
-    padding: 4,
-    marginBottom: Spacing.xl,
-    gap: 8,
-  },
-  typeOption: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: BorderRadius.md,
-    alignItems: 'center',
-  },
-  typeOptionActive: {
-    // Background set dynamically
-  },
-  typeText: {
-    color: 'rgba(255,255,255,0.6)',
-    fontWeight: '600',
-    fontSize: FontSizes.md,
-  },
-  typeTextActive: {
-    color: '#FFF',
-  },
-  amountContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.xl,
-  },
-  currencySymbol: {
-    fontSize: 40,
-    color: '#FFF',
-    fontWeight: '700',
-    marginRight: 8,
-  },
-  amountInput: {
-    fontSize: 56,
-    color: '#FFF',
-    fontWeight: '700',
-    minWidth: 120,
-  },
-  formCard: {
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
-    marginBottom: Spacing.xl,
-  },
-  inputGroup: {
-    marginBottom: Spacing.lg,
-  },
-  label: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: FontSizes.sm,
-    marginBottom: Spacing.xs,
-  },
-  input: {
-    color: '#FFF',
-    fontSize: FontSizes.md,
-    paddingVertical: Spacing.sm,
-    borderBottomWidth: 1,
-  },
-  methodRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 4,
-  },
-  methodChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: BorderRadius.full,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-  },
-  methodChipActive: {
-    borderColor: '#FFF',
-  },
-  methodText: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: FontSizes.xs,
-    fontWeight: '700',
-  },
-  methodTextActive: {
-    color: '#1E3A8A',
-  },
-  saveButton: {
-    backgroundColor: '#FFF',
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.lg,
-    alignItems: 'center',
-    marginBottom: Spacing.xl,
-  },
-  saveButtonText: {
-    fontSize: FontSizes.lg,
-    fontWeight: '700',
-  },
-  labelRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-    marginBottom: Spacing.xs,
-  },
-  contactButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.sm,
-  },
-  contactButtonText: {
-    color: '#FFF',
-    fontSize: 10,
-    fontWeight: '600',
-  },
+  container: { flex: 1 },
+  flex: { flex: 1 },
+  content: { padding: Spacing.lg, gap: Spacing.md },
+  typeRow: { flexDirection: 'row', gap: Spacing.sm },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  chip: { flex: 1, minHeight: MIN_TOUCH_TARGET - 8, paddingHorizontal: Spacing.md, borderRadius: BorderRadius.full, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  amountRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  currency: { fontSize: 40, fontWeight: '700', marginRight: 8 },
+  amountInput: { fontSize: 56, fontWeight: '700', minWidth: 120 },
+  error: { fontSize: FontSizes.xs, textAlign: 'center' },
+  form: { borderRadius: BorderRadius.lg, borderWidth: 1, padding: Spacing.lg, gap: Spacing.sm },
+  labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  label: { fontSize: FontSizes.sm, marginTop: Spacing.sm },
+  input: { fontSize: FontSizes.md, minHeight: 44, borderBottomWidth: 1 },
+  contactButton: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, minHeight: 36, borderRadius: BorderRadius.sm },
 });

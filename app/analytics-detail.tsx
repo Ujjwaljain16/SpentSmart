@@ -1,209 +1,111 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList } from 'react-native';
-import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-
-import { Colors, Spacing, FontSizes, BorderRadius } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { getTransactionsByCategory, getMonthlyComparison } from '@/services/analytics';
-import { Transaction } from '@/types/transaction';
+import React from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TransactionCard } from '@/components/transactions/transaction-card';
-import { DEFAULT_CATEGORIES } from '@/services/category-storage';
-import { useSecurity } from '@/contexts/security-context';
+import { Money, useFormatMoney } from '@/components/ui/Money';
+import { ScreenHeader } from '@/components/ui/ScreenHeader';
+import { BorderRadius, FontSizes, Spacing } from '@/constants/theme';
+import { useCategories } from '@/contexts/categories-context';
+import { isKnownIcon } from '@/domain/categories';
+import { useLiveQuery } from '@/hooks/use-live-query';
+import { useThemeColors } from '@/hooks/use-theme-colors';
+import { routes } from '@/lib/routes';
 
 export default function AnalyticsDetailScreen() {
-    const { category } = useLocalSearchParams<{ category: string }>();
-    const colorScheme = useColorScheme();
-    const insets = useSafeAreaInsets();
-    const { isPrivacyModeEnabled } = useSecurity();
+  const { category } = useLocalSearchParams<{ category: string }>();
+  const key = String(category ?? '');
+  const colors = useThemeColors();
+  const insets = useSafeAreaInsets();
+  const format = useFormatMoney();
+  const { resolve } = useCategories();
+  const cat = resolve(key);
 
-    const [transactions, setTransactions] = useState<Transaction[]>([]);
-    const [comparison, setComparison] = useState<any>(null);
-    const [loading, setLoading] = useState(true);
+  const { data, loading } = useLiveQuery(
+    async (repos) => {
+      const [page, total, comparison] = await Promise.all([
+        repos.transactions.list({ categoryKey: key }, 10),
+        repos.analytics.categoryLifetimeTotal(key),
+        repos.analytics.categoryComparison(key),
+      ]);
+      return { recent: page.items, total, comparison };
+    },
+    [key],
+  );
 
-    const catInfo = DEFAULT_CATEGORIES.find(c => c.key === category) || DEFAULT_CATEGORIES.find(c => c.key === 'other')!;
+  const icon = (isKnownIcon(cat.icon) ? cat.icon : 'pricetag') as keyof typeof Ionicons.glyphMap;
+  const trend = data?.comparison.trend;
+  const trendColor = trend?.direction === 'up' ? colors.error : trend?.direction === 'down' ? colors.success : colors.textSecondary;
 
-    const loadData = useCallback(async () => {
-        if (!category) return;
-        setLoading(true);
-        try {
-            const [txs, comp] = await Promise.all([
-                getTransactionsByCategory(category as any),
-                getMonthlyComparison()
-            ]);
-            setTransactions(txs);
-            setComparison(comp);
-        } catch (error) {
-            console.error('Error loading analytics detail:', error);
-        } finally {
-            setLoading(false);
-        }
-    }, [category]);
+  return (
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar style={colors.isDark ? 'light' : 'dark'} />
+      <ScreenHeader title={`${cat.label} insights`} />
 
-    React.useEffect(() => {
-        loadData();
-    }, [loadData]);
-
-    const backgroundColor = colorScheme === 'dark' ? '#1E3A8A' : '#3B82F6';
-
-    return (
-        <View style={[styles.container, { backgroundColor }]}>
-            <StatusBar style="light" />
-
-            {/* Header */}
-            <View style={[styles.header, { paddingTop: insets.top + Spacing.md }]}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color="#FFF" />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>{catInfo.label} Insights</Text>
-                <View style={{ width: 40 }} />
+      {loading && !data ? (
+        <ActivityIndicator color={colors.tint} style={styles.loading} />
+      ) : (
+        <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + Spacing.xl }}>
+          <View style={styles.summary}>
+            <View style={[styles.iconLarge, { backgroundColor: `${cat.color}33` }]}>
+              <Ionicons name={icon} size={32} color={cat.color} />
             </View>
+            <Money paise={data?.total ?? 0} style={[styles.total, { color: colors.text }]} />
+            <Text style={[styles.totalLabel, { color: colors.textSecondary }]}>All-time total in {cat.label}</Text>
+          </View>
 
-            <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + Spacing.xl }}>
-                {/* Summary Card */}
-                <View style={styles.summaryCard}>
-                    <View style={[styles.iconLarge, { backgroundColor: `${catInfo.color}40` }]}>
-                        <Ionicons name={catInfo.icon as any} size={32} color={catInfo.color} />
-                    </View>
-                    <Text style={styles.totalAmount}>
-                        {isPrivacyModeEnabled ? '•••••' : `₹${transactions.reduce((sum, tx) => sum + tx.amount, 0).toLocaleString('en-IN')}`}
-                    </Text>
-                    <Text style={styles.totalLabel}>Total Spent in {catInfo.label}</Text>
+          {data && data.comparison.previousPaise > 0 ? (
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: colors.textSecondary }]} accessibilityRole="header">
+                Month over month
+              </Text>
+              <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <View style={styles.cardRow}>
+                  <Text style={[styles.cardLabel, { color: colors.text }]}>This month vs last</Text>
+                  <View style={styles.trend}>
+                    <Ionicons name={trend?.direction === 'down' ? 'trending-down' : 'trending-up'} size={18} color={trendColor} />
+                    <Text style={[styles.trendValue, { color: trendColor }]}>{trend?.percent ?? 0}%</Text>
+                  </View>
                 </View>
+                <Text style={[styles.detail, { color: colors.textSecondary }]}>
+                  Last month: {format(data.comparison.previousPaise)} • This month: {format(data.comparison.currentPaise)}
+                </Text>
+              </View>
+            </View>
+          ) : null}
 
-                {/* Comparison Section */}
-                {comparison && comparison[category as string] && (
-                    <View style={styles.section}>
-                        <Text style={styles.sectionTitle}>Month-over-Month</Text>
-                        <View style={styles.comparisonCard}>
-                            <View style={styles.comparisonRow}>
-                                <Text style={styles.comparisonLabel}>vs Last Month</Text>
-                                <View style={styles.comparisonValueRow}>
-                                    <Ionicons
-                                        name={comparison[category as string].trend === 'up' ? "trending-up" : "trending-down"}
-                                        size={18}
-                                        color={comparison[category as string].trend === 'up' ? "#EF4444" : "#10B981"}
-                                    />
-                                    <Text style={[styles.comparisonValue, { color: comparison[category as string].trend === 'up' ? "#EF4444" : "#10B981" }]}>
-                                        {comparison[category as string].percent}%
-                                    </Text>
-                                </View>
-                            </View>
-                            <Text style={styles.comparisonDetail}>
-                                Last month: ₹{comparison[category as string].lastMonth.toLocaleString('en-IN')}
-                            </Text>
-                        </View>
-                    </View>
-                )}
-
-                {/* Recent Transactions */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Recent {catInfo.label} Payments</Text>
-                    {transactions.length > 0 ? (
-                        transactions.slice(0, 10).map(tx => (
-                            <TransactionCard key={tx.id} transaction={tx} showDeleteButton={false} showEditButton={false} />
-                        ))
-                    ) : (
-                        <Text style={styles.emptyText}>No recent transactions in this category</Text>
-                    )}
-                </View>
-            </ScrollView>
-        </View>
-    );
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.textSecondary }]} accessibilityRole="header">
+              Recent {cat.label} transactions
+            </Text>
+            {data && data.recent.length > 0 ? (
+              data.recent.map((t) => <TransactionCard key={t.id} transaction={t} onEdit={(tx) => router.push(routes.editTransaction(tx.id))} />)
+            ) : (
+              <Text style={[styles.empty, { color: colors.textSecondary }]}>No transactions in this category yet.</Text>
+            )}
+          </View>
+        </ScrollView>
+      )}
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: Spacing.lg,
-        paddingBottom: Spacing.md,
-    },
-    backButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: 'rgba(255,255,255,0.1)',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    headerTitle: {
-        fontSize: FontSizes.lg,
-        fontWeight: '700',
-        color: '#FFF',
-    },
-    summaryCard: {
-        alignItems: 'center',
-        paddingVertical: Spacing.xl,
-        marginTop: Spacing.md,
-    },
-    iconLarge: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: Spacing.md,
-    },
-    totalAmount: {
-        fontSize: 48,
-        fontWeight: '800',
-        color: '#FFF',
-    },
-    totalLabel: {
-        fontSize: FontSizes.md,
-        color: 'rgba(255,255,255,0.6)',
-        marginTop: Spacing.xs,
-    },
-    section: {
-        paddingHorizontal: Spacing.lg,
-        marginTop: Spacing.xl,
-    },
-    sectionTitle: {
-        fontSize: FontSizes.md,
-        fontWeight: '600',
-        color: 'rgba(255,255,255,0.8)',
-        marginBottom: Spacing.md,
-    },
-    comparisonCard: {
-        backgroundColor: 'rgba(255,255,255,0.1)',
-        borderRadius: BorderRadius.lg,
-        padding: Spacing.lg,
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.2)',
-    },
-    comparisonRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: Spacing.xs,
-    },
-    comparisonLabel: {
-        fontSize: FontSizes.md,
-        color: '#FFF',
-    },
-    comparisonValueRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-    },
-    comparisonValue: {
-        fontSize: FontSizes.lg,
-        fontWeight: '700',
-    },
-    comparisonDetail: {
-        fontSize: FontSizes.sm,
-        color: 'rgba(255,255,255,0.6)',
-    },
-    emptyText: {
-        textAlign: 'center',
-        color: 'rgba(255,255,255,0.5)',
-        marginTop: Spacing.xl,
-    }
+  container: { flex: 1 },
+  loading: { marginTop: Spacing.xxl },
+  summary: { alignItems: 'center', paddingVertical: Spacing.xl },
+  iconLarge: { width: 80, height: 80, borderRadius: 40, justifyContent: 'center', alignItems: 'center', marginBottom: Spacing.md },
+  total: { fontSize: 44, fontWeight: '800' },
+  totalLabel: { fontSize: FontSizes.md, marginTop: Spacing.xs },
+  section: { paddingHorizontal: Spacing.lg, marginTop: Spacing.xl },
+  sectionTitle: { fontSize: FontSizes.md, fontWeight: '600', marginBottom: Spacing.md },
+  card: { borderRadius: BorderRadius.lg, padding: Spacing.lg, borderWidth: 1, gap: Spacing.xs },
+  cardRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  cardLabel: { fontSize: FontSizes.md },
+  trend: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  trendValue: { fontSize: FontSizes.lg, fontWeight: '700' },
+  detail: { fontSize: FontSizes.sm },
+  empty: { textAlign: 'center', marginTop: Spacing.xl },
 });

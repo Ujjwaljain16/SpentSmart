@@ -3,35 +3,22 @@ const fs = require('fs');
 const path = require('path');
 
 /**
- * Expo config plugin to add FileProvider configuration for secure file sharing
+ * Registers a FileProvider that exposes exactly one directory — cache/qr_share/ — which the native module
+ * fills with short-lived QR images. Nothing else in the app's storage is reachable through it.
  */
 const withUpiIntent = (config) => {
-  // Add FileProvider to AndroidManifest.xml
-  config = withAndroidManifest(config, (config) => {
-    const androidManifest = config.modResults;
-    const { manifest } = androidManifest;
-
-    if (!manifest.application) {
-      manifest.application = [{}];
-    }
-
+  config = withAndroidManifest(config, (mod) => {
+    const { manifest } = mod.modResults;
+    if (!manifest.application) manifest.application = [{}];
     const application = manifest.application[0];
-    
-    // Add FileProvider if it doesn't exist
-    if (!application.provider) {
-      application.provider = [];
-    }
+    if (!application.provider) application.provider = [];
 
-    // Ensure we use the correct package name for authority
-    const packageName = config.android?.package || 'com.ujjwaljain.spentsmart';
+    const packageName = mod.android?.package || config.android?.package;
+    if (!packageName) throw new Error('upi-intent: android.package must be set in app.json');
     const authority = `${packageName}.fileprovider`;
 
-    // Check if FileProvider already exists
-    const hasFileProvider = application.provider.some(
-      (provider) => provider.$['android:name'] === 'androidx.core.content.FileProvider'
-    );
-
-    if (!hasFileProvider) {
+    const exists = application.provider.some((p) => p.$['android:authorities'] === authority);
+    if (!exists) {
       application.provider.push({
         $: {
           'android:name': 'androidx.core.content.FileProvider',
@@ -43,49 +30,30 @@ const withUpiIntent = (config) => {
           {
             $: {
               'android:name': 'android.support.FILE_PROVIDER_PATHS',
-              'android:resource': '@xml/file_provider_paths',
+              'android:resource': '@xml/spentsmart_file_provider_paths',
             },
           },
         ],
       });
     }
-
-    return config;
+    return mod;
   });
 
-  // Create file_provider_paths.xml resource file
   config = withDangerousMod(config, [
     'android',
-    async (config) => {
-      const projectRoot = config.modRequest.platformProjectRoot;
-      const resXmlPath = path.join(
-        projectRoot,
-        'app',
-        'src',
-        'main',
-        'res',
-        'xml'
-      );
-
-      // Create xml directory if it doesn't exist
-      if (!fs.existsSync(resXmlPath)) {
-        fs.mkdirSync(resXmlPath, { recursive: true });
-      }
-
-      const fileProviderPathsPath = path.join(resXmlPath, 'file_provider_paths.xml');
-      
-      // Create file_provider_paths.xml if it doesn't exist
-      // We overwrite or ensure it exists
-      const fileProviderPathsContent = `<?xml version="1.0" encoding="utf-8"?>
+    async (mod) => {
+      const xmlDir = path.join(mod.modRequest.platformProjectRoot, 'app', 'src', 'main', 'res', 'xml');
+      fs.mkdirSync(xmlDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(xmlDir, 'spentsmart_file_provider_paths.xml'),
+        `<?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <cache-path name="qr_images" path="." />
-    <external-cache-path name="qr_images_external" path="." />
-    <files-path name="files" path="." />
-</paths>`;
-
-      fs.writeFileSync(fileProviderPathsPath, fileProviderPathsContent, 'utf8');
-
-      return config;
+    <cache-path name="qr_share" path="qr_share/" />
+</paths>
+`,
+        'utf8',
+      );
+      return mod;
     },
   ]);
 

@@ -1,8 +1,5 @@
 {
-  "platforms": ["apple", "android", "web"],
-  "apple": {
-    "modules": ["UpiIntentModule"]
-  },
+  "platforms": ["android"],
   "android": {
     "modules": ["expo.modules.upiintent.UpiIntentModule"]
   }

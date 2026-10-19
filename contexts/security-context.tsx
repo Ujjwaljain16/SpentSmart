@@ -1,106 +1,185 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
 import * as LocalAuthentication from 'expo-local-authentication';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ScreenCapture from 'expo-screen-capture';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { AppState } from 'react-native';
+import { log } from '@/lib/logger';
+import { useSettings } from './settings-context';
 
-const BIO_LOCK_KEY = '@upitracker_bio_lock';
-const PRIVACY_MODE_KEY = '@upitracker_privacy_mode';
+export type EnableLockResult = { ok: true } | { ok: false; reason: 'no_hardware' | 'not_enrolled' | 'auth_failed' };
 
 interface SecurityContextType {
-    isBioLockEnabled: boolean;
-    isPrivacyModeEnabled: boolean;
-    isUnlocked: boolean;
-    setBioLockEnabled: (enabled: boolean) => Promise<void>;
-    setPrivacyModeEnabled: (enabled: boolean) => Promise<void>;
-    authenticate: () => Promise<boolean>;
-    lockApp: () => void;
-    hasHardware: boolean;
+  isBioLockEnabled: boolean;
+  isPrivacyModeEnabled: boolean;
+  isUnlocked: boolean;
+  lockTimeoutSeconds: number;
+  /** Device can authenticate (biometrics or screen lock). */
+  canUseLock: boolean;
+  setBioLockEnabled: (enabled: boolean) => Promise<EnableLockResult>;
+  setPrivacyModeEnabled: (enabled: boolean) => Promise<void>;
+  setLockTimeoutSeconds: (seconds: number) => Promise<void>;
+  authenticate: () => Promise<boolean>;
+  /** Ask the device owner to confirm a sensitive action. Always true when no app lock is configured. */
+  verifyOwner: (message: string) => Promise<boolean>;
+  lockApp: () => void;
 }
 
 const SecurityContext = createContext<SecurityContextType | undefined>(undefined);
+const CAPTURE_KEY = 'spentsmart-lock';
+
+async function deviceLevel(): Promise<LocalAuthentication.SecurityLevel> {
+  try {
+    return await LocalAuthentication.getEnrolledLevelAsync();
+  } catch {
+    return LocalAuthentication.SecurityLevel.NONE;
+  }
+}
+
+async function promptForAuth(message: string): Promise<boolean> {
+  const result = await LocalAuthentication.authenticateAsync({
+    promptMessage: message,
+    fallbackLabel: 'Use device passcode',
+  });
+  return result.success;
+}
 
 export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [isBioLockEnabled, setIsBioLockEnabled] = useState(false);
-    const [isPrivacyModeEnabled, setIsPrivacyModeEnabled] = useState(false);
-    const [isUnlocked, setIsUnlocked] = useState(true);
-    const [hasHardware, setHasHardware] = useState(false);
+  const { settings, setSetting } = useSettings();
+  const { bioLockEnabled, privacyModeEnabled, lockTimeoutSeconds } = settings;
 
-    useEffect(() => {
-        const loadSettings = async () => {
-            const bio = await AsyncStorage.getItem(BIO_LOCK_KEY);
-            const privacy = await AsyncStorage.getItem(PRIVACY_MODE_KEY);
+  // Settings are loaded before this provider renders, so the very first frame is already locked when it should be.
+  const [isUnlocked, setIsUnlocked] = useState(() => !bioLockEnabled);
+  const [canUseLock, setCanUseLock] = useState(false);
+  const backgroundedAt = useRef<number | null>(null);
+  const prompting = useRef(false);
 
-            const bioEnabled = bio === 'true';
-            setIsBioLockEnabled(bioEnabled);
-            setIsPrivacyModeEnabled(privacy === 'true');
-
-            // If bio lock is enabled, start locked
-            if (bioEnabled) {
-                setIsUnlocked(false);
-            }
-
-            const compatible = await LocalAuthentication.hasHardwareAsync();
-            setHasHardware(compatible);
-        };
-
-        loadSettings();
-    }, []);
-
-    const setBioLockEnabled = async (enabled: boolean) => {
-        await AsyncStorage.setItem(BIO_LOCK_KEY, String(enabled));
-        setIsBioLockEnabled(enabled);
+  useEffect(() => {
+    let alive = true;
+    deviceLevel().then((level) => alive && setCanUseLock(level !== LocalAuthentication.SecurityLevel.NONE));
+    return () => {
+      alive = false;
     };
+  }, []);
 
-    const setPrivacyModeEnabled = async (enabled: boolean) => {
-        await AsyncStorage.setItem(PRIVACY_MODE_KEY, String(enabled));
-        setIsPrivacyModeEnabled(enabled);
-    };
-
-    const authenticate = async () => {
-        if (!isBioLockEnabled) {
-            setIsUnlocked(true);
-            return true;
+  // Lock after the configured time in the background.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'background') {
+        backgroundedAt.current = Date.now();
+      } else if (state === 'active') {
+        const since = backgroundedAt.current;
+        backgroundedAt.current = null;
+        if (bioLockEnabled && since !== null && Date.now() - since >= lockTimeoutSeconds * 1000) {
+          setIsUnlocked(false);
         }
+      }
+    });
+    return () => subscription.remove();
+  }, [bioLockEnabled, lockTimeoutSeconds]);
 
-        const result = await LocalAuthentication.authenticateAsync({
-            promptMessage: 'Unlock ExpenseTracker',
-            fallbackLabel: 'Enter Passcode',
-        });
+  // While the lock is on, hide the app in the recents screen and block screenshots/recordings.
+  useEffect(() => {
+    if (bioLockEnabled) {
+      ScreenCapture.preventScreenCaptureAsync(CAPTURE_KEY).catch((e) => log.warn('preventScreenCapture failed', e));
+    } else {
+      ScreenCapture.allowScreenCaptureAsync(CAPTURE_KEY).catch(() => undefined);
+    }
+  }, [bioLockEnabled]);
 
-        if (result.success) {
-            setIsUnlocked(true);
-            return true;
-        }
+  const authenticate = useCallback(async () => {
+    if (!bioLockEnabled) {
+      setIsUnlocked(true);
+      return true;
+    }
+    if (prompting.current) return false;
+    prompting.current = true;
+    try {
+      // If the user later removed every screen lock from the device, the lock can no longer be enforced and
+      // must not lock them out of their own data.
+      if ((await deviceLevel()) === LocalAuthentication.SecurityLevel.NONE) {
+        log.warn('Device has no screen lock; disabling app lock');
+        await setSetting('bioLockEnabled', false);
+        setIsUnlocked(true);
+        return true;
+      }
+      const ok = await promptForAuth('Unlock SpentSmart');
+      if (ok) setIsUnlocked(true);
+      return ok;
+    } catch (error) {
+      log.warn('Authentication error', error);
+      return false;
+    } finally {
+      prompting.current = false;
+    }
+  }, [bioLockEnabled, setSetting]);
+
+  const setBioLockEnabled = useCallback(
+    async (enabled: boolean): Promise<EnableLockResult> => {
+      if (enabled) {
+        if (!(await LocalAuthentication.hasHardwareAsync())) return { ok: false, reason: 'no_hardware' };
+        if ((await deviceLevel()) === LocalAuthentication.SecurityLevel.NONE) return { ok: false, reason: 'not_enrolled' };
+      }
+      // Changing the lock always requires proving it works / being the owner.
+      if (!(await promptForAuth(enabled ? 'Confirm to turn on app lock' : 'Confirm to turn off app lock'))) {
+        return { ok: false, reason: 'auth_failed' };
+      }
+      await setSetting('bioLockEnabled', enabled);
+      return { ok: true };
+    },
+    [setSetting],
+  );
+
+  const verifyOwner = useCallback(
+    async (message: string) => {
+      if (!bioLockEnabled) return true;
+      try {
+        return await promptForAuth(message);
+      } catch (error) {
+        log.warn('Owner verification failed', error);
         return false;
-    };
+      }
+    },
+    [bioLockEnabled],
+  );
+  const setPrivacyModeEnabled = useCallback((enabled: boolean) => setSetting('privacyModeEnabled', enabled), [setSetting]);
+  const setLockTimeoutSeconds = useCallback((seconds: number) => setSetting('lockTimeoutSeconds', seconds), [setSetting]);
+  const lockApp = useCallback(() => {
+    if (bioLockEnabled) setIsUnlocked(false);
+  }, [bioLockEnabled]);
 
-    const lockApp = () => {
-        if (isBioLockEnabled) {
-            setIsUnlocked(false);
-        }
-    };
+  const value = useMemo<SecurityContextType>(
+    () => ({
+      isBioLockEnabled: bioLockEnabled,
+      isPrivacyModeEnabled: privacyModeEnabled,
+      isUnlocked,
+      lockTimeoutSeconds,
+      canUseLock,
+      setBioLockEnabled,
+      setPrivacyModeEnabled,
+      setLockTimeoutSeconds,
+      authenticate,
+      verifyOwner,
+      lockApp,
+    }),
+    [
+      bioLockEnabled,
+      privacyModeEnabled,
+      isUnlocked,
+      lockTimeoutSeconds,
+      canUseLock,
+      setBioLockEnabled,
+      setPrivacyModeEnabled,
+      setLockTimeoutSeconds,
+      authenticate,
+      verifyOwner,
+      lockApp,
+    ],
+  );
 
-    return (
-        <SecurityContext.Provider
-            value={{
-                isBioLockEnabled,
-                isPrivacyModeEnabled,
-                isUnlocked,
-                setBioLockEnabled,
-                setPrivacyModeEnabled,
-                authenticate,
-                lockApp,
-                hasHardware,
-            }}
-        >
-            {children}
-        </SecurityContext.Provider>
-    );
+  return <SecurityContext.Provider value={value}>{children}</SecurityContext.Provider>;
 };
 
-export const useSecurity = () => {
-    const context = useContext(SecurityContext);
-    if (context === undefined) {
-        throw new Error('useSecurity must be used within a SecurityProvider');
-    }
-    return context;
+export const useSecurity = (): SecurityContextType => {
+  const context = useContext(SecurityContext);
+  if (context === undefined) throw new Error('useSecurity must be used within a SecurityProvider');
+  return context;
 };

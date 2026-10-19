@@ -1,268 +1,159 @@
-import React, { useState, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  RefreshControl,
-  ActivityIndicator,
-} from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-import { Colors, Spacing } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { PendingManager } from '@/services/pending-manager';
-import { calculateInsights, Period, PeriodInsights } from '@/services/analytics';
-import { getBudget } from '@/services/storage';
-import { getUserProfile } from '@/services/user-storage';
-
-import { BalanceCard } from '@/components/home/BalanceCard';
-import { InsightsGrid } from '@/components/home/InsightsGrid';
-import { FloatingScanButton } from '@/components/home/FloatingScanButton';
-import { TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { BorderRadius, FontSizes } from '@/constants/theme';
+import { router } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import React, { useState } from 'react';
+import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BalanceCard } from '@/components/home/BalanceCard';
+import { FloatingScanButton } from '@/components/home/FloatingScanButton';
+import { InsightsGrid } from '@/components/home/InsightsGrid';
+import { BorderRadius, FontSizes, Spacing } from '@/constants/theme';
+import { useSettings } from '@/contexts/settings-context';
+import { budgetUsage, Period } from '@/domain/periods';
+import { useLiveQuery } from '@/hooks/use-live-query';
+import { useThemeColors } from '@/hooks/use-theme-colors';
+import { routes } from '@/lib/routes';
 
 export default function HomeScreen() {
-  const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? 'dark'];
+  const colors = useThemeColors();
   const insets = useSafeAreaInsets();
-
-  // User profile for greeting
-  const [username, setUsername] = useState<string>('');
-  const [avatarId, setAvatarId] = useState<string>('');
-
+  const { settings } = useSettings();
   const [period, setPeriod] = useState<Period>('week');
-  const [insights, setInsights] = useState<PeriodInsights | null>(null);
-  const [budget, setBudget] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [loading, setLoading] = useState(true);
 
-  const loadData = useCallback(async () => {
-    try {
-      // Check for abandoned payment attempts
-      const activePendings = await PendingManager.getPendings();
-      if (activePendings.length > 0) {
-        router.push('/recover-pending');
-        return;
-      }
-
-      // Load user profile for greeting
-      const profile = await getUserProfile();
-      if (profile) {
-        setUsername(profile.name);
-        setAvatarId(profile.avatarId);
-      }
-
-      // Load insights for selected period
-      const [data, budgetData] = await Promise.all([
-        calculateInsights(period),
-        getBudget()
+  const { data, loading, refresh } = useLiveQuery(
+    async (repos) => {
+      const now = new Date();
+      const [insights, monthly, open] = await Promise.all([
+        repos.analytics.insights(period, now),
+        repos.analytics.insights('month', now),
+        repos.attempts.listOpen(),
       ]);
-      setInsights(data);
-      setBudget(budgetData);
-    } catch (error) {
-      console.error('Error loading insights:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [period]);
-
-  useFocusEffect(
-    useCallback(() => {
-      loadData();
-    }, [loadData])
+      return { insights, monthSpent: monthly.expensePaise, openAttempts: open.length };
+    },
+    [period],
   );
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadData();
+    await refresh();
     setRefreshing(false);
   };
 
-  const handlePeriodChange = (newPeriod: Period) => {
-    // Don't reload if clicking same period
-    if (newPeriod === period) {
-      return;
-    }
-    setPeriod(newPeriod);
-    setLoading(true);
-  };
+  const insights = data?.insights;
+  const usage = data ? budgetUsage(data.monthSpent, settings.budgetPaise || null) : null;
+  const greetingName = settings.profileName.trim().toLowerCase() || 'there';
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+      <StatusBar style={colors.isDark ? 'light' : 'dark'} />
 
       <ScrollView
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + 120 }
-        ]}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.tint}
-            colors={[colors.tint]}
-            progressBackgroundColor={colors.card}
-          />
-        }
+        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom + 120 }]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.tint} colors={[colors.tint]} progressBackgroundColor={colors.card} />}
       >
-        {loading ? (
-          <View style={styles.loadingContainer}>
+        {loading && !insights ? (
+          <View style={styles.loading}>
             <ActivityIndicator size="large" color={colors.tint} />
           </View>
         ) : insights ? (
           <>
-            {/* Greeting Header */}
-            <View style={styles.greetingHeader}>
-              <Text style={[styles.greeting, { color: colors.text }]}>
-                hey, {username.toLowerCase() || 'there'}
+            <View style={styles.greetingRow}>
+              <Text style={[styles.greeting, { color: colors.text }]} accessibilityRole="header">
+                hey, {greetingName}
               </Text>
-              <View style={[styles.avatarCircle, { backgroundColor: colors.surface }]}>
-                <Ionicons name={(avatarId || 'person-circle') as any} size={32} color={colors.text} />
+              <View style={[styles.avatar, { backgroundColor: colors.surface }]}>
+                <Ionicons name={settings.avatarId as keyof typeof Ionicons.glyphMap} size={32} color={colors.text} />
               </View>
             </View>
 
-            {/* Balance Card */}
+            {data && data.openAttempts > 0 ? (
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={`${data.openAttempts} payment${data.openAttempts === 1 ? '' : 's'} waiting for confirmation. Review now`}
+                style={[styles.banner, { backgroundColor: colors.card, borderColor: colors.warning }]}
+                onPress={() => router.push(routes.recoverPending)}
+              >
+                <Ionicons name="help-circle" size={22} color={colors.warning} />
+                <Text style={[styles.bannerText, { color: colors.text }]}>
+                  {data.openAttempts} payment{data.openAttempts === 1 ? '' : 's'} waiting for confirmation
+                </Text>
+                <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+              </TouchableOpacity>
+            ) : null}
+
             <BalanceCard
-              balance={insights.balance}
-              totalIncome={insights.totalIncome}
-              totalExpense={insights.totalExpense}
+              balancePaise={insights.balancePaise}
+              incomePaise={insights.incomePaise}
+              expensePaise={insights.expensePaise}
               trend={insights.trend}
               period={period}
-              budget={budget}
-              onPeriodChange={handlePeriodChange}
+              onPeriodChange={setPeriod}
+              budget={usage ? { budgetPaise: settings.budgetPaise, spentPaise: data!.monthSpent, usage } : null}
             />
 
-            {/* Quick Actions Row */}
-            <View style={styles.quickActionsRow}>
+            <View style={styles.quickRow}>
               <TouchableOpacity
-                style={[styles.quickAction, { backgroundColor: colors.card }]}
-                onPress={() => router.push('/manual-entry')}
+                accessibilityRole="button"
+                accessibilityLabel="Add a transaction manually"
+                style={[styles.quick, { backgroundColor: colors.card }]}
+                onPress={() => router.push(routes.manualEntry)}
               >
-                <View style={[styles.actionIcon, { backgroundColor: colors.tint }]}>
-                  <Ionicons name="send-outline" size={20} color="#FFF" />
+                <View style={[styles.quickIcon, { backgroundColor: colors.tint }]}>
+                  <Ionicons name="send-outline" size={20} color={colors.onTint} />
                 </View>
-                <Text style={[styles.actionLabel, { color: colors.text }]}>Transfer</Text>
+                <Text style={[styles.quickLabel, { color: colors.text }]}>Transfer</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.quickAction, { backgroundColor: colors.card }]}
-                onPress={() => router.push('/receive')}
+                accessibilityRole="button"
+                accessibilityLabel="Receive money"
+                style={[styles.quick, { backgroundColor: colors.card }]}
+                onPress={() => router.push(routes.receive)}
               >
-                <View style={[styles.actionIcon, { backgroundColor: colors.success }]}>
-                  <Ionicons name="download-outline" size={20} color="#FFF" />
+                <View style={[styles.quickIcon, { backgroundColor: colors.success }]}>
+                  <Ionicons name="download-outline" size={20} color={colors.onTint} />
                 </View>
-                <Text style={[styles.actionLabel, { color: colors.text }]}>Receive</Text>
+                <Text style={[styles.quickLabel, { color: colors.text }]}>Receive</Text>
               </TouchableOpacity>
             </View>
 
-            {/* Insights Grid */}
-            {insights.totalExpense > 0 ? (
-              <InsightsGrid
-                categoryBreakdown={insights.categoryBreakdown}
-                topPayees={insights.topPayees}
-              />
+            {insights.expensePaise > 0 ? (
+              <InsightsGrid categories={insights.categories} topPayees={insights.topPayees} />
             ) : (
-              <View style={[styles.emptyState, { backgroundColor: colors.card }]}>
-                <Text style={[styles.emptyTitle, { color: colors.text }]}>No spending data</Text>
-                <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-                  Scan first UPI → Auto track everything
-                </Text>
+              <View style={[styles.empty, { backgroundColor: colors.card }]}>
+                <Text style={[styles.emptyTitle, { color: colors.text }]}>No spending yet</Text>
+                <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>Scan a UPI QR code to log your first payment.</Text>
               </View>
             )}
           </>
         ) : (
-          <View style={[styles.emptyState, { backgroundColor: colors.card }]}>
+          <View style={[styles.empty, { backgroundColor: colors.card }]}>
             <Text style={[styles.emptyTitle, { color: colors.text }]}>Unable to load data</Text>
             <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>Pull to refresh</Text>
           </View>
         )}
       </ScrollView>
 
-      {/* Floating Scan Button */}
       <FloatingScanButton />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: Spacing.lg,
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 100,
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 60,
-    paddingHorizontal: Spacing.lg,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#FFF',
-    marginBottom: 12,
-  },
-  emptySubtitle: {
-    fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.8)',
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  quickActionsRow: {
-    flexDirection: 'row',
-    gap: Spacing.md,
-    marginBottom: Spacing.xl,
-  },
-  quickAction: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: BorderRadius.lg,
-    gap: Spacing.sm,
-  },
-  actionIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  actionLabel: {
-    fontSize: FontSizes.md,
-    fontWeight: '600',
-  },
-  greetingHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.lg,
-  },
-  greeting: {
-    fontSize: FontSizes.xxl,
-    fontWeight: 'bold',
-    color: '#FFF',
-  },
-  avatarCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarText: {
-    // fontSize: 24,
-  },
+  container: { flex: 1 },
+  scrollContent: { paddingHorizontal: Spacing.lg },
+  loading: { alignItems: 'center', justifyContent: 'center', paddingVertical: 100 },
+  greetingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.lg },
+  greeting: { fontSize: FontSizes.xxl, fontWeight: 'bold' },
+  avatar: { width: 52, height: 52, borderRadius: 26, justifyContent: 'center', alignItems: 'center' },
+  banner: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, padding: Spacing.md, minHeight: 48, borderRadius: BorderRadius.lg, borderWidth: 1, marginBottom: Spacing.lg },
+  bannerText: { flex: 1, fontSize: FontSizes.sm, fontWeight: '600' },
+  quickRow: { flexDirection: 'row', gap: Spacing.md, marginBottom: Spacing.xl },
+  quick: { flex: 1, flexDirection: 'row', alignItems: 'center', padding: 12, minHeight: 56, borderRadius: BorderRadius.lg, gap: Spacing.sm },
+  quickIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  quickLabel: { fontSize: FontSizes.md, fontWeight: '600' },
+  empty: { alignItems: 'center', paddingVertical: 60, paddingHorizontal: Spacing.lg, borderRadius: BorderRadius.lg },
+  emptyTitle: { fontSize: FontSizes.xl, fontWeight: '600', marginBottom: 12 },
+  emptySubtitle: { fontSize: FontSizes.md, textAlign: 'center', lineHeight: 22 },
 });

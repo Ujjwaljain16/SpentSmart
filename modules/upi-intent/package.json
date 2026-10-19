@@ -1,15 +1,14 @@
 {
-    "name": "upi-intent",
-    "version": "1.0.0",
-    "main": "index.ts",
-    "scripts": {},
-    "dependencies": {},
-    "devDependencies": {},
-    "expo": {
-        "autolinking": {
-            "android": {
-                "package": "expo.modules.upiintent"
-            }
-        }
+  "name": "upi-intent",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Android bridge for launching UPI payments with a result and sharing QR images",
+  "main": "index.ts",
+  "expo": {
+    "autolinking": {
+      "android": {
+        "package": "expo.modules.upiintent"
+      }
     }
+  }
 }

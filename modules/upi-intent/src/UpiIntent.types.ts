@@ -20,6 +20,4 @@ export interface UpiIntentNativeModule {
   payWithUpi(uri: string, packageName: string | null): Promise<PayWithUpiResult>;
   /** Open an app's launcher screen. Returns false if it is not installed. */
   launchApp(packageName: string): Promise<boolean>;
-  /** Share a PNG (base64, optionally a data URL) to one specific app. Returns false on failure. */
-  shareImage(packageName: string, base64Data: string): Promise<boolean>;
 }

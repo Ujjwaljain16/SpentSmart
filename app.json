@@ -69,7 +69,8 @@
           "useSQLCipher": true
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "./modules/upi-intent/app.plugin.js"
     ],
     "updates": {
       "url": "https://u.expo.dev/14d0fdab-c65f-4488-9356-a157d43b5c37",

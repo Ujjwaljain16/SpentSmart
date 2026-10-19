@@ -1,195 +1,51 @@
-import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  ActivityIndicator,
-  FlatList,
-  Modal,
-  TouchableWithoutFeedback,
-  Dimensions,
-  Platform,
-} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, {
-  useAnimatedStyle,
-  withSpring,
-} from 'react-native-reanimated';
-
-import { CategoryType, CategoryInfo } from '@/types/transaction';
-import { DEFAULT_CATEGORY_LIST } from '@/constants/categories';
-import { getCategories, AVAILABLE_ICONS } from '@/services/category-storage';
-import { Colors, BorderRadius, FontSizes, Spacing } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import React, { useRef, useState } from 'react';
+import { FlatList, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import { BorderRadius, FontSizes, Spacing } from '@/constants/theme';
+import { useCategories } from '@/contexts/categories-context';
+import { isKnownIcon } from '@/domain/categories';
+import { Category } from '@/domain/types';
+import { useThemeColors } from '@/hooks/use-theme-colors';
 
 interface CategoryPickerProps {
-  selectedCategory: CategoryType | string | null;
-  onSelectCategory: (category: any) => void;
-  compact?: boolean;
-  mode?: 'dropdown' | 'chips';
-  customCategories?: CategoryInfo[];
+  selectedCategory: string | null;
+  onSelectCategory: (key: string) => void;
+  /** 'chips': horizontal scroller. 'dropdown': compact select. 'list': wrapped buttons. */
+  mode?: 'chips' | 'dropdown' | 'list';
+  /** Replace the category list (e.g. to prepend an "All categories" entry). */
+  categories?: readonly Category[];
+  /** Hide categories that make no sense for the current context. */
+  exclude?: readonly string[];
 }
 
-const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
+const iconOf = (icon: string) => (isKnownIcon(icon) ? icon : 'pricetag') as keyof typeof Ionicons.glyphMap;
 
-function CategoryButton({
-  category,
-  isSelected,
-  onPress,
-}: {
-  category: CategoryInfo;
-  isSelected: boolean;
-  onPress: () => void;
-}) {
-  const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? 'dark'];
+export function CategoryPicker({ selectedCategory, onSelectCategory, mode = 'list', categories: override, exclude }: CategoryPickerProps) {
+  const colors = useThemeColors();
+  const { categories: stored } = useCategories();
+  const categories = (override ?? stored).filter((c) => !exclude?.includes(c.key));
+  const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
+  const anchor = useRef<View>(null);
 
-  const animatedStyle = useAnimatedStyle(() => {
-    return {
-      transform: [
-        {
-          scale: withSpring(isSelected ? 1.05 : 1, {
-            damping: 15,
-            stiffness: 150,
-          }),
-        },
-      ],
-    };
-  }, [isSelected]);
+  const selected = categories.find((c) => c.key === selectedCategory) ?? categories[0];
 
-  const getIconName = (icon: string): keyof typeof Ionicons.glyphMap => {
-    // Check if it's a valid Ionicons icon
-    if (AVAILABLE_ICONS.includes(icon)) {
-      return icon as keyof typeof Ionicons.glyphMap;
-    }
-    return 'pricetag';
-  };
-
-  return (
-    <AnimatedTouchable
-      style={[
-        styles.categoryButton,
-        {
-          backgroundColor: isSelected ? category.color : 'transparent',
-          borderColor: isSelected ? category.color : colors.border,
-        },
-        animatedStyle,
-      ]}
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      <View
-        style={[
-          styles.iconContainer,
-          {
-            backgroundColor: isSelected
-              ? 'rgba(255, 255, 255, 0.2)'
-              : colors.surface,
-          },
-        ]}
-      >
-        <Ionicons
-          name={getIconName(category.icon)}
-          size={20}
-          color={isSelected ? '#fff' : category.color}
-        />
-      </View>
-      <Text
-        style={[
-          styles.categoryLabel,
-          {
-            color: isSelected ? '#fff' : colors.text,
-          },
-        ]}
-        numberOfLines={1}
-      >
-        {category.label}
-      </Text>
-    </AnimatedTouchable>
-  );
-}
-
-export function CategoryPicker({
-  selectedCategory,
-  onSelectCategory,
-  compact = false,
-  mode = 'dropdown',
-  customCategories
-}: CategoryPickerProps) {
-  const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? 'dark'];
-  const [categories, setCategories] = useState<CategoryInfo[]>(customCategories || DEFAULT_CATEGORY_LIST);
-  const [isLoading, setIsLoading] = useState(!customCategories);
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
-  const buttonRef = React.useRef<View>(null);
-
-  useEffect(() => {
-    if (!customCategories) {
-      loadCategories();
-    } else {
-      setCategories(customCategories);
-    }
-  }, [customCategories]);
-
-  const loadCategories = async () => {
-    try {
-      const loaded = await getCategories();
-      setCategories(loaded);
-    } catch (error) {
-      console.error('Error loading categories:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Helper to get selected category info
-  const selectedCategoryInfo = categories.find(c => c.key === selectedCategory) || categories[0];
-
-  // Chips Mode (Horizontal Carousel)
   if (mode === 'chips') {
     return (
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingVertical: 4, gap: 8 }}
-      >
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow} keyboardShouldPersistTaps="handled">
         {categories.map((cat) => {
-          const isActive = selectedCategory === cat.key;
+          const active = selectedCategory === cat.key;
           return (
             <TouchableOpacity
               key={cat.key}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                paddingHorizontal: 16,
-                paddingVertical: 8,
-                borderRadius: 20,
-                backgroundColor: isActive
-                  ? cat.color
-                  : 'transparent',
-                borderWidth: 1,
-                borderColor: isActive
-                  ? cat.color
-                  : colors.border,
-              }}
+              accessibilityRole="button"
+              accessibilityLabel={`Category ${cat.label}`}
+              accessibilityState={{ selected: active }}
+              style={[styles.chip, { backgroundColor: active ? cat.color : 'transparent', borderColor: active ? cat.color : colors.border }]}
               onPress={() => onSelectCategory(cat.key)}
             >
-              <Ionicons
-                name={cat.icon as keyof typeof Ionicons.glyphMap}
-                size={16}
-                color={isActive ? '#fff' : cat.color}
-                style={{ marginRight: 6 }}
-              />
-              <Text style={{
-                color: isActive ? '#fff' : colors.text,
-                fontWeight: isActive ? '700' : '500',
-                fontSize: 14
-              }}>
-                {cat.label}
-              </Text>
+              <Ionicons name={iconOf(cat.icon)} size={16} color={active ? '#FFFFFF' : cat.color} style={styles.chipIcon} />
+              <Text style={[styles.chipText, { color: active ? '#FFFFFF' : colors.text, fontWeight: active ? '700' : '500' }]}>{cat.label}</Text>
             </TouchableOpacity>
           );
         })}
@@ -197,92 +53,52 @@ export function CategoryPicker({
     );
   }
 
-  // Compact Dropdown Mode
-  if (compact) {
-    const handleOpen = () => {
-      buttonRef.current?.measureInWindow((x, y, width, height) => {
-        setDropdownPosition({
-          top: y + height + 4,
-          left: x,
-          width: width,
-        });
-        setIsExpanded(true);
+  if (mode === 'dropdown') {
+    const openMenu = () => {
+      anchor.current?.measureInWindow((x, y, width, height) => {
+        setPosition({ top: y + height + 4, left: x, width });
+        setOpen(true);
       });
     };
-
     return (
-      <View style={{ width: '100%' }}>
+      <View style={styles.full}>
         <TouchableOpacity
-          ref={buttonRef}
-          style={[
-            styles.dropdownButton,
-            {
-              backgroundColor: colors.card,
-              borderColor: colors.border,
-            }
-          ]}
-          onPress={handleOpen}
+          ref={anchor as React.RefObject<View>}
+          accessibilityRole="button"
+          accessibilityLabel={`Category filter: ${selected?.label ?? 'none'}`}
+          accessibilityState={{ expanded: open }}
+          style={[styles.dropdownButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+          onPress={openMenu}
         >
-          <View style={[styles.iconContainer, { width: 24, height: 24, backgroundColor: 'transparent' }]}>
-            <Ionicons
-              name={(selectedCategoryInfo.icon || 'apps') as keyof typeof Ionicons.glyphMap}
-              size={18}
-              color={colors.text}
-            />
-          </View>
-          <Text
-            style={[styles.categoryLabel, { color: colors.text, flex: 1, marginRight: 4 }]}
-            numberOfLines={1}
-            ellipsizeMode="tail"
-          >
-            {selectedCategoryInfo.label}
+          <Ionicons name={iconOf(selected?.icon ?? 'apps')} size={18} color={colors.text} />
+          <Text style={[styles.dropdownLabel, { color: colors.text }]} numberOfLines={1}>
+            {selected?.label ?? 'Select'}
           </Text>
-          <Ionicons name={isExpanded ? "chevron-up" : "chevron-down"} size={16} color={colors.text} />
+          <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={colors.text} />
         </TouchableOpacity>
 
-        <Modal
-          visible={isExpanded}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setIsExpanded(false)}
-        >
-          <TouchableWithoutFeedback onPress={() => setIsExpanded(false)}>
-            <View style={styles.modalOverlay}>
-              <View style={[
-                styles.dropdownList,
-                {
-                  backgroundColor: colors.card,
-                  borderColor: colors.border,
-                  top: dropdownPosition.top,
-                  left: dropdownPosition.left,
-                  width: dropdownPosition.width,
-                  maxHeight: 300, // Explicit height constraint
-                }
-              ]}>
+        <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+          <TouchableWithoutFeedback onPress={() => setOpen(false)} accessibilityLabel="Close category list">
+            <View style={[styles.overlay, { backgroundColor: colors.scrim }]}>
+              <View
+                style={[styles.dropdownList, { backgroundColor: colors.card, borderColor: colors.border, top: position.top, left: position.left, width: position.width }]}
+              >
                 <FlatList
                   data={categories}
                   keyExtractor={(item) => item.key}
                   showsVerticalScrollIndicator={false}
                   renderItem={({ item }) => (
                     <TouchableOpacity
-                      style={[
-                        styles.dropdownItem,
-                        selectedCategory === item.key && { backgroundColor: colors.tint + '20' }
-                      ]}
+                      accessibilityRole="menuitem"
+                      accessibilityLabel={item.label}
+                      style={[styles.dropdownItem, selectedCategory === item.key && { backgroundColor: `${colors.tint}33` }]}
                       onPress={() => {
                         onSelectCategory(item.key);
-                        setIsExpanded(false);
+                        setOpen(false);
                       }}
                     >
-                      <Ionicons
-                        name={(item.icon || 'apps') as keyof typeof Ionicons.glyphMap}
-                        size={20}
-                        color={item.color}
-                        style={{ marginRight: 8 }}
-                      />
-                      <Text style={{ color: colors.text, fontSize: 14, fontWeight: '500' }}>
-                        {item.label}
-                      </Text>
+                      <Ionicons name={iconOf(item.icon)} size={20} color={item.color} style={styles.dropdownIcon} />
+                      <Text style={{ color: colors.text, fontSize: FontSizes.sm, fontWeight: '500' }}>{item.label}</Text>
                     </TouchableOpacity>
                   )}
                 />
@@ -294,89 +110,42 @@ export function CategoryPicker({
     );
   }
 
-  // Default List Mode
   return (
-    <View style={styles.container}>
-      <Text style={[styles.label, { color: colors.textSecondary }]}>
-        Category
-      </Text>
-      <View style={styles.categoriesContainer}>
-        {categories.map((category) => (
-          <CategoryButton
-            key={category.key}
-            category={category}
-            isSelected={selectedCategory === category.key}
-            onPress={() => onSelectCategory(category.key)}
-          />
-        ))}
-      </View>
+    <View style={styles.wrap}>
+      {categories.map((cat) => {
+        const active = selectedCategory === cat.key;
+        return (
+          <TouchableOpacity
+            key={cat.key}
+            accessibilityRole="button"
+            accessibilityLabel={`Category ${cat.label}`}
+            accessibilityState={{ selected: active }}
+            style={[styles.listButton, { backgroundColor: active ? cat.color : 'transparent', borderColor: active ? cat.color : colors.border }]}
+            onPress={() => onSelectCategory(cat.key)}
+          >
+            <Ionicons name={iconOf(cat.icon)} size={20} color={active ? '#FFFFFF' : cat.color} />
+            <Text style={{ color: active ? '#FFFFFF' : colors.text, fontSize: FontSizes.sm, fontWeight: '500' }} numberOfLines={1}>
+              {cat.label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    marginBottom: Spacing.lg,
-  },
-  label: {
-    fontSize: FontSizes.sm,
-    fontWeight: '500',
-    marginBottom: Spacing.sm,
-  },
-  categoriesContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
-  },
-  categoryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    gap: Spacing.xs,
-  },
-  iconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: BorderRadius.sm,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  categoryLabel: {
-    fontSize: FontSizes.sm,
-    fontWeight: '500',
-  },
-  // New Compact/Dropdown Styles
-  dropdownButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: BorderRadius.full,
-    borderWidth: 1,
-    gap: 6,
-    minHeight: 40,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.2)', // Dim background slightly to show focus
-  },
-  dropdownList: {
-    position: 'absolute',
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    padding: 4,
-    boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.2)',
-    elevation: 5,
-    zIndex: 1000,
-  },
-  dropdownItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: BorderRadius.sm,
-  }
+  full: { width: '100%' },
+  chipRow: { paddingVertical: 4, gap: 8 },
+  chip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, minHeight: 40, borderRadius: 20, borderWidth: 1 },
+  chipIcon: { marginRight: 6 },
+  chipText: { fontSize: FontSizes.sm },
+  wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  listButton: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, minHeight: 44, paddingHorizontal: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1 },
+  dropdownButton: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, paddingHorizontal: 16, borderRadius: BorderRadius.full, borderWidth: 1 },
+  dropdownLabel: { flex: 1, fontSize: FontSizes.sm, fontWeight: '500' },
+  overlay: { flex: 1 },
+  dropdownList: { position: 'absolute', maxHeight: 300, borderRadius: BorderRadius.md, borderWidth: 1, padding: 4, elevation: 6 },
+  dropdownItem: { flexDirection: 'row', alignItems: 'center', padding: 12, minHeight: 44, borderRadius: BorderRadius.sm },
+  dropdownIcon: { marginRight: 8 },
 });
-

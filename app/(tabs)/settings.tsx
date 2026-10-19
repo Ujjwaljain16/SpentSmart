@@ -1,610 +1,343 @@
-import React, { useState, useCallback } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Alert,
-  ScrollView,
-  TextInput,
-} from "react-native";
-import { useFocusEffect, router } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { StatusBar } from "expo-status-bar";
-import Constants from "expo-constants";
-import { openURL } from "expo-linking";
+import { Ionicons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
+import { openURL } from 'expo-linking';
+import { router } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import React, { useEffect, useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Button } from '@/components/ui/Button';
+import { ISSUES_URL, PRIVACY_POLICY_URL } from '@/constants/app';
+import { BorderRadius, FontSizes, MIN_TOUCH_TARGET, Spacing } from '@/constants/theme';
+import { useRepos } from '@/contexts/database-context';
+import { useSecurity } from '@/contexts/security-context';
+import { useSettings } from '@/contexts/settings-context';
+import { ThemeMode, useTheme } from '@/contexts/theme-context';
+import { paiseToDecimal, parseRupees } from '@/domain/money';
+import { useLiveQuery } from '@/hooks/use-live-query';
+import { useThemeColors } from '@/hooks/use-theme-colors';
+import { getRecentLogs } from '@/lib/logger';
+import { routes } from '@/lib/routes';
+import { ExportScope, exportCsv, exportPdf } from '@/services/export';
+import { setRemindersEnabled } from '@/services/reminders';
 
-import { Colors, BorderRadius, FontSizes, Spacing } from "@/constants/theme";
-import { clearAllData, getAllTransactions } from "@/services/storage";
-import { exportToPDF } from "@/services/pdf-export";
-import { getCategories } from "@/services/category-storage";
-import { useTheme } from "@/contexts/theme-context";
-import { useSecurity } from "@/contexts/security-context";
-import { setBudget, getBudget } from "@/services/storage";
+const LOCK_TIMEOUTS: readonly { seconds: number; label: string }[] = [
+  { seconds: 0, label: 'Immediately' },
+  { seconds: 30, label: '30 sec' },
+  { seconds: 120, label: '2 min' },
+  { seconds: 300, label: '5 min' },
+];
 
-type ThemeMode = "light" | "dark" | "system";
+const THEMES: readonly { mode: ThemeMode; icon: keyof typeof Ionicons.glyphMap; label: string }[] = [
+  { mode: 'light', icon: 'sunny', label: 'Light theme' },
+  { mode: 'dark', icon: 'moon', label: 'Dark theme' },
+  { mode: 'system', icon: 'phone-portrait', label: 'Follow system theme' },
+];
 
 export default function SettingsScreen() {
-  const { colorScheme, themeMode, setThemeMode } = useTheme();
-  const { isBioLockEnabled, setBioLockEnabled, isPrivacyModeEnabled, setPrivacyModeEnabled, hasHardware } = useSecurity();
-  const colors = Colors[colorScheme ?? "dark"];
+  const colors = useThemeColors();
   const insets = useSafeAreaInsets();
+  const repos = useRepos();
+  const { themeMode, setThemeMode } = useTheme();
+  const { settings, setSetting, reload } = useSettings();
+  const { isBioLockEnabled, isPrivacyModeEnabled, canUseLock, lockTimeoutSeconds, setBioLockEnabled, setPrivacyModeEnabled, setLockTimeoutSeconds, verifyOwner } = useSecurity();
 
-  const [transactionCount, setTransactionCount] = useState(0);
-  const [categoryCount, setCategoryCount] = useState(0);
-  const [isExporting, setIsExporting] = useState(false);
-  const [budgetInput, setBudgetInput] = useState("");
-  const [isSavingBudget, setIsSavingBudget] = useState(false);
+  const { data: counts } = useLiveQuery(async (r) => ({ transactions: await r.transactions.count(), categories: (await r.categories.list()).length }));
+  const [budgetText, setBudgetText] = useState(settings.budgetPaise ? paiseToDecimal(settings.budgetPaise) : '');
+  const [busy, setBusy] = useState<string | null>(null);
 
-  const handleThemeChange = async (mode: ThemeMode) => {
-    await setThemeMode(mode);
+  useEffect(() => {
+    setBudgetText(settings.budgetPaise ? paiseToDecimal(settings.budgetPaise) : '');
+  }, [settings.budgetPaise]);
+
+  const run = async (key: string, task: () => Promise<void>, errorMessage: string) => {
+    setBusy(key);
+    try {
+      await task();
+    } catch {
+      Alert.alert('Error', errorMessage);
+    } finally {
+      setBusy(null);
+    }
   };
 
-  const loadStats = useCallback(async () => {
-    try {
-      const [transactions, categories, currentBudget] = await Promise.all([
-        getAllTransactions(),
-        getCategories(),
-        getBudget(),
-      ]);
-      setTransactionCount(transactions.length);
-      setCategoryCount(categories.length);
-      if (currentBudget) setBudgetInput(currentBudget.toString());
-    } catch (error) {
-      console.error("Error loading stats:", error);
+  const toggleLock = async (enabled: boolean) => {
+    const result = await setBioLockEnabled(enabled);
+    if (result.ok) return;
+    const reasons = {
+      no_hardware: 'This device cannot verify your identity.',
+      not_enrolled: 'Set up a fingerprint, face or screen lock in your device settings first.',
+      auth_failed: 'Authentication was cancelled, so the setting was not changed.',
+    } as const;
+    Alert.alert('App lock', reasons[result.reason]);
+  };
+
+  const toggleReminders = async (enabled: boolean) => {
+    const active = await setRemindersEnabled(enabled);
+    await setSetting('remindersEnabled', active);
+    if (enabled && !active) Alert.alert('Reminders', 'Notifications are turned off for SpentSmart. Enable them in system settings to get reminders.');
+  };
+
+  const saveBudget = () =>
+    run(
+      'budget',
+      async () => {
+        const trimmed = budgetText.trim();
+        if (trimmed === '') {
+          await setSetting('budgetPaise', 0);
+          Alert.alert('Budget removed', 'You no longer have a monthly budget.');
+          return;
+        }
+        const paise = parseRupees(trimmed);
+        if (paise === null) {
+          Alert.alert('Invalid amount', 'Enter a budget like 15000 or 15000.50.');
+          return;
+        }
+        await setSetting('budgetPaise', paise);
+        Alert.alert('Saved', 'Monthly budget updated.');
+      },
+      'The budget could not be saved.',
+    );
+
+  const chooseScope = (title: string, onChoose: (scope: ExportScope) => void) => {
+    const now = new Date();
+    Alert.alert(title, 'Which transactions?', [
+      { text: 'This month', onPress: () => onChoose({ kind: 'month', date: now }) },
+      { text: 'This year', onPress: () => onChoose({ kind: 'year' }) },
+      { text: 'Everything', onPress: () => onChoose({ kind: 'all' }) },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const requireData = (): boolean => {
+    if (!counts || counts.transactions === 0) {
+      Alert.alert('No data', 'There are no transactions to export.');
+      return false;
     }
-  }, []);
+    return true;
+  };
 
-  useFocusEffect(
-    useCallback(() => {
-      loadStats();
-    }, [loadStats])
-  );
-
-  const handleClearData = () => {
-    if (transactionCount === 0) {
-      Alert.alert("No Data", "There is no data to clear.");
-      return;
-    }
-
+  const eraseEverything = () => {
     Alert.alert(
-      "Clear All Data",
-      `This will permanently delete all ${transactionCount} transaction${transactionCount !== 1 ? "s" : ""
-      }. This action cannot be undone.`,
+      'Delete all data',
+      'This permanently deletes every transaction, category, setting and pending payment on this device. It cannot be undone. Export first if you want a copy.',
       [
-        { text: "Cancel", style: "cancel" },
+        { text: 'Cancel', style: 'cancel' },
         {
-          text: "Clear All",
-          style: "destructive",
+          text: 'Delete everything',
+          style: 'destructive',
           onPress: async () => {
-            const success = await clearAllData();
-            if (success) {
-              setTransactionCount(0);
-              Alert.alert("Success", "All data has been cleared.");
-            } else {
-              Alert.alert("Error", "Failed to clear data. Please try again.");
-            }
+            if (!(await verifyOwner('Confirm to delete all data'))) return;
+            await run(
+              'erase',
+              async () => {
+                await repos.eraseEverything();
+                await reload();
+                Alert.alert('Done', 'All data has been deleted.');
+              },
+              'Data could not be deleted. Please try again.',
+            );
           },
         },
-      ]
+      ],
     );
   };
 
-  const handleExportAll = async () => {
-    if (transactionCount === 0) {
-      Alert.alert("No Data", "There are no transactions to export.");
-      return;
-    }
-
-    setIsExporting(true);
-    try {
-      await exportToPDF();
-    } catch (error) {
-      console.error("Export error:", error);
-      Alert.alert("Error", "Failed to export data. Please try again.");
-    } finally {
-      setIsExporting(false);
-    }
+  const showDiagnostics = () => {
+    const logs = getRecentLogs();
+    const text = logs.length
+      ? logs
+          .slice(-15)
+          .map((l) => `${new Date(l.at).toLocaleTimeString()} ${l.level.toUpperCase()} ${l.message}`)
+          .join('\n')
+      : 'No warnings or errors recorded in this session.';
+    Alert.alert('Diagnostics (this session)', `${text}\n\nUPI IDs and amounts are removed from these messages. Nothing is sent anywhere.`);
   };
 
-  const handleSaveBudget = async () => {
-    const amount = parseFloat(budgetInput);
-    if (isNaN(amount) || amount < 0) {
-      Alert.alert("Invalid Amount", "Please enter a valid budget amount.");
-      return;
-    }
-
-    setIsSavingBudget(true);
-    try {
-      const success = await setBudget(amount);
-      if (success) {
-        Alert.alert("Success", "Monthly budget updated successfully.");
-      } else {
-        Alert.alert("Error", "Failed to save budget.");
-      }
-    } catch (error) {
-      console.error("Save budget error:", error);
-      Alert.alert("Error", "An unexpected error occurred.");
-    } finally {
-      setIsSavingBudget(false);
-    }
+  const Row = ({ icon, title, subtitle, right, onPress, danger }: { icon: keyof typeof Ionicons.glyphMap; title: string; subtitle?: string; right?: React.ReactNode; onPress?: () => void; danger?: boolean }) => {
+    const content = (
+      <>
+        <View style={[styles.iconBox, { backgroundColor: danger ? `${colors.error}33` : colors.surface }]}>
+          <Ionicons name={icon} size={20} color={danger ? colors.error : colors.tint} />
+        </View>
+        <View style={styles.rowText}>
+          <Text style={[styles.rowTitle, { color: danger ? colors.error : colors.text }]}>{title}</Text>
+          {subtitle ? <Text style={[styles.rowSub, { color: colors.textSecondary }]}>{subtitle}</Text> : null}
+        </View>
+        {right ?? (onPress ? <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} /> : null)}
+      </>
+    );
+    return onPress ? (
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel={title} style={styles.row} onPress={onPress}>
+        {content}
+      </TouchableOpacity>
+    ) : (
+      <View style={styles.row}>{content}</View>
+    );
   };
 
-  const appVersion = Constants.expoConfig?.version || "1.0.0";
+  const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <View style={styles.section}>
+      <Text style={[styles.sectionTitle, { color: colors.textSecondary }]} accessibilityRole="header">
+        {title}
+      </Text>
+      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>{children}</View>
+    </View>
+  );
+
+  const Divider = () => <View style={[styles.divider, { backgroundColor: colors.border }]} />;
+  const appVersion = Constants.expoConfig?.version ?? '—';
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+      <StatusBar style={colors.isDark ? 'light' : 'dark'} />
+      <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + Spacing.md, paddingBottom: insets.bottom + 100 }]} showsVerticalScrollIndicator={false}>
+        <Text style={[styles.title, { color: colors.text }]} accessibilityRole="header">
+          Settings
+        </Text>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingTop: insets.top + Spacing.md, paddingBottom: insets.bottom + 100 },
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header */}
-        <Text style={[styles.title, { color: colors.text }]}>Settings</Text>
-
-        {/* Privacy Section */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
-            PRIVACY
-          </Text>
-
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
-            {/* Privacy Dashboard */}
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => router.push('/privacy-dashboard')}
-            >
-              <View style={styles.menuItemLeft}>
-                <View style={[styles.iconContainer, { backgroundColor: colors.surface }]}>
-                  <Ionicons name="shield-checkmark" size={20} color={colors.tint} />
+        <Section title="PRIVACY & SECURITY">
+          <Row icon="shield-checkmark" title="Privacy dashboard" subtitle="See what is stored and what the app can access" onPress={() => router.push(routes.privacyDashboard)} />
+          <Divider />
+          <Row
+            icon="finger-print"
+            title="App lock"
+            subtitle={canUseLock ? 'Require fingerprint, face or passcode' : 'Set up a screen lock on this device first'}
+            right={<Switch accessibilityLabel="App lock" value={isBioLockEnabled} onValueChange={toggleLock} disabled={!canUseLock && !isBioLockEnabled} trackColor={{ true: colors.tint }} />}
+          />
+          {isBioLockEnabled && (
+            <>
+              <Divider />
+              <View style={styles.padded}>
+                <Text style={[styles.rowSub, { color: colors.textSecondary, marginBottom: Spacing.sm }]}>Lock after leaving the app for</Text>
+                <View style={styles.chips}>
+                  {LOCK_TIMEOUTS.map((o) => {
+                    const active = lockTimeoutSeconds === o.seconds;
+                    return (
+                      <TouchableOpacity
+                        key={o.seconds}
+                        accessibilityRole="radio"
+                        accessibilityLabel={`Lock after ${o.label}`}
+                        accessibilityState={{ selected: active }}
+                        style={[styles.chip, { backgroundColor: active ? colors.tint : 'transparent', borderColor: active ? colors.tint : colors.border }]}
+                        onPress={() => void setLockTimeoutSeconds(o.seconds)}
+                      >
+                        <Text style={{ color: active ? colors.onTint : colors.textSecondary, fontSize: FontSizes.sm, fontWeight: '600' }}>{o.label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
-                <View style={styles.menuItemText}>
-                  <Text style={[styles.menuItemLabel, { color: colors.text }]}>
-                    Privacy Dashboard
-                  </Text>
-                  <Text style={[styles.menuItemDescription, { color: colors.textSecondary }]}>
-                    See what we store & control your data
-                  </Text>
-                </View>
+                <Text style={[styles.rowSub, { color: colors.textSecondary, marginTop: Spacing.sm }]}>While the lock is on, screenshots are blocked and the app is hidden in the recent-apps view.</Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-            </TouchableOpacity>
+            </>
+          )}
+          <Divider />
+          <Row
+            icon="eye-off-outline"
+            title="Privacy mode"
+            subtitle="Hide amounts everywhere in the app"
+            right={<Switch accessibilityLabel="Privacy mode" value={isPrivacyModeEnabled} onValueChange={(v) => void setPrivacyModeEnabled(v)} trackColor={{ true: colors.tint }} />}
+          />
+        </Section>
+
+        <Section title="REMINDERS">
+          <Row
+            icon="notifications-outline"
+            title="Daily reminders"
+            subtitle="10:00 and 20:00, on this device only"
+            right={<Switch accessibilityLabel="Daily reminders" value={settings.remindersEnabled} onValueChange={(v) => void toggleReminders(v)} trackColor={{ true: colors.tint }} />}
+          />
+        </Section>
+
+        <Section title="BUDGET">
+          <View style={styles.padded}>
+            <Text style={[styles.rowTitle, { color: colors.text }]}>Monthly limit (₹)</Text>
+            <TextInput
+              accessibilityLabel="Monthly budget in rupees"
+              style={[styles.budgetInput, { color: colors.text, borderColor: colors.border }]}
+              value={budgetText}
+              onChangeText={setBudgetText}
+              placeholder="e.g. 15000 (leave empty for none)"
+              placeholderTextColor={colors.textSecondary}
+              keyboardType="decimal-pad"
+            />
+            <Button label="Save budget" onPress={() => void saveBudget()} loading={busy === 'budget'} />
           </View>
-        </View>
+        </Section>
 
-        {/* Security Section */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
-            SECURITY & PRIVACY
-          </Text>
+        <Section title="CATEGORIES">
+          <Row icon="pricetags-outline" title="Manage categories" subtitle={`${counts?.categories ?? '—'} configured`} onPress={() => router.push(routes.categoryManager)} />
+        </Section>
 
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
-            {/* Biometric Lock */}
-            {hasHardware && (
-              <>
-                <View style={styles.menuItem}>
-                  <View style={styles.menuItemLeft}>
-                    <View style={[styles.iconContainer, { backgroundColor: colors.surface }]}>
-                      <Ionicons name="finger-print" size={20} color={colors.tint} />
-                    </View>
-                    <View style={styles.menuItemText}>
-                      <Text style={[styles.menuItemLabel, { color: colors.text }]}>
-                        Biometric Lock
-                      </Text>
-                      <Text style={[styles.menuItemDescription, { color: colors.textSecondary }]}>
-                        Require authentication to open app
-                      </Text>
-                    </View>
-                  </View>
-                  <TouchableOpacity
-                    onPress={() => setBioLockEnabled(!isBioLockEnabled)}
-                    style={[styles.toggleWrap, { backgroundColor: isBioLockEnabled ? colors.tint : colors.surface }]}
-                  >
-                    <View style={[styles.toggleHandle, { marginLeft: isBioLockEnabled ? 22 : 2 }]} />
-                  </TouchableOpacity>
-                </View>
-                <View style={[styles.divider, { backgroundColor: colors.border }]} />
-              </>
-            )}
+        <Section title="DATA">
+          <Row
+            icon="document-text-outline"
+            title={busy === 'csv' ? 'Exporting…' : 'Export CSV'}
+            subtitle="Spreadsheet-friendly, includes every field"
+            onPress={() => requireData() && chooseScope('Export CSV', (scope) => void run('csv', async () => void (await exportCsv(repos, scope)), 'The export failed. Please try again.'))}
+          />
+          <Divider />
+          <Row
+            icon="download-outline"
+            title={busy === 'pdf' ? 'Exporting…' : 'Export PDF report'}
+            subtitle="Printable summary (latest 2,000 rows)"
+            onPress={() => requireData() && chooseScope('Export PDF', (scope) => void run('pdf', () => exportPdf(repos, scope), 'The export failed. Please try again.'))}
+          />
+          <Divider />
+          <Row icon="trash-outline" title="Delete all data" subtitle={`${counts?.transactions ?? '—'} transactions stored`} onPress={eraseEverything} danger />
+        </Section>
 
-            {/* Privacy Mode */}
-            <View style={styles.menuItem}>
-              <View style={styles.menuItemLeft}>
-                <View style={[styles.iconContainer, { backgroundColor: colors.surface }]}>
-                  <Ionicons name="eye-off-outline" size={20} color={colors.tint} />
-                </View>
-                <View style={styles.menuItemText}>
-                  <Text style={[styles.menuItemLabel, { color: colors.text }]}>
-                    Privacy Mode
-                  </Text>
-                  <Text style={[styles.menuItemDescription, { color: colors.textSecondary }]}>
-                    Mask amounts on home screen
-                  </Text>
-                </View>
-              </View>
-              <TouchableOpacity
-                onPress={() => setPrivacyModeEnabled(!isPrivacyModeEnabled)}
-                style={[styles.toggleWrap, { backgroundColor: isPrivacyModeEnabled ? colors.tint : colors.surface }]}
-              >
-                <View style={[styles.toggleHandle, { marginLeft: isPrivacyModeEnabled ? 22 : 2 }]} />
-              </TouchableOpacity>
-            </View>
+        <Section title="APPEARANCE">
+          <View style={styles.themeRow}>
+            {THEMES.map((t) => {
+              const active = themeMode === t.mode;
+              return (
+                <TouchableOpacity
+                  key={t.mode}
+                  accessibilityRole="radio"
+                  accessibilityLabel={t.label}
+                  accessibilityState={{ selected: active }}
+                  style={[styles.themeOption, { backgroundColor: active ? colors.tint : 'transparent', borderColor: active ? colors.tint : colors.border }]}
+                  onPress={() => void setThemeMode(t.mode)}
+                >
+                  <Ionicons name={t.icon} size={20} color={active ? colors.onTint : colors.textSecondary} />
+                </TouchableOpacity>
+              );
+            })}
           </View>
-        </View>
+        </Section>
 
-        {/* Budget Section */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
-            BUDGETING
-          </Text>
-
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
-            <View style={styles.budgetSetting}>
-              <View style={styles.budgetInputRow}>
-                <View style={[styles.iconContainer, { backgroundColor: colors.surface }]}>
-                  <Ionicons name="wallet-outline" size={20} color={colors.tint} />
-                </View>
-                <View style={styles.inputWrap}>
-                  <Text style={[styles.menuItemLabel, { color: colors.text }]}>
-                    Monthly Limit
-                  </Text>
-                  <TextInput
-                    style={[styles.budgetInput, { color: colors.text, borderBottomColor: colors.border }]}
-                    value={budgetInput}
-                    onChangeText={setBudgetInput}
-                    placeholder="Enter limit (e.g. 15000)"
-                    placeholderTextColor={colors.textSecondary}
-                    keyboardType="numeric"
-                  />
-                </View>
-              </View>
-              <TouchableOpacity
-                style={[styles.saveBudgetButton, { backgroundColor: colors.tint, opacity: isSavingBudget ? 0.7 : 1 }]}
-                onPress={handleSaveBudget}
-                disabled={isSavingBudget}
-              >
-                <Text style={styles.saveBudgetText}>
-                  {isSavingBudget ? "Saving..." : "Save"}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-
-        {/* Categories Section */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
-            CATEGORIES
-          </Text>
-
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => router.push("/category-manager")}
-            >
-              <View style={styles.menuItemLeft}>
-                <View style={[styles.iconContainer, { backgroundColor: colors.surface }]}>
-                  <Ionicons name="pricetags-outline" size={20} color={colors.tint} />
-                </View>
-                <View style={styles.menuItemText}>
-                  <Text style={[styles.menuItemLabel, { color: colors.text }]}>
-                    Manage Categories
-                  </Text>
-                  <Text style={[styles.menuItemDescription, { color: colors.textSecondary }]}>
-                    {categoryCount} categor{categoryCount !== 1 ? "ies" : "y"} configured
-                  </Text>
-                </View>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Data Section */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
-            DATA
-          </Text>
-
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
-            {/* Export PDF */}
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={handleExportAll}
-              disabled={isExporting}
-            >
-              <View style={styles.menuItemLeft}>
-                <View style={[styles.iconContainer, { backgroundColor: colors.surface }]}>
-                  <Ionicons name="download-outline" size={20} color={colors.tint} />
-                </View>
-                <View style={styles.menuItemText}>
-                  <Text style={[styles.menuItemLabel, { color: colors.text }]}>
-                    {isExporting ? "Exporting..." : "Export Transactions"}
-                  </Text>
-                  <Text style={[styles.menuItemDescription, { color: colors.textSecondary }]}>
-                    Get PDF report of all transactions
-                  </Text>
-                </View>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-            </TouchableOpacity>
-
-            <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-            {/* Clear Data */}
-            <TouchableOpacity style={styles.menuItem} onPress={handleClearData}>
-              <View style={styles.menuItemLeft}>
-                <View style={[styles.iconContainer, { backgroundColor: `${colors.error}20` }]}>
-                  <Ionicons name="trash-outline" size={20} color={colors.error} />
-                </View>
-                <View style={styles.menuItemText}>
-                  <Text style={[styles.menuItemLabel, { color: colors.error }]}>
-                    Clear All Data
-                  </Text>
-                  <Text style={[styles.menuItemDescription, { color: colors.textSecondary }]}>
-                    {transactionCount} transaction{transactionCount !== 1 ? "s" : ""} stored
-                  </Text>
-                </View>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Appearance Section */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
-            APPEARANCE
-          </Text>
-
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
-            <View style={styles.themeSelector}>
-              <TouchableOpacity
-                style={[
-                  styles.themeOption,
-                  {
-                    backgroundColor: themeMode === "light" ? colors.tint : "transparent",
-                    borderColor: themeMode === "light" ? colors.tint : colors.border,
-                  },
-                ]}
-                onPress={() => handleThemeChange("light")}
-              >
-                <Ionicons
-                  name="sunny"
-                  size={20}
-                  color={themeMode === "light" ? "#fff" : colors.textSecondary}
-                />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.themeOption,
-                  {
-                    backgroundColor: themeMode === "dark" ? colors.tint : "transparent",
-                    borderColor: themeMode === "dark" ? colors.tint : colors.border,
-                  },
-                ]}
-                onPress={() => handleThemeChange("dark")}
-              >
-                <Ionicons
-                  name="moon"
-                  size={20}
-                  color={themeMode === "dark" ? "#fff" : colors.textSecondary}
-                />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.themeOption,
-                  {
-                    backgroundColor: themeMode === "system" ? colors.tint : "transparent",
-                    borderColor: themeMode === "system" ? colors.tint : colors.border,
-                  },
-                ]}
-                onPress={() => handleThemeChange("system")}
-              >
-                <Ionicons
-                  name="phone-portrait"
-                  size={20}
-                  color={themeMode === "system" ? "#fff" : colors.textSecondary}
-                />
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-
-        {/* About Section */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
-            ABOUT
-          </Text>
-
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
-            <View style={styles.aboutItem}>
-              <Text style={[styles.aboutLabel, { color: colors.text }]}>
-                App Version
-              </Text>
-              <Text style={[styles.aboutValue, { color: colors.textSecondary }]}>
-                {appVersion}
-              </Text>
-            </View>
-
-            <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-            <View style={styles.aboutItem}>
-              <Text style={[styles.aboutLabel, { color: colors.text }]}>
-                Privacy
-              </Text>
-              <Text style={[styles.aboutValue, { color: colors.textSecondary }]}>
-                All data stored locally
-              </Text>
-            </View>
-
-            <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-            {/* Privacy Policy Link */}
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => {
-                openURL('https://github.com/Ujjwaljain16/ExpenseTracker/blob/main/PRIVACY.md');
-              }}
-            >
-              <View style={styles.menuItemLeft}>
-                <View style={[styles.iconContainer, { backgroundColor: colors.surface }]}>
-                  <Ionicons name="document-text-outline" size={20} color={colors.tint} />
-                </View>
-                <View style={styles.menuItemText}>
-                  <Text style={[styles.menuItemLabel, { color: colors.text }]}>
-                    Privacy Policy
-                  </Text>
-                  <Text style={[styles.menuItemDescription, { color: colors.textSecondary }]}>
-                    Read our privacy commitment
-                  </Text>
-                </View>
-              </View>
-              <Ionicons name="open-outline" size={20} color={colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-        </View>
+        <Section title="ABOUT">
+          <Row icon="information-circle-outline" title="Version" right={<Text style={{ color: colors.textSecondary, fontSize: FontSizes.md }}>{appVersion}</Text>} />
+          <Divider />
+          <Row icon="document-outline" title="Privacy policy" subtitle="Opens in your browser" onPress={() => void openURL(PRIVACY_POLICY_URL)} />
+          <Divider />
+          <Row icon="bug-outline" title="Diagnostics" subtitle="Recent warnings, with UPI IDs and amounts removed" onPress={showDiagnostics} />
+          <Divider />
+          <Row icon="chatbubble-outline" title="Report a problem" subtitle="Opens GitHub issues in your browser" onPress={() => void openURL(ISSUES_URL)} />
+        </Section>
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.xl,
-  },
-  title: {
-    fontSize: FontSizes.xxl,
-    fontWeight: "700",
-    marginBottom: Spacing.xl,
-  },
-  section: {
-    marginBottom: Spacing.xl,
-  },
-  sectionTitle: {
-    fontSize: FontSizes.xs,
-    fontWeight: "600",
-    letterSpacing: 1,
-    marginBottom: Spacing.sm,
-    marginLeft: Spacing.xs,
-  },
-  card: {
-    borderRadius: BorderRadius.lg,
-    overflow: "hidden",
-  },
-  themeSelector: {
-    flexDirection: "row",
-    padding: Spacing.sm,
-    gap: Spacing.sm,
-  },
-  themeOption: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    gap: Spacing.xs,
-  },
-  menuItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: Spacing.md,
-  },
-  menuItemLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: BorderRadius.sm,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: Spacing.md,
-  },
-  menuItemText: {
-    flex: 1,
-  },
-  menuItemLabel: {
-    fontSize: FontSizes.md,
-    fontWeight: "500",
-    marginBottom: 2,
-  },
-  menuItemDescription: {
-    fontSize: FontSizes.sm,
-  },
-  divider: {
-    height: 1,
-  },
-  aboutItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: Spacing.md,
-  },
-  aboutLabel: {
-    fontSize: FontSizes.md,
-  },
-  aboutValue: {
-    fontSize: FontSizes.md,
-  },
-  toggleWrap: {
-    width: 44,
-    height: 24,
-    borderRadius: 12,
-    justifyContent: 'center',
-    paddingHorizontal: 2,
-  },
-  toggleHandle: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#FFF',
-  },
-  budgetSetting: {
-    padding: Spacing.md,
-  },
-  budgetInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: Spacing.md,
-  },
-  inputWrap: {
-    flex: 1,
-  },
-  budgetInput: {
-    fontSize: FontSizes.lg,
-    fontWeight: '600',
-    paddingVertical: Spacing.xs,
-    borderBottomWidth: 1,
-  },
-  saveBudgetButton: {
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.md,
-    alignItems: 'center',
-  },
-  saveBudgetText: {
-    color: '#FFF',
-    fontSize: FontSizes.md,
-    fontWeight: '600',
-  },
+  container: { flex: 1 },
+  content: { paddingHorizontal: Spacing.lg },
+  title: { fontSize: FontSizes.xxl, fontWeight: '700', marginBottom: Spacing.xl },
+  section: { marginBottom: Spacing.xl },
+  sectionTitle: { fontSize: FontSizes.xs, fontWeight: '600', letterSpacing: 1, marginBottom: Spacing.sm, marginLeft: Spacing.xs },
+  card: { borderRadius: BorderRadius.lg, borderWidth: 1, overflow: 'hidden' },
+  row: { flexDirection: 'row', alignItems: 'center', padding: Spacing.md, minHeight: MIN_TOUCH_TARGET + 8, gap: Spacing.md },
+  iconBox: { width: 40, height: 40, borderRadius: BorderRadius.sm, justifyContent: 'center', alignItems: 'center' },
+  rowText: { flex: 1 },
+  rowTitle: { fontSize: FontSizes.md, fontWeight: '500' },
+  rowSub: { fontSize: FontSizes.sm, marginTop: 2 },
+  divider: { height: 1 },
+  padded: { padding: Spacing.md, gap: Spacing.sm },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  chip: { paddingHorizontal: Spacing.md, minHeight: 40, borderRadius: BorderRadius.full, borderWidth: 1, justifyContent: 'center' },
+  budgetInput: { fontSize: FontSizes.lg, fontWeight: '600', paddingVertical: Spacing.sm, borderBottomWidth: 1 },
+  themeRow: { flexDirection: 'row', padding: Spacing.sm, gap: Spacing.sm },
+  themeOption: { flex: 1, minHeight: MIN_TOUCH_TARGET, alignItems: 'center', justifyContent: 'center', borderRadius: BorderRadius.md, borderWidth: 1 },
 });

@@ -1,391 +1,162 @@
-import React, { useState, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Alert,
-  TextInput,
-  Modal,
-} from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import React, { useState } from 'react';
+import { Alert, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Button } from '@/components/ui/Button';
+import { ScreenHeader } from '@/components/ui/ScreenHeader';
+import { BorderRadius, FontSizes, MIN_TOUCH_TARGET, Spacing } from '@/constants/theme';
+import { useCategories } from '@/contexts/categories-context';
+import { useRepos } from '@/contexts/database-context';
+import { CATEGORY_COLORS, CATEGORY_ICONS, isKnownIcon } from '@/domain/categories';
+import { Category } from '@/domain/types';
+import { useThemeColors } from '@/hooks/use-theme-colors';
+import { log } from '@/lib/logger';
 
-import { Colors, BorderRadius, FontSizes, Spacing } from '@/constants/theme';
-import { CategoryInfo } from '@/types/transaction';
-import {
-  getCategories,
-  addCategory,
-  deleteCategory,
-  AVAILABLE_ICONS,
-  AVAILABLE_COLORS,
-  resetCategoriesToDefaults,
-} from '@/services/category-storage';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+const iconOf = (icon: string) => (isKnownIcon(icon) ? icon : 'pricetag') as keyof typeof Ionicons.glyphMap;
 
 export default function CategoryManagerScreen() {
-  const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? 'dark'];
+  const colors = useThemeColors();
   const insets = useSafeAreaInsets();
+  const repos = useRepos();
+  const { categories } = useCategories();
 
-  const [categories, setCategories] = useState<CategoryInfo[]>([]);
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
+  const [label, setLabel] = useState('');
+  const [icon, setIcon] = useState<string>('pricetag');
+  const [color, setColor] = useState<string>(CATEGORY_COLORS[0]);
 
-  // New category form state
-  const [newLabel, setNewLabel] = useState('');
-  const [selectedIcon, setSelectedIcon] = useState('pricetag');
-  const [selectedColor, setSelectedColor] = useState(AVAILABLE_COLORS[0]);
+  const fail = (error: unknown, fallback: string) => {
+    log.warn('Category operation failed', error);
+    Alert.alert('Error', error instanceof Error && error.name === 'ValidationError' ? error.message : fallback);
+  };
 
-  const loadCategories = useCallback(async () => {
+  const remove = (category: Category) => {
+    Alert.alert('Delete category', `Delete “${category.label}”? Its transactions will move to “Other”.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => repos.categories.remove(category.key).then((ok) => !ok && Alert.alert('Error', 'This category can’t be deleted.')).catch((e) => fail(e, 'The category could not be deleted.')) },
+    ]);
+  };
+
+  const add = async () => {
     try {
-      const loaded = await getCategories();
-      setCategories(loaded);
+      await repos.categories.add({ label, icon, color });
+      setShowAdd(false);
+      setLabel('');
+      setIcon('pricetag');
+      setColor(CATEGORY_COLORS[0]);
     } catch (error) {
-      console.error('Error loading categories:', error);
-    }
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      loadCategories();
-    }, [loadCategories])
-  );
-
-  const handleClose = () => {
-    router.back();
-  };
-
-  const handleDeleteCategory = (category: CategoryInfo) => {
-    if (category.key === 'other') {
-      Alert.alert('Cannot Delete', 'The "Other" category cannot be deleted as it serves as a fallback.');
-      return;
-    }
-
-    Alert.alert(
-      'Delete Category',
-      `Are you sure you want to delete "${category.label}"? Existing transactions with this category will retain the category key.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            const success = await deleteCategory(category.key);
-            if (success) {
-              loadCategories();
-            } else {
-              Alert.alert('Error', 'Failed to delete category.');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handleAddCategory = async () => {
-    const trimmedLabel = newLabel.trim();
-
-    if (!trimmedLabel) {
-      Alert.alert('Required', 'Please enter a category name.');
-      return;
-    }
-
-    if (trimmedLabel.length < 2) {
-      Alert.alert('Invalid', 'Category name must be at least 2 characters.');
-      return;
-    }
-
-    // Check for duplicate labels
-    const exists = categories.some(
-      c => c.label.toLowerCase() === trimmedLabel.toLowerCase()
-    );
-    if (exists) {
-      Alert.alert('Duplicate', 'A category with this name already exists.');
-      return;
-    }
-
-    try {
-      await addCategory({
-        label: trimmedLabel,
-        icon: selectedIcon,
-        color: selectedColor,
-      });
-
-      setShowAddModal(false);
-      setNewLabel('');
-      setSelectedIcon('pricetag');
-      setSelectedColor(AVAILABLE_COLORS[0]);
-      loadCategories();
-    } catch (error) {
-      console.error('Error adding category:', error);
-      Alert.alert('Error', 'Failed to add category. Please try again.');
+      fail(error, 'The category could not be added.');
     }
   };
 
-  const handleResetDefaults = () => {
-    Alert.alert(
-      'Reset to Defaults',
-      'This will replace all categories with the default ones. Existing transactions will retain their category keys.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reset',
-          style: 'destructive',
-          onPress: async () => {
-            const success = await resetCategoriesToDefaults();
-            if (success) {
-              loadCategories();
-              Alert.alert('Success', 'Categories reset to defaults.');
-            } else {
-              Alert.alert('Error', 'Failed to reset categories.');
-            }
-          },
-        },
-      ]
-    );
+  const reset = () => {
+    Alert.alert('Reset categories', 'Restore the default categories? Custom categories are removed and their transactions move to “Other”.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Reset', style: 'destructive', onPress: () => repos.categories.resetToDefaults().catch((e) => fail(e, 'Categories could not be reset.')) },
+    ]);
   };
-
-  const getIconName = (icon: string): keyof typeof Ionicons.glyphMap => {
-    if (AVAILABLE_ICONS.includes(icon)) {
-      return icon as keyof typeof Ionicons.glyphMap;
-    }
-    return 'pricetag';
-  };
-
-  // Use theme background
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+      <StatusBar style={colors.isDark ? 'light' : 'dark'} />
+      <ScreenHeader
+        title="Categories"
+        bordered
+        trailing={
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Add category" onPress={() => setShowAdd(true)} style={styles.addButton}>
+            <Ionicons name="add" size={26} color={colors.tint} />
+          </TouchableOpacity>
+        }
+      />
 
-      {/* Header */}
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: insets.top + Spacing.sm,
-            borderBottomColor: colors.border,
-          },
-        ]}
-      >
-        <TouchableOpacity onPress={handleClose} style={styles.headerButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>
-          Manage Categories
-        </Text>
-        <TouchableOpacity
-          onPress={() => setShowAddModal(true)}
-          style={styles.headerButton}
-        >
-          <Ionicons name="add" size={24} color={colors.tint} />
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Categories List */}
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
-          {categories.map((category, index) => (
-            <View key={category.key}>
-              <View style={styles.categoryItem}>
-                <View
-                  style={[
-                    styles.categoryIcon,
-                    { backgroundColor: `${category.color}20` },
-                  ]}
-                >
-                  <Ionicons
-                    name={getIconName(category.icon)}
-                    size={20}
-                    color={category.color}
-                  />
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing.xl }]}>
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          {categories.map((c, i) => (
+            <View key={c.key}>
+              <View style={styles.item}>
+                <View style={[styles.icon, { backgroundColor: `${c.color}33` }]}>
+                  <Ionicons name={iconOf(c.icon)} size={20} color={c.color} />
                 </View>
-                <View style={styles.categoryInfo}>
-                  <Text style={[styles.categoryLabel, { color: colors.text }]}>
-                    {category.label}
-                  </Text>
-                  <Text style={[styles.categoryKey, { color: colors.textSecondary }]}>
-                    {category.key}
-                  </Text>
-                </View>
-                {category.key !== 'other' && (
-                  <TouchableOpacity
-                    onPress={() => handleDeleteCategory(category)}
-                    style={styles.deleteButton}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  >
-                    <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                <Text style={[styles.itemLabel, { color: colors.text }]}>{c.label}</Text>
+                {!c.isSystem ? (
+                  <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Delete ${c.label}`} onPress={() => remove(c)} style={styles.delete}>
+                    <Ionicons name="trash-outline" size={20} color={colors.error} />
                   </TouchableOpacity>
+                ) : (
+                  <Text style={[styles.system, { color: colors.textSecondary }]}>built-in</Text>
                 )}
               </View>
-              {index < categories.length - 1 && (
-                <View style={[styles.divider, { backgroundColor: colors.border }]} />
-              )}
+              {i < categories.length - 1 ? <View style={[styles.divider, { backgroundColor: colors.border }]} /> : null}
             </View>
           ))}
         </View>
-
-        {/* Reset Button */}
-        <TouchableOpacity
-          style={[styles.resetButton, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
-          onPress={handleResetDefaults}
-        >
-          <Ionicons name="refresh" size={20} color={colors.textSecondary} />
-          <Text style={[styles.resetButtonText, { color: colors.textSecondary }]}>
-            Reset to Default Categories
-          </Text>
-        </TouchableOpacity>
+        <Button label="Reset to default categories" variant="secondary" onPress={reset} />
       </ScrollView>
 
-      {/* Add Category Modal */}
-      <Modal
-        visible={showAddModal}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setShowAddModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View
-            style={[
-              styles.modalContent,
-              {
-                backgroundColor: colors.background,
-                paddingBottom: insets.bottom + Spacing.lg,
-              },
-            ]}
-          >
-            {/* Modal Header */}
-            <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-              <TouchableOpacity onPress={() => setShowAddModal(false)}>
-                <Text style={[styles.modalCancel, { color: colors.textSecondary }]}>
-                  Cancel
-                </Text>
+      <Modal visible={showAdd} animationType="slide" transparent onRequestClose={() => setShowAdd(false)}>
+        <View style={[styles.scrim, { backgroundColor: colors.scrim }]}>
+          <View style={[styles.sheet, { backgroundColor: colors.background, paddingBottom: insets.bottom + Spacing.lg }]}>
+            <View style={[styles.sheetHeader, { borderBottomColor: colors.border }]}>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Cancel" onPress={() => setShowAdd(false)} style={styles.sheetButton}>
+                <Text style={{ color: colors.textSecondary, fontSize: FontSizes.md }}>Cancel</Text>
               </TouchableOpacity>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>
-                New Category
+              <Text style={[styles.sheetTitle, { color: colors.text }]} accessibilityRole="header">
+                New category
               </Text>
-              <TouchableOpacity onPress={handleAddCategory}>
-                <Text style={[styles.modalSave, { color: colors.tint }]}>
-                  Add
-                </Text>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Add category" onPress={() => void add()} style={styles.sheetButton}>
+                <Text style={{ color: colors.tint, fontSize: FontSizes.md, fontWeight: '600' }}>Add</Text>
               </TouchableOpacity>
             </View>
 
-            <ScrollView
-              style={styles.modalScroll}
-              showsVerticalScrollIndicator={false}
-            >
-              {/* Category Name */}
-              <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
-                  Name
-                </Text>
-                <TextInput
-                  style={[
-                    styles.textInput,
-                    {
-                      backgroundColor: colors.card,
-                      borderColor: colors.border,
-                      color: colors.text,
-                    },
-                  ]}
-                  value={newLabel}
-                  onChangeText={setNewLabel}
-                  placeholder="e.g., Shopping, Entertainment"
-                  placeholderTextColor={colors.textSecondary}
-                  maxLength={20}
-                  autoFocus
-                />
+            <ScrollView contentContainerStyle={styles.sheetBody} keyboardShouldPersistTaps="handled">
+              <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Name</Text>
+              <TextInput
+                accessibilityLabel="Category name"
+                style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
+                value={label}
+                onChangeText={setLabel}
+                placeholder="e.g. Shopping"
+                placeholderTextColor={colors.textSecondary}
+                maxLength={24}
+                autoFocus
+              />
+
+              <View style={[styles.preview, { backgroundColor: color }]}>
+                <Ionicons name={iconOf(icon)} size={20} color="#FFFFFF" />
+                <Text style={styles.previewText}>{label || 'Category'}</Text>
               </View>
 
-              {/* Preview */}
-              <View style={styles.previewContainer}>
-                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
-                  Preview
-                </Text>
-                <View
-                  style={[
-                    styles.previewBadge,
-                    {
-                      backgroundColor: selectedColor,
-                    },
-                  ]}
-                >
-                  <View
-                    style={[
-                      styles.previewIcon,
-                      { backgroundColor: 'rgba(255, 255, 255, 0.2)' },
-                    ]}
+              <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Colour</Text>
+              <View style={styles.grid}>
+                {CATEGORY_COLORS.map((c) => (
+                  <TouchableOpacity
+                    key={c}
+                    accessibilityRole="radio"
+                    accessibilityLabel={`Colour ${c}`}
+                    accessibilityState={{ selected: color === c }}
+                    style={[styles.swatch, { backgroundColor: c }, color === c && styles.swatchSelected]}
+                    onPress={() => setColor(c)}
                   >
-                    <Ionicons
-                      name={getIconName(selectedIcon)}
-                      size={20}
-                      color="#fff"
-                    />
-                  </View>
-                  <Text style={styles.previewLabel}>
-                    {newLabel || 'Category'}
-                  </Text>
-                </View>
+                    {color === c ? <Ionicons name="checkmark" size={18} color="#FFFFFF" /> : null}
+                  </TouchableOpacity>
+                ))}
               </View>
 
-              {/* Color Picker */}
-              <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
-                  Color
-                </Text>
-                <View style={styles.colorGrid}>
-                  {AVAILABLE_COLORS.map((color) => (
-                    <TouchableOpacity
-                      key={color}
-                      style={[
-                        styles.colorOption,
-                        { backgroundColor: color },
-                        selectedColor === color && styles.colorSelected,
-                      ]}
-                      onPress={() => setSelectedColor(color)}
-                    >
-                      {selectedColor === color && (
-                        <Ionicons name="checkmark" size={16} color="#fff" />
-                      )}
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              {/* Icon Picker */}
-              <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
-                  Icon
-                </Text>
-                <View style={styles.iconGrid}>
-                  {AVAILABLE_ICONS.slice(0, 30).map((icon) => (
-                    <TouchableOpacity
-                      key={icon}
-                      style={[
-                        styles.iconOption,
-                        { backgroundColor: colors.surface },
-                        selectedIcon === icon && {
-                          backgroundColor: selectedColor,
-                        },
-                      ]}
-                      onPress={() => setSelectedIcon(icon)}
-                    >
-                      <Ionicons
-                        name={getIconName(icon)}
-                        size={20}
-                        color={selectedIcon === icon ? '#fff' : colors.text}
-                      />
-                    </TouchableOpacity>
-                  ))}
-                </View>
+              <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Icon</Text>
+              <View style={styles.grid}>
+                {CATEGORY_ICONS.map((name) => (
+                  <TouchableOpacity
+                    key={name}
+                    accessibilityRole="radio"
+                    accessibilityLabel={`Icon ${name}`}
+                    accessibilityState={{ selected: icon === name }}
+                    style={[styles.iconOption, { backgroundColor: icon === name ? color : colors.surface }]}
+                    onPress={() => setIcon(name)}
+                  >
+                    <Ionicons name={iconOf(name)} size={20} color={icon === name ? '#FFFFFF' : colors.text} />
+                  </TouchableOpacity>
+                ))}
               </View>
             </ScrollView>
           </View>
@@ -396,191 +167,28 @@ export default function CategoryManagerScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.md,
-    paddingBottom: Spacing.md,
-    borderBottomWidth: 1,
-  },
-  headerButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: FontSizes.lg,
-    fontWeight: '600',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: Spacing.lg,
-  },
-  card: {
-    borderRadius: BorderRadius.lg,
-    overflow: 'hidden',
-  },
-  categoryItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: Spacing.md,
-  },
-  categoryIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: BorderRadius.md,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: Spacing.md,
-  },
-  categoryInfo: {
-    flex: 1,
-  },
-  categoryLabel: {
-    fontSize: FontSizes.md,
-    fontWeight: '500',
-    marginBottom: 2,
-  },
-  categoryKey: {
-    fontSize: FontSizes.xs,
-  },
-  deleteButton: {
-    padding: Spacing.sm,
-  },
-  divider: {
-    height: 1,
-    marginLeft: Spacing.md + 44 + Spacing.md,
-  },
-  resetButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
-    marginTop: Spacing.lg,
-    gap: Spacing.sm,
-  },
-  resetButtonText: {
-    fontSize: FontSizes.md,
-  },
-  infoCard: {
-    flexDirection: 'row',
-    padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
-    marginTop: Spacing.lg,
-    gap: Spacing.sm,
-  },
-  infoText: {
-    flex: 1,
-    fontSize: FontSizes.sm,
-    lineHeight: 20,
-  },
-  // Modal styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    borderTopLeftRadius: BorderRadius.xl,
-    borderTopRightRadius: BorderRadius.xl,
-    maxHeight: '85%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: Spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  modalCancel: {
-    fontSize: FontSizes.md,
-  },
-  modalTitle: {
-    fontSize: FontSizes.lg,
-    fontWeight: '600',
-  },
-  modalSave: {
-    fontSize: FontSizes.md,
-    fontWeight: '600',
-  },
-  modalScroll: {
-    paddingHorizontal: Spacing.lg,
-  },
-  inputGroup: {
-    marginTop: Spacing.lg,
-  },
-  inputLabel: {
-    fontSize: FontSizes.sm,
-    fontWeight: '500',
-    marginBottom: Spacing.sm,
-  },
-  textInput: {
-    borderWidth: 1,
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-    fontSize: FontSizes.md,
-  },
-  previewContainer: {
-    marginTop: Spacing.lg,
-    alignItems: 'flex-start',
-  },
-  previewBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.md,
-    gap: Spacing.xs,
-  },
-  previewIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: BorderRadius.sm,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  previewLabel: {
-    fontSize: FontSizes.sm,
-    fontWeight: '500',
-    color: '#fff',
-  },
-  colorGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
-  },
-  colorOption: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  colorSelected: {
-    borderWidth: 3,
-    borderColor: '#fff',
-  },
-  iconGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
-  },
-  iconOption: {
-    width: 44,
-    height: 44,
-    borderRadius: BorderRadius.md,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  container: { flex: 1 },
+  content: { padding: Spacing.lg, gap: Spacing.lg },
+  addButton: { width: MIN_TOUCH_TARGET, height: MIN_TOUCH_TARGET, alignItems: 'center', justifyContent: 'center' },
+  card: { borderRadius: BorderRadius.lg, borderWidth: 1, overflow: 'hidden' },
+  item: { flexDirection: 'row', alignItems: 'center', padding: Spacing.md, minHeight: 64, gap: Spacing.md },
+  icon: { width: 44, height: 44, borderRadius: BorderRadius.md, justifyContent: 'center', alignItems: 'center' },
+  itemLabel: { flex: 1, fontSize: FontSizes.md, fontWeight: '500' },
+  delete: { width: MIN_TOUCH_TARGET, height: MIN_TOUCH_TARGET, alignItems: 'center', justifyContent: 'center' },
+  system: { fontSize: FontSizes.xs },
+  divider: { height: 1, marginLeft: Spacing.md + 44 + Spacing.md },
+  scrim: { flex: 1, justifyContent: 'flex-end' },
+  sheet: { borderTopLeftRadius: BorderRadius.xl, borderTopRightRadius: BorderRadius.xl, maxHeight: '88%' },
+  sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.md, borderBottomWidth: 1 },
+  sheetButton: { minHeight: MIN_TOUCH_TARGET, minWidth: 64, justifyContent: 'center', alignItems: 'center' },
+  sheetTitle: { fontSize: FontSizes.lg, fontWeight: '600' },
+  sheetBody: { padding: Spacing.lg, gap: Spacing.md },
+  fieldLabel: { fontSize: FontSizes.sm, fontWeight: '500', marginTop: Spacing.sm },
+  input: { borderWidth: 1, borderRadius: BorderRadius.md, paddingHorizontal: Spacing.md, minHeight: 48, fontSize: FontSizes.md },
+  preview: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, alignSelf: 'flex-start', paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, borderRadius: BorderRadius.md },
+  previewText: { color: '#FFFFFF', fontSize: FontSizes.sm, fontWeight: '600' },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  swatch: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
+  swatchSelected: { borderWidth: 3, borderColor: '#FFFFFF' },
+  iconOption: { width: 44, height: 44, borderRadius: BorderRadius.md, justifyContent: 'center', alignItems: 'center' },
 });
-

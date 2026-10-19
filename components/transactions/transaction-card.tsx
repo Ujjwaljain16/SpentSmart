@@ -1,134 +1,81 @@
-import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
-
-import { Transaction, CategoryInfo } from '@/types/transaction';
-import { DEFAULT_CATEGORIES } from '@/constants/categories';
-import { getCategories, AVAILABLE_ICONS } from '@/services/category-storage';
-import { Colors, BorderRadius, FontSizes, Spacing } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useSecurity } from '@/contexts/security-context';
+import React from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Money } from '@/components/ui/Money';
+import { BorderRadius, FontSizes, Spacing } from '@/constants/theme';
+import { useCategories } from '@/contexts/categories-context';
+import { isKnownIcon } from '@/domain/categories';
+import { Transaction } from '@/domain/types';
+import { useThemeColors } from '@/hooks/use-theme-colors';
 
 interface TransactionCardProps {
   transaction: Transaction;
   onDelete?: (id: string) => void;
   onEdit?: (transaction: Transaction) => void;
-  showDeleteButton?: boolean;
-  showEditButton?: boolean;
 }
 
-function TransactionCardComponent({
-  transaction,
-  onDelete,
-  onEdit,
-  showDeleteButton = true,
-  showEditButton = true,
-}: TransactionCardProps) {
-  const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? 'dark'];
-  const { isPrivacyModeEnabled } = useSecurity();
-  const [categoryInfo, setCategoryInfo] = useState<CategoryInfo>(
-    DEFAULT_CATEGORIES[transaction.category] || DEFAULT_CATEGORIES.other
-  );
-
-  useEffect(() => {
-    loadCategory();
-  }, [transaction.category]);
-
-  const loadCategory = async () => {
-    try {
-      const categories = await getCategories();
-      const found = categories.find(c => c.key === transaction.category);
-      if (found) {
-        setCategoryInfo(found);
-      }
-    } catch (error) {
-      // Use default category on error
-    }
-  };
-
-  const getIconName = (icon: string): keyof typeof Ionicons.glyphMap => {
-    if (AVAILABLE_ICONS.includes(icon)) {
-      return icon as keyof typeof Ionicons.glyphMap;
-    }
-    return 'pricetag';
-  };
-
-  const formattedDate = format(new Date(transaction.timestamp), 'MMM d, yyyy');
-  const formattedTime = format(new Date(transaction.timestamp), 'h:mm a');
+function TransactionCardComponent({ transaction, onDelete, onEdit }: TransactionCardProps) {
+  const colors = useThemeColors();
+  const { resolve } = useCategories();
+  const category = resolve(transaction.categoryKey);
+  const iconName = (isKnownIcon(category.icon) ? category.icon : 'pricetag') as keyof typeof Ionicons.glyphMap;
+  const isIncome = transaction.type === 'income';
+  const date = new Date(transaction.occurredAt);
+  const title = transaction.note || category.label;
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      {/* Category Icon */}
-      <View
-        style={[
-          styles.iconContainer,
-          { backgroundColor: `${categoryInfo.color}40` },
-        ]}
-      >
-        <Ionicons
-          name={getIconName(categoryInfo.icon)}
-          size={20}
-          color={categoryInfo.color}
-        />
+    <View
+      style={[styles.container, { backgroundColor: colors.card, borderColor: colors.border }]}
+      accessible
+      accessibilityLabel={`${isIncome ? 'Received from' : 'Paid to'} ${transaction.payeeName}, ${title}, ${format(date, 'd MMMM yyyy')}`}
+    >
+      <View style={[styles.iconContainer, { backgroundColor: `${category.color}33` }]}>
+        <Ionicons name={iconName} size={20} color={category.color} />
       </View>
 
-      {/* Transaction Details */}
       <View style={styles.details}>
-        <Text style={[styles.reason, { color: colors.text }]} numberOfLines={1}>
-          {transaction.reason || transaction.category}
+        <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
+          {title}
         </Text>
-        <Text
-          style={[styles.payee, { color: colors.textSecondary }]}
-          numberOfLines={1}
-        >
+        <Text style={[styles.payee, { color: colors.textSecondary }]} numberOfLines={1}>
           {transaction.payeeName}
         </Text>
-        <View style={styles.metaRow}>
-          <Text style={[styles.date, { color: colors.textSecondary }]}>
-            {formattedDate} • {formattedTime}
-          </Text>
-        </View>
+        <Text style={[styles.date, { color: colors.textSecondary }]}>
+          {format(date, 'MMM d, yyyy')} • {format(date, 'h:mm a')}
+        </Text>
       </View>
 
-      {/* Amount & Delete */}
-      <View style={styles.rightSection}>
-        <Text style={[
-          styles.amount,
-          { color: transaction.type === 'income' ? colors.success : colors.text }
-        ]}>
-          {transaction.type === 'income' ? '+' : '-'}
-          {isPrivacyModeEnabled ? '•••••' : `₹${transaction.amount.toLocaleString('en-IN', {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 2,
-          })}`}
-        </Text>
-        <View style={styles.actionButtons}>
-          {showEditButton && onEdit && (
-            <TouchableOpacity
-              style={styles.editButton}
-              onPress={() => onEdit(transaction)}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Ionicons name="pencil" size={18} color={colors.tint} />
-            </TouchableOpacity>
-          )}
-          {showDeleteButton && onDelete && (
-            <TouchableOpacity
-              style={styles.deleteButton}
-              onPress={() => onDelete(transaction.id)}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Ionicons name="trash-outline" size={18} color={colors.error} />
-            </TouchableOpacity>
-          )}
-        </View>
+      <View style={styles.right}>
+        <Money
+          paise={transaction.amountPaise}
+          options={{ sign: isIncome ? '+' : '-' }}
+          style={[styles.amount, { color: isIncome ? colors.success : colors.text }]}
+        />
+        {(onEdit || onDelete) && (
+          <View style={styles.actions}>
+            {onEdit && (
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={`Edit transaction with ${transaction.payeeName}`}
+                style={styles.actionButton}
+                onPress={() => onEdit(transaction)}
+              >
+                <Ionicons name="pencil" size={18} color={colors.tint} />
+              </TouchableOpacity>
+            )}
+            {onDelete && (
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={`Delete transaction with ${transaction.payeeName}`}
+                style={styles.actionButton}
+                onPress={() => onDelete(transaction.id)}
+              >
+                <Ionicons name="trash-outline" size={18} color={colors.error} />
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
       </View>
     </View>
   );
@@ -153,41 +100,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: Spacing.md,
   },
-  details: {
-    flex: 1,
-  },
-  reason: {
-    fontSize: FontSizes.md,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  payee: {
-    fontSize: FontSizes.sm,
-    marginBottom: 4,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  date: {
-    fontSize: FontSizes.xs,
-  },
-  rightSection: {
-    alignItems: 'flex-end',
-  },
-  amount: {
-    fontSize: FontSizes.lg,
-    fontWeight: '700',
-    marginBottom: Spacing.xs,
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    gap: Spacing.xs,
-  },
-  editButton: {
-    padding: Spacing.xs,
-  },
-  deleteButton: {
-    padding: Spacing.xs,
-  },
+  details: { flex: 1 },
+  title: { fontSize: FontSizes.md, fontWeight: '600', marginBottom: 2 },
+  payee: { fontSize: FontSizes.sm, marginBottom: 4 },
+  date: { fontSize: FontSizes.xs },
+  right: { alignItems: 'flex-end' },
+  amount: { fontSize: FontSizes.lg, fontWeight: '700', marginBottom: Spacing.xs },
+  actions: { flexDirection: 'row' },
+  actionButton: { padding: Spacing.sm, minWidth: 40, minHeight: 40, alignItems: 'center', justifyContent: 'center' },
 });

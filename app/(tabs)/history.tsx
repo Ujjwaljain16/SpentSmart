@@ -1,385 +1,186 @@
-import React, { useState, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  FlatList,
-  TouchableOpacity,
-  Alert,
-  RefreshControl,
-} from 'react-native';
-import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-
-import { Colors, BorderRadius, FontSizes, Spacing } from '@/constants/theme';
-import { Transaction, CategoryType } from '@/types/transaction';
-import { TransactionCard } from '@/components/transactions/transaction-card';
-import {
-  getAllTransactions,
-  searchTransactions,
-  deleteTransaction,
-} from '@/services/storage';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { DEFAULT_CATEGORIES, getCategories } from '@/services/category-storage';
-import { useSecurity } from '@/contexts/security-context';
+import React, { useCallback, useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, FlatList, RefreshControl, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CategoryPicker } from '@/components/transactions/category-picker';
-import { CategoryInfo } from '@/types/transaction';
+import { TransactionCard } from '@/components/transactions/transaction-card';
+import { useFormatMoney } from '@/components/ui/Money';
+import { BorderRadius, FontSizes, Spacing } from '@/constants/theme';
+import { useCategories } from '@/contexts/categories-context';
+import { useRepos } from '@/contexts/database-context';
+import { DateFilter, dateFilterStart } from '@/domain/periods';
+import { Category, Transaction } from '@/domain/types';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
+import { usePagedTransactions } from '@/hooks/use-paged-transactions';
+import { useThemeColors } from '@/hooks/use-theme-colors';
+import { log } from '@/lib/logger';
+import { routes } from '@/lib/routes';
 
-type DateFilter = 'all' | 'today' | 'week' | 'month' | 'year';
+const DATE_FILTERS: readonly DateFilter[] = ['all', 'today', 'week', 'month', 'year'];
+const DATE_LABELS: Record<DateFilter, string> = { all: 'All time', today: 'Today', week: 'This week', month: 'This month', year: 'This year' };
+const ALL_KEY = 'all';
 
 export default function HistoryScreen() {
-  const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? 'dark'];
-  const { isPrivacyModeEnabled } = useSecurity();
+  const colors = useThemeColors();
   const insets = useSafeAreaInsets();
+  const repos = useRepos();
+  const format = useFormatMoney();
+  const { categories } = useCategories();
 
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [categories, setCategories] = useState<CategoryInfo[]>(DEFAULT_CATEGORIES);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchText, setSearchText] = useState('');
+  const search = useDebouncedValue(searchText, 250);
+  const [categoryKey, setCategoryKey] = useState<string>(ALL_KEY);
+  const [dateFilter, setDateFilter] = useState<DateFilter>('all');
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<CategoryType | 'all'>('all');
-  const [selectedDateRange, setSelectedDateRange] = useState<DateFilter>('all');
 
-  const loadData = useCallback(async () => {
-    try {
-      const [txResults, catResults] = await Promise.all([
-        searchQuery.trim() ? searchTransactions(searchQuery) : getAllTransactions(),
-        getCategories()
-      ]);
+  const filter = useMemo(
+    () => ({
+      search,
+      categoryKey: categoryKey === ALL_KEY ? undefined : categoryKey,
+      since: dateFilterStart(dateFilter, new Date()),
+    }),
+    // `since` is derived from "now"; recomputing per filter change is intended.
+    [search, categoryKey, dateFilter],
+  );
+  const { items, summary, loading, loadingMore, hasMore, loadMore, reload } = usePagedTransactions(filter);
 
-      setCategories(catResults);
-
-      let results = txResults;
-
-      // Apply category filter
-      if (selectedCategory !== 'all') {
-        results = results.filter(tx => tx.category === selectedCategory);
-      }
-
-      // Apply date range filter
-      if (selectedDateRange !== 'all') {
-        const now = new Date();
-        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-        const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay()).getTime();
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-        const startOfYear = new Date(now.getFullYear(), 0, 1).getTime();
-
-        results = results.filter(tx => {
-          switch (selectedDateRange) {
-            case 'today':
-              return tx.timestamp >= startOfToday;
-            case 'week':
-              return tx.timestamp >= startOfWeek;
-            case 'month':
-              return tx.timestamp >= startOfMonth;
-            case 'year':
-              return tx.timestamp >= startOfYear;
-            default:
-              return true;
-          }
-        });
-      }
-
-      setTransactions(results);
-    } catch (error) {
-      console.error('Error loading data:', error);
-    }
-  }, [searchQuery, selectedCategory, selectedDateRange]);
-
-  useFocusEffect(
-    useCallback(() => {
-      loadData();
-    }, [loadData])
+  const pickerCategories = useMemo<readonly Category[]>(
+    () => [{ key: ALL_KEY, label: 'All categories', icon: 'apps', color: colors.text, sortOrder: -1, isSystem: true }, ...categories],
+    [categories, colors.text],
   );
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadData();
+    await reload();
     setRefreshing(false);
   };
 
-  const handleSearch = (text: string) => {
-    setSearchQuery(text);
-  };
-
-  const handleDelete = (id: string) => {
-    Alert.alert(
-      'Delete Transaction',
-      'Are you sure you want to delete this transaction?',
-      [
+  const handleDelete = useCallback(
+    (id: string) => {
+      Alert.alert('Delete transaction', 'Are you sure you want to delete this transaction?', [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: async () => {
-            await deleteTransaction(id);
-            loadData();
+          onPress: () => {
+            repos.transactions.remove(id).catch((error) => {
+              log.error('Delete failed', error);
+              Alert.alert('Error', 'The transaction could not be deleted.');
+            });
           },
         },
-      ]
-    );
-  };
-
-  const handleEdit = (transaction: Transaction) => {
-    const { router } = require('expo-router');
-    router.push({
-      pathname: '/edit-transaction',
-      params: {
-        id: transaction.id,
-        amount: transaction.amount.toString(),
-        category: transaction.category,
-        reason: transaction.reason || '',
-        payeeName: transaction.payeeName,
-        upiId: transaction.upiId,
-        type: transaction.type,
-        paymentMethod: transaction.paymentMethod,
-      },
-    });
-  };
-
-  const clearSearch = () => {
-    setSearchQuery('');
-  };
-
-  const renderTransaction = ({ item }: { item: Transaction }) => (
-    <TransactionCard
-      transaction={item}
-      onDelete={handleDelete}
-      onEdit={handleEdit}
-      showDeleteButton
-      showEditButton
-    />
+      ]);
+    },
+    [repos],
   );
 
-  const renderEmptyState = () => (
-    <View style={[styles.emptyState, { backgroundColor: colors.card }]}>
-      <Ionicons
-        name={searchQuery ? 'search-outline' : 'receipt-outline'}
-        size={48}
-        color={colors.textSecondary}
-      />
-      <Text style={[styles.emptyText, { color: colors.text }]}>
-        {searchQuery ? 'No matching transactions' : 'No transactions yet'}
-      </Text>
-      <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>
-        {searchQuery
-          ? 'Try a different search term'
-          : 'Your payment history will appear here'}
-      </Text>
-    </View>
-  );
+  const handleEdit = useCallback((t: Transaction) => router.push(routes.editTransaction(t.id)), []);
 
-  const totalAmount = transactions.reduce((sum, tx) => {
-    return tx.type === 'income' ? sum + tx.amount : sum - tx.amount;
-  }, 0);
+  const cycleDateFilter = () => setDateFilter(DATE_FILTERS[(DATE_FILTERS.indexOf(dateFilter) + 1) % DATE_FILTERS.length]!);
+
+  const isFiltered = searchText.trim() !== '' || categoryKey !== ALL_KEY || dateFilter !== 'all';
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+      <StatusBar style={colors.isDark ? 'light' : 'dark'} />
 
-      {/* Header */}
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: insets.top + Spacing.md,
-          },
-        ]}
-      >
-        <Text style={[styles.title, { color: colors.text }]}>History</Text>
+      <View style={[styles.header, { paddingTop: insets.top + Spacing.md }]}>
+        <Text style={[styles.title, { color: colors.text }]} accessibilityRole="header">
+          History
+        </Text>
 
-        {/* Search Bar */}
-        <View
-          style={[
-            styles.searchContainer,
-            {
-              backgroundColor: colors.card,
-              borderColor: colors.border,
-            },
-          ]}
-        >
-          <Ionicons
-            name="search"
-            size={20}
-            color={colors.textSecondary}
-            style={styles.searchIcon}
-          />
+        <View style={[styles.search, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Ionicons name="search" size={20} color={colors.textSecondary} style={styles.searchIcon} />
           <TextInput
+            accessibilityLabel="Search transactions"
             style={[styles.searchInput, { color: colors.text }]}
-            placeholder="Search by reason, payee, category..."
+            placeholder="Search by note, payee, category…"
             placeholderTextColor={colors.textSecondary}
-            value={searchQuery}
-            onChangeText={handleSearch}
+            value={searchText}
+            onChangeText={setSearchText}
             returnKeyType="search"
             autoCorrect={false}
           />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={clearSearch} style={styles.clearButton}>
-              <Ionicons
-                name="close-circle"
-                size={20}
-                color={colors.textSecondary}
-              />
+          {searchText.length > 0 && (
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => setSearchText('')} style={styles.clear}>
+              <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           )}
         </View>
 
-        {/* Filters */}
         <View style={styles.filterRow}>
-          <View style={{ flex: 1 }}>
-            <CategoryPicker
-              selectedCategory={selectedCategory}
-              onSelectCategory={(category) => setSelectedCategory(category)}
-              mode="dropdown"
-              compact
-              customCategories={[
-                { key: 'all', label: 'All Categories', icon: 'apps', color: colors.text } as CategoryInfo,
-                ...categories
-              ]}
-            />
+          <View style={styles.flex}>
+            <CategoryPicker selectedCategory={categoryKey} onSelectCategory={setCategoryKey} mode="dropdown" categories={pickerCategories} />
           </View>
-
           <TouchableOpacity
-            style={[styles.filterButton, { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={() => {
-              const ranges: DateFilter[] = ['all', 'today', 'week', 'month', 'year'];
-              const currentIndex = ranges.indexOf(selectedDateRange);
-              const nextIndex = (currentIndex + 1) % ranges.length;
-              setSelectedDateRange(ranges[nextIndex]);
-            }}
+            accessibilityRole="button"
+            accessibilityLabel={`Date filter: ${DATE_LABELS[dateFilter]}. Tap to change`}
+            style={[styles.dateButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={cycleDateFilter}
           >
-            <Text style={[styles.filterText, { color: colors.text }]}>
-              {selectedDateRange === 'all' ? 'All Time' :
-                selectedDateRange === 'today' ? 'Today' :
-                  selectedDateRange === 'week' ? 'This Week' :
-                    selectedDateRange === 'month' ? 'This Month' : 'This Year'}
-            </Text>
+            <Text style={[styles.dateText, { color: colors.text }]}>{DATE_LABELS[dateFilter]}</Text>
             <Ionicons name="chevron-down" size={16} color={colors.textSecondary} />
           </TouchableOpacity>
         </View>
 
-        {/* Summary */}
-        {transactions.length > 0 && (
-          <View style={styles.summary}>
-            <Text style={[styles.summaryText, { color: colors.textSecondary }]}>
-              {transactions.length} transaction{transactions.length !== 1 ? 's' : ''} •{' '}
-              <Text style={{ color: colors.text, fontWeight: '600' }}>
-                {isPrivacyModeEnabled ? '•••••' : `₹${totalAmount.toLocaleString('en-IN')}`}
-              </Text>
-            </Text>
-          </View>
+        {summary && summary.count > 0 && (
+          <Text style={[styles.summary, { color: colors.textSecondary }]}>
+            {summary.count} transaction{summary.count === 1 ? '' : 's'} • net{' '}
+            <Text style={{ color: colors.text, fontWeight: '600' }}>{format(Math.abs(summary.netPaise), { sign: summary.netPaise < 0 ? '-' : undefined })}</Text>
+          </Text>
         )}
       </View>
 
-      {/* Transaction List */}
       <FlatList
-        data={transactions}
+        data={items}
         keyExtractor={(item) => item.id}
-        renderItem={renderTransaction}
-        contentContainerStyle={[
-          styles.listContent,
-          transactions.length === 0 && styles.emptyListContent,
-        ]}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.tint}
-            colors={[colors.tint]}
-            progressBackgroundColor={colors.card}
-          />
+        renderItem={({ item }) => <TransactionCard transaction={item} onDelete={handleDelete} onEdit={handleEdit} />}
+        contentContainerStyle={[styles.list, items.length === 0 && styles.listEmpty]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.tint} colors={[colors.tint]} progressBackgroundColor={colors.card} />}
+        onEndReached={hasMore ? loadMore : undefined}
+        onEndReachedThreshold={0.6}
+        ListFooterComponent={loadingMore ? <ActivityIndicator style={styles.footer} color={colors.tint} /> : <View style={styles.bottomSpace} />}
+        ListEmptyComponent={
+          loading ? (
+            <ActivityIndicator color={colors.tint} />
+          ) : (
+            <View style={[styles.emptyState, { backgroundColor: colors.card }]}>
+              <Ionicons name={isFiltered ? 'search-outline' : 'receipt-outline'} size={48} color={colors.textSecondary} />
+              <Text style={[styles.emptyText, { color: colors.text }]}>{isFiltered ? 'No matching transactions' : 'No transactions yet'}</Text>
+              <Text style={[styles.emptySub, { color: colors.textSecondary }]}>{isFiltered ? 'Try a different search or filter' : 'Your payment history will appear here'}</Text>
+            </View>
+          )
         }
-        ListEmptyComponent={renderEmptyState}
         showsVerticalScrollIndicator={false}
-        initialNumToRender={10}
-        maxToRenderPerBatch={10}
-        windowSize={5}
+        initialNumToRender={12}
+        maxToRenderPerBatch={12}
+        windowSize={7}
+        removeClippedSubviews
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.md,
-  },
-  title: {
-    fontSize: FontSizes.xxl,
-    fontWeight: '700',
-    marginBottom: Spacing.md,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.md,
-  },
-  searchIcon: {
-    marginRight: Spacing.sm,
-  },
-  searchInput: {
-    flex: 1,
-    paddingVertical: Spacing.sm,
-    fontSize: FontSizes.md,
-  },
-  clearButton: {
-    padding: Spacing.xs,
-  },
-  summary: {
-    paddingTop: Spacing.sm,
-  },
-  summaryText: {
-    fontSize: FontSizes.sm,
-  },
-  filterRow: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    marginTop: Spacing.sm,
-    zIndex: 100, // Ensure dropdown appears above list
-  },
-  filterButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-  },
-  filterText: {
-    fontSize: FontSizes.sm,
-    fontWeight: '500',
-  },
-  listContent: {
-    padding: Spacing.lg,
-    paddingTop: Spacing.md,
-  },
-  emptyListContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
-  },
-  emptyState: {
-    padding: Spacing.xl,
-    borderRadius: BorderRadius.lg,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontSize: FontSizes.md,
-    fontWeight: '500',
-    marginTop: Spacing.md,
-    marginBottom: Spacing.xs,
-  },
-  emptySubtext: {
-    fontSize: FontSizes.sm,
-    textAlign: 'center',
-  },
+  container: { flex: 1 },
+  flex: { flex: 1 },
+  header: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.md, zIndex: 100 },
+  title: { fontSize: FontSizes.xxl, fontWeight: '700', marginBottom: Spacing.md },
+  search: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: BorderRadius.md, paddingHorizontal: Spacing.md },
+  searchIcon: { marginRight: Spacing.sm },
+  searchInput: { flex: 1, minHeight: 48, fontSize: FontSizes.md },
+  clear: { padding: Spacing.sm },
+  filterRow: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.sm },
+  dateButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderRadius: BorderRadius.md, paddingHorizontal: Spacing.md, minHeight: 44 },
+  dateText: { fontSize: FontSizes.sm, fontWeight: '500' },
+  summary: { fontSize: FontSizes.sm, paddingTop: Spacing.sm },
+  list: { padding: Spacing.lg, paddingTop: Spacing.md },
+  listEmpty: { flexGrow: 1, justifyContent: 'center' },
+  footer: { paddingVertical: Spacing.lg },
+  bottomSpace: { height: 100 },
+  emptyState: { padding: Spacing.xl, borderRadius: BorderRadius.lg, alignItems: 'center' },
+  emptyText: { fontSize: FontSizes.md, fontWeight: '500', marginTop: Spacing.md, marginBottom: Spacing.xs },
+  emptySub: { fontSize: FontSizes.sm, textAlign: 'center' },
 });

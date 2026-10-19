@@ -1,252 +1,90 @@
-import React, { useState, useEffect } from 'react';
-import {
-    View,
-    Text,
-    StyleSheet,
-    TouchableOpacity,
-    ScrollView,
-    Alert,
-    Platform,
-} from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import React, { useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AttemptReview } from '@/components/payment/AttemptReview';
+import { Button } from '@/components/ui/Button';
+import { ScreenHeader } from '@/components/ui/ScreenHeader';
+import { FontSizes, Spacing } from '@/constants/theme';
+import { useRepos } from '@/contexts/database-context';
+import { PaymentAttempt } from '@/db/repositories/attempts';
+import { Paise } from '@/domain/money';
+import { parseUpiResponse } from '@/domain/upi/response';
+import { useLiveQuery } from '@/hooks/use-live-query';
+import { useThemeColors } from '@/hooks/use-theme-colors';
+import { log } from '@/lib/logger';
+import { routes } from '@/lib/routes';
 
-import { Colors, BorderRadius, FontSizes, Spacing } from '@/constants/theme';
-import { PendingManager, PendingTransaction } from '@/services/pending-manager';
-import { saveTransaction } from '@/services/storage';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-
+/** Payments you started but never confirmed (for example because the app was closed while paying). */
 export default function RecoverPendingScreen() {
-    const [pendings, setPendings] = useState<PendingTransaction[]>([]);
-    const colorScheme = useColorScheme();
-    const colors = Colors[colorScheme ?? 'dark'];
-    const insets = useSafeAreaInsets();
+  const colors = useThemeColors();
+  const insets = useSafeAreaInsets();
+  const repos = useRepos();
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const { data: attempts, loading } = useLiveQuery((r) => r.attempts.listOpen());
 
-    useEffect(() => {
-        loadPendings();
-    }, []);
+  const guard = async (id: string, task: () => Promise<unknown>) => {
+    setBusyId(id);
+    try {
+      await task();
+    } catch (error) {
+      log.error('Resolving payment failed', error);
+      Alert.alert('Error', 'That did not work. Please try again.');
+    } finally {
+      setBusyId(null);
+    }
+  };
 
-    const loadPendings = async () => {
-        const activePendings = await PendingManager.getPendings();
-        setPendings(activePendings);
+  const record = (attempt: PaymentAttempt, paid: Paise) =>
+    guard(attempt.id, () => {
+      const response = parseUpiResponse(attempt.response);
+      return repos.attempts.record(attempt.id, { amountPaise: paid }, response.outcome === 'success' ? 'upi_result' : 'user', {
+        id: response.txnId,
+        ref: response.txnRef,
+      });
+    });
 
-        // If no pendings left, go back
-        if (activePendings.length === 0) {
-            router.replace('/(tabs)');
-        }
-    };
+  const empty = !loading && (attempts?.length ?? 0) === 0;
 
-    const handleResolve = async (tx: PendingTransaction, status: 'confirmed' | 'cancelled') => {
-        try {
-            if (status === 'confirmed') {
-                const amountNum = tx.paymentData.amount || 0;
-                await saveTransaction(
-                    tx.paymentData,
-                    tx.category,
-                    tx.reason,
-                    amountNum,
-                    tx.timestamp
-                );
-            }
+  return (
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar style={colors.isDark ? 'light' : 'dark'} />
+      <ScreenHeader title="Confirm payments" bordered />
 
-            await PendingManager.resolvePending(tx.id, status);
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing.xl }]} keyboardShouldPersistTaps="handled">
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+          You opened a UPI app but never told SpentSmart how it went. Confirm each payment, or decide later.
+        </Text>
 
-            // Update local state
-            setPendings(prev => prev.filter(p => p.id !== tx.id));
+        {empty ? (
+          <View style={styles.empty}>
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>All caught up</Text>
+            <Button label="Back to home" onPress={() => router.replace(routes.home)} />
+          </View>
+        ) : null}
 
-            if (pendings.length <= 1) {
-                router.replace('/(tabs)');
-            }
-        } catch (error) {
-            console.error('Failed to resolve pending:', error);
-            Alert.alert('Error', 'Failed to save transaction');
-        }
-    };
+        {(attempts ?? []).map((attempt) => (
+          <AttemptReview
+            key={attempt.id}
+            attempt={attempt}
+            busy={busyId === attempt.id}
+            onRecord={(paid) => void record(attempt, paid)}
+            onDiscard={() => void guard(attempt.id, () => repos.attempts.discard(attempt.id))}
+            onSnooze={() => void guard(attempt.id, () => repos.attempts.snooze(attempt.id))}
+          />
+        ))}
 
-    const getTimeAgo = (timestamp: number) => {
-        const seconds = Math.floor((Date.now() - timestamp) / 1000);
-        if (seconds < 60) return 'Just now';
-        const minutes = Math.floor(seconds / 60);
-        if (minutes < 60) return `${minutes}m ago`;
-        const hours = Math.floor(minutes / 60);
-        return `${hours}h ago`;
-    };
-
-    // Match theme background
-    const backgroundColor = colors.background;
-
-    return (
-        <View style={[styles.container, { backgroundColor }]}>
-            <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
-
-            {/* Header */}
-            <View style={[styles.header, { paddingTop: insets.top + Spacing.md, borderBottomColor: colors.border }]}>
-                <Text style={[styles.headerTitle, { color: colors.text }]}>
-                    Recover Payments
-                </Text>
-                <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
-                    You opened a UPI app but didn't confirm the payment.
-                </Text>
-            </View>
-
-            <ScrollView contentContainerStyle={styles.scrollContent}>
-                {pendings.map((tx) => {
-                    return (
-                        <View key={tx.id} style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}>
-                            <View style={styles.cardDetails}>
-                                <View style={styles.detailRow}>
-                                    <Text style={[styles.payeeName, { color: colors.text }]}>
-                                        {tx.paymentData.payeeName}
-                                    </Text>
-                                    <Text style={[styles.amount, { color: colors.text }]}>
-                                        ₹{tx.paymentData.amount?.toFixed(2) || '0.00'}
-                                    </Text>
-                                </View>
-                                <View style={styles.detailRow}>
-                                    <Text style={[styles.timestamp, { color: colors.textSecondary }]}>
-                                        {getTimeAgo(tx.timestamp)}
-                                    </Text>
-                                    <View style={[styles.categoryTag, { borderColor: colors.border, backgroundColor: colors.surface }]}>
-                                        <Text style={{ color: colors.textSecondary, fontSize: 10 }}>#{tx.category}</Text>
-                                    </View>
-                                </View>
-                                {tx.reason && (
-                                    <Text style={[styles.reason, { color: colors.textSecondary }]}>
-                                        "{tx.reason}"
-                                    </Text>
-                                )}
-                            </View>
-
-                            <View style={styles.cardActions}>
-                                <TouchableOpacity
-                                    style={[styles.actionButton, styles.cancelButton, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }]}
-                                    onPress={() => handleResolve(tx, 'cancelled')}
-                                >
-                                    <Ionicons name="close-outline" size={20} color={colors.text} />
-                                    <Text style={[styles.actionText, { color: colors.text }]}>Didn't Pay</Text>
-                                </TouchableOpacity>
-
-                                <TouchableOpacity
-                                    style={[styles.actionButton, styles.payButton, { backgroundColor: colors.tint }]}
-                                    onPress={() => handleResolve(tx, 'confirmed')}
-                                >
-                                    <Ionicons name="checkmark-outline" size={20} color="#fff" />
-                                    <Text style={[styles.actionText, { color: '#fff' }]}>Yes, Paid</Text>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                    );
-                })}
-            </ScrollView>
-
-            <TouchableOpacity
-                style={[styles.skipButton, { marginBottom: insets.bottom + Spacing.md }]}
-                onPress={() => router.replace('/(tabs)')}
-            >
-                <Text style={[styles.skipText, { color: colors.textSecondary }]}>Decide Later</Text>
-            </TouchableOpacity>
-        </View>
-    );
+        {(attempts?.length ?? 0) > 1 ? <Button label="Decide all later" variant="ghost" onPress={() => void repos.attempts.snoozeAll().then(() => router.replace(routes.home))} /> : null}
+      </ScrollView>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
-    header: {
-        paddingHorizontal: Spacing.lg,
-        paddingBottom: Spacing.lg,
-        borderBottomWidth: 1,
-    },
-    headerTitle: {
-        fontSize: FontSizes.xxl,
-        fontWeight: '800',
-        marginBottom: Spacing.xs,
-    },
-    headerSubtitle: {
-        fontSize: FontSizes.md,
-        lineHeight: 20,
-    },
-    scrollContent: {
-        padding: Spacing.lg,
-        gap: Spacing.md,
-    },
-    card: {
-        padding: Spacing.lg,
-        borderRadius: BorderRadius.xl,
-        borderWidth: 1,
-    },
-    cardHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        marginBottom: Spacing.md,
-    },
-    payeeName: {
-        fontSize: FontSizes.lg,
-        fontWeight: '700',
-    },
-    upiId: {
-        fontSize: FontSizes.sm,
-    },
-    cardDetails: {
-        marginBottom: Spacing.xl,
-    },
-    detailRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: Spacing.xs,
-    },
-    amount: {
-        fontSize: 24,
-        fontWeight: '800',
-    },
-    timestamp: {
-        fontSize: FontSizes.sm,
-    },
-    reason: {
-        fontSize: FontSizes.md,
-        fontStyle: 'italic',
-        marginBottom: Spacing.sm,
-    },
-    categoryTag: {
-        fontSize: FontSizes.xs,
-        fontWeight: '600',
-        alignSelf: 'flex-start',
-        borderWidth: 1,
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderRadius: BorderRadius.full,
-    },
-    cardActions: {
-        flexDirection: 'row',
-        gap: Spacing.md,
-    },
-    actionButton: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: Spacing.md,
-        borderRadius: BorderRadius.lg,
-        gap: Spacing.xs,
-    },
-    cancelButton: {},
-    payButton: {},
-    actionText: {
-        fontWeight: '700',
-        fontSize: FontSizes.md,
-    },
-    skipButton: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: Spacing.md,
-    },
-    skipText: {
-        fontSize: FontSizes.md,
-        fontWeight: '600',
-    },
+  container: { flex: 1 },
+  content: { padding: Spacing.lg, gap: Spacing.md },
+  subtitle: { fontSize: FontSizes.md, lineHeight: 22 },
+  empty: { alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.xxl },
+  emptyTitle: { fontSize: FontSizes.xl, fontWeight: '700' },
 });

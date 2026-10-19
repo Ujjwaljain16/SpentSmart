@@ -1,541 +1,371 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
-} from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-
-import { Colors, BorderRadius, FontSizes, Spacing } from '@/constants/theme';
-import { CategoryType } from '@/types/transaction';
-import { CategoryPicker } from '@/components/transactions/category-picker';
-import { PhonePeIcon, GPayIcon, QRIcon } from '@/components/payment/BrandIcons';
-import { saveTransaction } from '@/services/storage';
-import { buildUPIUrl } from '@/constants/upi-config';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, AppState, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { HiddenQrRenderer } from '@/components/payment/HiddenQrRenderer';
+import { AttemptReview } from '@/components/payment/AttemptReview';
 import { QRPaymentGenerator } from '@/components/payment/QRPaymentGenerator';
-import { openUPIApp, getInstalledUPIApps, getPreferredUPIApp, setPreferredUPIApp, UPIAppInfo, UPI_APPS } from '@/services/upi-app-launcher';
-import { usePaymentConfirmation } from '@/hooks/usePaymentConfirmation';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { PendingManager } from '@/services/pending-manager';
+import { CategoryPicker } from '@/components/transactions/category-picker';
+import { Button } from '@/components/ui/Button';
+import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { SlideToPay } from '@/components/ui/SlideToPay';
-import { ConfirmationModal } from '@/components/ui/ConfirmationModal';
-import { shareQRToGPay } from '@/services/silent-qr-share';
+import { GPAY_PACKAGE } from '@/constants/upi-apps';
+import { BorderRadius, FontSizes, MIN_TOUCH_TARGET, Spacing } from '@/constants/theme';
+import { useRepos } from '@/contexts/database-context';
+import { useSettings } from '@/contexts/settings-context';
+import { PaymentAttempt } from '@/db/repositories/attempts';
+import { Paise, paiseToDecimal, parseRupees } from '@/domain/money';
+import { PaymentDraft, draftFromParams } from '@/domain/payment-draft';
+import { buildPayUri } from '@/domain/upi/build';
+import { parseUpiResponse } from '@/domain/upi/response';
+import { useThemeColors } from '@/hooks/use-theme-colors';
+import { clearPaymentDraft, peekPaymentDraft } from '@/lib/payment-draft-store';
+import { log } from '@/lib/logger';
+import { routes } from '@/lib/routes';
+import { UpiAppChoice, beginPayment, beginQrSharePayment, listUpiApps } from '@/services/payments';
 
 export default function PaymentScreen() {
-  const params = useLocalSearchParams<{
-    upiId: string;
-    payeeName: string;
-    amount: string;
-    transactionNote: string;
-    rawParams?: string;
-    initialCategory?: CategoryType;
-  }>();
-
-  const paymentData = {
-    upiId: params.upiId || 'unknown@upi',
-    payeeName: params.payeeName || 'Unknown Payee',
-    amount: params.amount,
-    transactionNote: params.transactionNote || '',
-  };
-
-  const rawParams: Record<string, string> | undefined = params.rawParams
-    ? JSON.parse(atob(params.rawParams))
-    : undefined;
-
-  const [amount, setAmount] = useState(paymentData.amount || '');
-  const [transactionNote, setTransactionNote] = useState(paymentData.transactionNote || '');
-  const [category, setCategory] = useState<CategoryType>(params.initialCategory as CategoryType || 'food');
-  const [isLoading, setIsLoading] = useState(false);
-  const [installedApps, setInstalledApps] = useState<UPIAppInfo[]>([]);
-  const [preferredApp, setPreferredApp] = useState<string | null>(null);
-  const [showQRGenerator, setShowQRGenerator] = useState(false);
-
+  const colors = useThemeColors();
   const insets = useSafeAreaInsets();
-  const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? 'dark'];
+  const repos = useRepos();
+  const { settings, setSetting } = useSettings();
+  const params = useLocalSearchParams();
 
-  const { showConfirmation, confidenceScore, hideConfirmation } = usePaymentConfirmation();
+  // The scanner hands over a validated draft; manual entry / deep links go through strict param validation.
+  const draft: PaymentDraft | null = useMemo(() => peekPaymentDraft() ?? draftFromParams(params), [params]);
+  useEffect(() => () => clearPaymentDraft(), []);
+
+  const [amountText, setAmountText] = useState(draft?.amountPaise !== undefined ? paiseToDecimal(draft.amountPaise) : '');
+  const [note, setNote] = useState(draft?.note ?? '');
+  const [categoryKey, setCategoryKey] = useState(draft?.categoryKey ?? 'food');
+  const [apps, setApps] = useState<UpiAppChoice[] | null>(null);
+  const [selectedApp, setSelectedApp] = useState<string | null>(null);
+  const [showQr, setShowQr] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [review, setReview] = useState<PaymentAttempt | null>(null);
+  const [recording, setRecording] = useState(false);
+  const [resetToken, setResetToken] = useState(0);
+  const [qrValue, setQrValue] = useState<string | null>(null);
+  const qrResolver = useRef<((png: string | null) => void) | null>(null);
+  const awaitingReturn = useRef<string | null>(null);
+
+  const amountPaise: Paise | null = parseRupees(amountText);
+  const canPay = amountPaise !== null && draft !== null;
 
   useEffect(() => {
-    const restoreState = async () => {
-      try {
-        const activePendings = await PendingManager.getPendings();
-        if (activePendings.length > 0) {
-          const recent = activePendings[0];
-          if (Date.now() - recent.timestamp < 5 * 60 * 1000) {
-            if (recent.paymentData.amount) setAmount(recent.paymentData.amount.toString());
-            if (recent.reason) setTransactionNote(recent.reason);
-            if (recent.category) setCategory(recent.category);
-          }
-        }
-      } catch (e) {
-        console.warn('Failed to restore pending state', e);
-      }
-    };
-    restoreState();
-  }, []);
-
-  useEffect(() => {
-    loadApps();
-  }, []);
-
-  const loadApps = async () => {
-    setIsLoading(true);
-    try {
-      const apps = await getInstalledUPIApps();
-      setInstalledApps(apps);
-      const savedPref = await getPreferredUPIApp();
-      if (savedPref) setPreferredApp(savedPref);
-    } catch (error) {
-      console.error('Failed to load UPI apps:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const currentAmount = parseFloat(amount);
-  const canPay = !isNaN(currentAmount) && currentAmount > 0;
-
-  const handleOpenUPIApp = async (appId: string) => {
-    if (!canPay) {
-      Alert.alert('Invalid Amount', 'Please enter a valid amount');
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      await setPreferredUPIApp(appId);
-
-      const pendingId = `pending_${Date.now()}`;
-
-      await PendingManager.savePending({
-        id: pendingId,
-        paymentData: {
-          upiId: paymentData.upiId,
-          payeeName: paymentData.payeeName,
-          amount: currentAmount,
-          transactionNote: transactionNote || paymentData.transactionNote,
-          rawParams: rawParams
-        },
-        category: category,
-        reason: transactionNote || paymentData.transactionNote,
-        timestamp: Date.now(),
-        status: 'pending',
-        launchedApp: appId
-      });
-
-      const isGPay = appId.includes('gpay') || appId.includes('tez') || appId === 'com.google.android.apps.nbu.paisa.user';
-
-      if (isGPay) {
-        const success = await shareQRToGPay({
-          upiId: paymentData.upiId,
-          payeeName: paymentData.payeeName,
-          amount: currentAmount,
-          transactionNote: transactionNote || paymentData.transactionNote,
-        });
-
-        if (!success) {
-          const upiUrl = buildUPIUrl({
-            upiId: paymentData.upiId,
-            payeeName: paymentData.payeeName,
-            amount: currentAmount,
-            transactionNote: transactionNote || paymentData.transactionNote,
-            rawParams: rawParams,
-          });
-          await openUPIApp(appId, upiUrl);
-        }
-      } else {
-        const upiUrl = buildUPIUrl({
-          upiId: paymentData.upiId,
-          payeeName: paymentData.payeeName,
-          amount: currentAmount,
-          transactionNote: transactionNote || paymentData.transactionNote,
-          rawParams: rawParams,
-        });
-        await openUPIApp(appId, upiUrl);
-      }
-
-    } catch (error) {
-      console.error('Payment failed:', error);
-      Alert.alert('Error', 'Could not open UPI app');
-      setIsLoading(false);
-    }
-  };
-
-  const handleConfirmPayment = async () => {
-    try {
-      const activePendings = await PendingManager.getPendings();
-
-      if (activePendings.length > 0) {
-        const pending = activePendings.find(p => Math.abs((p.paymentData.amount || 0) - currentAmount) < 0.1);
-        const targetPending = pending || activePendings[0];
-
-        const finalNote = targetPending.reason || targetPending.paymentData.transactionNote || transactionNote;
-        const finalCategory = targetPending.category || category;
-
-        await saveTransaction(
-          {
-            upiId: paymentData.upiId,
-            payeeName: paymentData.payeeName,
-            amount: currentAmount,
-            transactionNote: finalNote || paymentData.transactionNote,
-            rawParams
-          },
-          finalCategory,
-          finalNote || paymentData.transactionNote || `Paid to ${paymentData.payeeName}`,
-          currentAmount,
-          targetPending.timestamp
-        );
-
-        await PendingManager.resolvePending(targetPending.id, 'confirmed');
-      } else {
-        await saveTransaction(
-          {
-            upiId: paymentData.upiId,
-            payeeName: paymentData.payeeName,
-            amount: currentAmount,
-            transactionNote: transactionNote || paymentData.transactionNote,
-            rawParams
-          },
-          category,
-          transactionNote || paymentData.transactionNote || `Paid to ${paymentData.payeeName}`,
-          currentAmount,
-          Date.now()
-        );
-      }
-
-      router.replace('/(tabs)');
-    } catch (error) {
-      console.error("Error saving transaction", error);
-      Alert.alert("Error", "Could not save transaction.");
-    }
-  };
-
-  const handleCancelPayment = async () => {
-    const activePendings = await PendingManager.getPendings();
-    const pending = activePendings.find(p => Math.abs((p.paymentData.amount || 0) - currentAmount) < 0.1);
-    const idToResolve = pending ? pending.id : (activePendings[0]?.id);
-
-    if (idToResolve) {
-      await PendingManager.resolvePending(idToResolve, 'cancelled');
-    }
-
-    hideConfirmation();
-    router.replace('/');
-  };
-
-  if (showQRGenerator) {
-    const upiUrl = buildUPIUrl({
-      upiId: paymentData.upiId,
-      payeeName: paymentData.payeeName,
-      amount: parseFloat(amount) || 0,
-      transactionNote: paymentData.transactionNote,
-      rawParams: rawParams,
+    let alive = true;
+    listUpiApps().then((found) => {
+      if (!alive) return;
+      setApps(found);
+      const preferred = found.find((a) => a.packageName === settings.preferredUpiApp) ?? found.find((a) => a.packageName === GPAY_PACKAGE) ?? found[0];
+      setSelectedApp(preferred?.packageName ?? null);
     });
+    return () => {
+      alive = false;
+    };
+    // Detect apps once; the preferred app is only a default.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
+  // Some UPI apps give no result. When the user comes back to SpentSmart, ask them what happened.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', async (state) => {
+      const id = awaitingReturn.current;
+      if (state !== 'active' || !id) return;
+      awaitingReturn.current = null;
+      try {
+        await repos.attempts.markReturned(id, { suggestion: 'unsure', response: null });
+        setReview(await repos.attempts.get(id));
+      } catch (error) {
+        log.error('Could not open payment review', error);
+      }
+    });
+    return () => sub.remove();
+  }, [repos]);
+
+  const startPayment = useCallback(
+    async (options: { packageName: string | null; withoutAmount?: boolean }) => {
+      if (!draft || amountPaise === null || busy) return;
+      setBusy(true);
+      try {
+        if (options.packageName) await setSetting('preferredUpiApp', options.packageName).catch(() => undefined);
+        const result = await beginPayment(repos, {
+          draft,
+          amountPaise,
+          note: note.trim() || undefined,
+          categoryKey,
+          appPackage: options.packageName,
+          withoutAmount: options.withoutAmount,
+        });
+
+        switch (result.launch.kind) {
+          case 'result':
+            setReview(result.attempt);
+            break;
+          case 'launched_without_result':
+            awaitingReturn.current = result.attempt.id;
+            break;
+          case 'no_app':
+            Alert.alert('No UPI app found', 'Install a UPI app such as Google Pay, PhonePe or Paytm, or pay with the QR code instead.');
+            setResetToken((n) => n + 1);
+            break;
+          case 'error':
+            Alert.alert('Could not open the UPI app', 'Please try again, or pay with the QR code instead.');
+            setResetToken((n) => n + 1);
+            break;
+        }
+      } catch (error) {
+        log.error('Payment could not be started', error);
+        Alert.alert('Error', 'The payment could not be started. Nothing was charged.');
+        setResetToken((n) => n + 1);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [draft, amountPaise, busy, note, categoryKey, repos, setSetting],
+  );
+
+  const payWithGooglePayQr = useCallback(async () => {
+    if (!draft || amountPaise === null || busy) return;
+    setBusy(true);
+    try {
+      const attempt = await beginQrSharePayment(repos, {
+        draft,
+        amountPaise,
+        note: note.trim() || undefined,
+        categoryKey,
+        renderQr: (txnRef) =>
+          new Promise<string | null>((resolve) => {
+            qrResolver.current = resolve;
+            setQrValue(buildPayUri({ vpa: draft.vpa, payeeName: draft.payeeName, amountPaise, note: note.trim() || undefined, txnRef, source: draft.source }));
+            setTimeout(() => resolve(null), 4000);
+          }),
+      });
+      if (attempt) awaitingReturn.current = attempt.id;
+      else Alert.alert('Google Pay unavailable', 'The QR code could not be sent to Google Pay.');
+    } finally {
+      setBusy(false);
+    }
+  }, [draft, amountPaise, busy, note, categoryKey, repos]);
+
+  const handleQrReady = useCallback((png: string) => {
+    qrResolver.current?.(png);
+    qrResolver.current = null;
+  }, []);
+
+  const record = async (attempt: PaymentAttempt, paid: Paise) => {
+    setRecording(true);
+    try {
+      const response = parseUpiResponse(attempt.response);
+      await repos.attempts.record(
+        attempt.id,
+        { amountPaise: paid, categoryKey, note: note.trim() || null },
+        response.outcome === 'success' ? 'upi_result' : 'user',
+        { id: response.txnId, ref: response.txnRef },
+      );
+      setReview(null);
+      router.replace(routes.home);
+    } catch (error) {
+      log.error('Could not record payment', error);
+      Alert.alert('Error', 'The payment could not be saved. Please try again.');
+    } finally {
+      setRecording(false);
+    }
+  };
+
+  const discard = async (attempt: PaymentAttempt) => {
+    await repos.attempts.discard(attempt.id);
+    setReview(null);
+    setResetToken((n) => n + 1);
+  };
+
+  const snooze = async (attempt: PaymentAttempt) => {
+    await repos.attempts.snooze(attempt.id);
+    setReview(null);
+    router.replace(routes.home);
+  };
+
+  const retryWithoutAmount = async (attempt: PaymentAttempt) => {
+    await repos.attempts.discard(attempt.id);
+    setReview(null);
+    await startPayment({ packageName: attempt.appPackage, withoutAmount: true });
+  };
+
+  if (!draft) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <ScreenHeader title="Payment" leading="close" />
+        <View style={styles.invalid}>
+          <Ionicons name="warning-outline" size={48} color={colors.warning} />
+          <Text style={[styles.invalidTitle, { color: colors.text }]}>This payment link isn’t valid</Text>
+          <Text style={[styles.invalidText, { color: colors.textSecondary }]}>It is missing a valid UPI ID or has an invalid amount, so it was not opened.</Text>
+          <Button label="Go back" onPress={() => router.back()} style={styles.wide} />
+        </View>
+      </View>
+    );
+  }
+
+  if (showQr) {
+    const uri = buildPayUri({ vpa: draft.vpa, payeeName: draft.payeeName, amountPaise: amountPaise ?? undefined, note: note.trim() || undefined, source: draft.source });
     return (
       <QRPaymentGenerator
-        upiUrl={upiUrl}
-        payeeName={paymentData.payeeName}
-        upiId={paymentData.upiId}
-        amount={parseFloat(amount)}
-        onClose={() => setShowQRGenerator(false)}
+        upiUrl={uri}
+        payeeName={draft.payeeName}
+        upiId={draft.vpa}
+        amountPaise={amountPaise ?? undefined}
+        onClose={() => setShowQr(false)}
+        onPaidViaQr={async () => {
+          if (amountPaise === null) {
+            Alert.alert('Enter an amount', 'Enter the amount you paid first.');
+            setShowQr(false);
+            return;
+          }
+          const attempt = await repos.attempts.create({ vpa: draft.vpa, payeeName: draft.payeeName, amountPaise, note: note.trim() || null, categoryKey, appPackage: null, txnRef: null });
+          setShowQr(false);
+          setReview(attempt);
+        }}
       />
     );
   }
 
-  const showManualAppSelector = () => {
-    Alert.alert(
-      'Select Payment App',
-      'Choose an app to pay with:',
-      [
-        ...installedApps.map((app: UPIAppInfo) => ({
-          text: app.name,
-          onPress: () => handleOpenUPIApp(app.id)
-        })),
-        { text: 'Cancel', style: 'cancel' }
-      ]
-    );
-  };
-
-  const gpayApp = installedApps.find(a => a.id.includes('gpay') || a.id.includes('tez') || a.name.toLowerCase().includes('google'));
-  const primaryApp = gpayApp || installedApps[0];
-
-  const getAppIcon = (app: UPIAppInfo, size = 24) => {
-    const id = app.id.toLowerCase();
-    const name = app.name.toLowerCase();
-    if (id.includes('phonepe') || name.includes('phonepe')) return <PhonePeIcon size={size} />;
-    if (id.includes('tez') || id.includes('google') || name.includes('gpay')) return <GPayIcon size={size} />;
-    return <Ionicons name="wallet-outline" size={size * 0.75} color={colors.text} />;
-  };
+  const selected = apps?.find((a) => a.packageName === selectedApp);
+  const canEditAmount = draft.amountEditable;
 
   return (
-    <>
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+    <KeyboardAvoidingView style={[styles.container, { backgroundColor: colors.background }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <StatusBar style={colors.isDark ? 'light' : 'dark'} />
+      <ScreenHeader title={draft.payeeName} leading="close" />
 
-        <View style={[styles.header, { paddingTop: insets.top + Spacing.sm }]}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
-            <Ionicons name="close" size={24} color={colors.text} />
-          </TouchableOpacity>
-
-          <View style={{ alignItems: 'center' }}>
-            <Text style={[styles.payeeName, { color: colors.text }]}>
-              {paymentData.payeeName}
-            </Text>
-            <TouchableOpacity
-              style={styles.vpaContainer}
-              onPress={() => Alert.alert('Copied', paymentData.upiId)}
-            >
-              <Text style={[styles.vpaText, { color: colors.textSecondary }]}>
-                {paymentData.upiId}
-              </Text>
-              <Ionicons name="copy-outline" size={12} color={colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-
-          <View style={{ width: 40 }} />
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <Text style={[styles.vpa, { color: colors.textSecondary }]} selectable accessibilityLabel={`UPI ID ${draft.vpa}`}>
+          {draft.vpa}
+        </Text>
+        <View style={[styles.banner, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Ionicons name={draft.source?.isMerchant ? 'storefront-outline' : 'person-outline'} size={16} color={colors.textSecondary} />
+          <Text style={[styles.bannerText, { color: colors.textSecondary }]}>
+            The name comes from the QR code and isn’t verified. Check the UPI ID before you pay.
+          </Text>
         </View>
 
-        <View style={[styles.secureBanner, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Ionicons name="shield-checkmark" size={14} color={colors.success} />
-          <Text style={[styles.secureText, { color: colors.text }]}>Secure Payment Mode</Text>
+        <View style={styles.amountRow}>
+          <Text style={[styles.currency, { color: colors.text }]}>₹</Text>
+          <TextInput
+            accessibilityLabel="Amount in rupees"
+            style={[styles.amountInput, { color: colors.text }]}
+            value={amountText}
+            onChangeText={setAmountText}
+            placeholder="0"
+            placeholderTextColor={colors.textSecondary}
+            keyboardType="decimal-pad"
+            editable={canEditAmount}
+            autoFocus={canEditAmount && !amountText}
+          />
+        </View>
+        {amountText !== '' && amountPaise === null ? (
+          <Text style={[styles.error, { color: colors.error }]}>Enter an amount like 250 or 250.50 (up to ₹1 crore).</Text>
+        ) : null}
+        {!canEditAmount ? <Text style={[styles.fixed, { color: colors.textSecondary }]}>The amount is set by the merchant’s QR code.</Text> : null}
+
+        <View style={styles.section}>
+          <CategoryPicker selectedCategory={categoryKey} onSelectCategory={setCategoryKey} mode="chips" exclude={['income']} />
         </View>
 
-        <View style={styles.mainContent}>
-          <View style={{ alignItems: 'center', marginBottom: 32 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={[styles.currencySymbol, { color: colors.text }]}>₹</Text>
-              <TextInput
-                style={[
-                  styles.amountInput,
-                  { color: colors.text }
-                ]}
-                value={amount}
-                onChangeText={setAmount}
-                placeholder="0"
-                placeholderTextColor={colors.textSecondary}
-                keyboardType="decimal-pad"
-                autoFocus
-              />
-            </View>
-          </View>
+        <TextInput
+          accessibilityLabel="Note"
+          style={[styles.note, { color: colors.text, backgroundColor: colors.card, borderColor: colors.border }]}
+          value={note}
+          onChangeText={setNote}
+          placeholder="Add a note (optional)"
+          placeholderTextColor={colors.textSecondary}
+          maxLength={80}
+        />
+      </ScrollView>
 
-          <View style={{ height: 50 }}>
-            <CategoryPicker
-              selectedCategory={category}
-              onSelectCategory={setCategory}
-              mode="chips"
-            />
-          </View>
+      <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.lg }]}>
+        {apps === null ? (
+          <ActivityIndicator color={colors.tint} />
+        ) : apps.length > 0 ? (
+          <>
+            <SlideToPay appName={selected?.name ?? 'UPI app'} disabled={!canPay || busy} resetToken={resetToken} onSuccess={() => void startPayment({ packageName: selected?.packageName ?? null })} />
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.appRow} keyboardShouldPersistTaps="handled">
+              {apps.map((app) => {
+                const active = app.packageName === selectedApp;
+                return (
+                  <TouchableOpacity
+                    key={app.packageName}
+                    accessibilityRole="radio"
+                    accessibilityLabel={`Pay with ${app.name}`}
+                    accessibilityState={{ selected: active }}
+                    style={[styles.appChip, { backgroundColor: active ? colors.tint : colors.card, borderColor: active ? colors.tint : colors.border }]}
+                    onPress={() => setSelectedApp(app.packageName)}
+                  >
+                    <Text style={{ color: active ? colors.onTint : colors.text, fontSize: FontSizes.sm, fontWeight: '600' }}>{app.name}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </>
+        ) : (
+          <Button label="Choose a UPI app" disabled={!canPay || busy} loading={busy} onPress={() => void startPayment({ packageName: null })} />
+        )}
 
-          <View style={styles.noteContainer}>
-            <TextInput
-              style={[styles.noteInput, { color: colors.text, backgroundColor: colors.card, borderColor: colors.border }]}
-              value={transactionNote}
-              onChangeText={setTransactionNote}
-              placeholder="Add a note (optional)"
-              placeholderTextColor={colors.textSecondary}
-              maxLength={100}
-            />
-          </View>
-
+        <View style={styles.altRow}>
+          <Button label="Show QR code" variant="secondary" onPress={() => setShowQr(true)} style={styles.flex} disabled={busy} />
+          {apps?.some((a) => a.packageName === GPAY_PACKAGE) ? (
+            <Button label="Send QR to GPay" variant="secondary" onPress={() => void payWithGooglePayQr()} style={styles.flex} disabled={!canPay || busy} accessibilityLabel="Send this payment as a QR code to Google Pay" />
+          ) : null}
         </View>
-
-        <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.lg }]}>
-          <View style={styles.slideContainer}>
-            {installedApps.length > 0 ? (
-              <SlideToPay
-                appName={primaryApp?.name || "UPI App"}
-                onSuccess={() => handleOpenUPIApp(primaryApp?.id || installedApps[0].id)}
-                disabled={!canPay}
-                width="100%"
-              />
-            ) : (
-              <TouchableOpacity
-                style={[styles.fallbackButton, { backgroundColor: canPay ? colors.tint : colors.border }]}
-                onPress={showManualAppSelector}
-                disabled={!canPay}
-              >
-                <Text style={styles.fallbackButtonText}>Pay Now</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          <View style={styles.appIconsRow}>
-            {installedApps.find(a => a.id.includes('phonepe')) && (
-              <TouchableOpacity
-                style={[styles.iconButton, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
-                onPress={() => handleOpenUPIApp('com.phonepe.app')}
-              >
-                <PhonePeIcon size={18} />
-                <Text style={[styles.iconLabel, { color: colors.text }]}>PhonePe</Text>
-              </TouchableOpacity>
-            )}
-
-            <TouchableOpacity
-              style={[styles.iconButton, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1 }]}
-              onPress={() => setShowQRGenerator(true)}
-            >
-              <QRIcon size={18} />
-              <Text style={[styles.iconLabel, { color: colors.text }]}>QR</Text>
-            </TouchableOpacity>
-          </View>
-
-        </View>
-
+        {apps !== null && apps.length > 0 ? (
+          <Button label="Use another UPI app…" variant="ghost" disabled={!canPay || busy} onPress={() => void startPayment({ packageName: null })} />
+        ) : null}
       </View>
 
-      <ConfirmationModal
-        visible={showConfirmation}
-        amount={amount}
-        payeeName={paymentData.payeeName}
-        note={transactionNote || paymentData.transactionNote}
-        confidenceScore={confidenceScore}
-        onConfirm={handleConfirmPayment}
-        onCancel={handleCancelPayment}
-        onMaybe={() => {
-          hideConfirmation();
-          router.replace('/');
-        }}
-      />
-    </>
+      <Modal visible={review !== null} transparent animationType="slide" onRequestClose={() => review && void snooze(review)}>
+        <View style={[styles.modalScrim, { backgroundColor: colors.scrim }]}>
+          <ScrollView contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled">
+            {review ? (
+              <AttemptReview
+                attempt={review}
+                busy={recording}
+                onRecord={(paid) => void record(review, paid)}
+                onDiscard={() => void discard(review)}
+                onSnooze={() => void snooze(review)}
+                onRetryWithoutAmount={!draft.source?.isSigned && review.amountPaise !== null ? () => void retryWithoutAmount(review) : undefined}
+              />
+            ) : null}
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {qrValue ? <HiddenQrRenderer value={qrValue} onReady={handleQrReady} /> : null}
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.md,
-    paddingBottom: Spacing.sm,
-  },
-  headerButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: BorderRadius.full,
-    backgroundColor: 'rgba(0,0,0,0.05)',
-  },
-  payeeName: {
-    fontSize: FontSizes.lg,
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  vpaContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  vpaText: {
-    fontSize: FontSizes.sm,
-  },
-  secureBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: BorderRadius.full,
-    borderWidth: 1,
-    marginTop: Spacing.xs,
-    gap: 6,
-  },
-  secureText: {
-    fontSize: FontSizes.xs,
-    fontWeight: '600',
-  },
-  mainContent: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: 100, // Visual offset
-  },
-  inlineRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  amountContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingRight: Spacing.md,
-  },
-  currencySymbol: {
-    fontSize: 40,
-    fontWeight: '700',
-    marginRight: 4,
-  },
-  amountInput: {
-    fontSize: 56,
-    fontWeight: '700',
-    minWidth: 120, // ensure width for typing
-    padding: 0,
-  },
-  categoryContainer: {
-    // This container holds the dropdown
-  },
-  footer: {
-    paddingHorizontal: Spacing.lg,
-  },
-  slideContainer: {
-    marginBottom: Spacing.lg,
-    height: 60, // Fixed height for consistency
-  },
-  fallbackButton: {
-    height: 56,
-    borderRadius: BorderRadius.lg,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  fallbackButtonText: {
-    color: '#fff',
-    fontSize: FontSizes.lg,
-    fontWeight: '600',
-  },
-  appIconsRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: Spacing.lg,
-  },
-  iconButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: BorderRadius.full,
-    gap: 8,
-  },
-  iconLabel: {
-    fontSize: FontSizes.sm,
-    fontWeight: '600',
-  },
-  noteContainer: {
-    marginTop: Spacing.lg,
-    marginBottom: Spacing.md,
-  },
-  noteInput: {
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    fontSize: FontSizes.md,
-    textAlign: 'center',
-  },
+  container: { flex: 1 },
+  flex: { flex: 1 },
+  wide: { alignSelf: 'stretch' },
+  content: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xl, alignItems: 'stretch', gap: Spacing.md },
+  vpa: { textAlign: 'center', fontSize: FontSizes.sm },
+  banner: { flexDirection: 'row', gap: Spacing.sm, alignItems: 'center', padding: Spacing.sm, borderRadius: BorderRadius.md, borderWidth: 1 },
+  bannerText: { flex: 1, fontSize: FontSizes.xs },
+  amountRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: Spacing.lg },
+  currency: { fontSize: 40, fontWeight: '700', marginRight: 4 },
+  amountInput: { fontSize: 56, fontWeight: '700', minWidth: 120, padding: 0 },
+  error: { textAlign: 'center', fontSize: FontSizes.xs },
+  fixed: { textAlign: 'center', fontSize: FontSizes.xs },
+  section: { minHeight: 56 },
+  note: { borderWidth: 1, borderRadius: BorderRadius.md, paddingHorizontal: Spacing.md, minHeight: 48, fontSize: FontSizes.md, textAlign: 'center' },
+  footer: { paddingHorizontal: Spacing.lg, gap: Spacing.sm },
+  appRow: { gap: Spacing.sm, paddingVertical: 4 },
+  appChip: { minHeight: MIN_TOUCH_TARGET - 8, paddingHorizontal: Spacing.md, borderRadius: BorderRadius.full, borderWidth: 1, justifyContent: 'center' },
+  altRow: { flexDirection: 'row', gap: Spacing.sm },
+  invalid: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.xl, gap: Spacing.md },
+  invalidTitle: { fontSize: FontSizes.xl, fontWeight: '700', textAlign: 'center' },
+  invalidText: { fontSize: FontSizes.md, textAlign: 'center' },
+  modalScrim: { flex: 1, justifyContent: 'flex-end' },
+  modalBody: { flexGrow: 1, justifyContent: 'flex-end', padding: Spacing.md },
 });

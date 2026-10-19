@@ -24,7 +24,7 @@ import { useThemeColors } from '@/hooks/use-theme-colors';
 import { clearPaymentDraft, peekPaymentDraft } from '@/lib/payment-draft-store';
 import { log } from '@/lib/logger';
 import { routes } from '@/lib/routes';
-import { UpiAppChoice, beginPayment, beginQrGalleryPayment, listUpiApps, openAppLauncher } from '@/services/payments';
+import { UpiAppChoice, beginGooglePayQrShare, beginPayment, beginQrGalleryPayment, hasNativeUpi, listUpiApps, openAppLauncher } from '@/services/payments';
 
 export default function PaymentScreen() {
   const colors = useThemeColors();
@@ -129,6 +129,36 @@ export default function PaymentScreen() {
     [draft, amountPaise, busy, note, categoryKey, repos, setSetting],
   );
 
+  /** One-tap personal payment: send the QR image to Google Pay. Falls back to the gallery route if that fails. */
+  const payViaGooglePay = useCallback(async () => {
+    if (!draft || amountPaise === null || busy) return;
+    setBusy(true);
+    let shared = false;
+    try {
+      const outcome = await beginGooglePayQrShare(repos, {
+        draft,
+        amountPaise,
+        note: note.trim() || undefined,
+        categoryKey,
+        appPackage: GPAY_PACKAGE,
+        renderQr: () =>
+          new Promise<string | null>((resolve) => {
+            qrResolver.current = resolve;
+            // Plain personal-payment QR: no transaction reference, or UPI apps treat it as a shop payment.
+            setQrValue(buildPayUri({ vpa: draft.vpa, payeeName: draft.payeeName, amountPaise, note: note.trim() || undefined, source: draft.source }));
+            setTimeout(() => resolve(null), 4000);
+          }),
+      });
+      if (outcome.kind === 'ready') {
+        awaitingReturn.current = outcome.attempt.id;
+        shared = true;
+      }
+    } finally {
+      setBusy(false);
+    }
+    if (!shared) await payViaGalleryQrRef.current(GPAY_PACKAGE);
+  }, [draft, amountPaise, busy, note, categoryKey, repos]);
+
   /**
    * Personal UPI IDs can't be paid by an intent from another app (UPI apps show the payee but won't continue).
    * An ordinary QR scan is accepted, so: save the QR to the gallery, open the UPI app, and let the user import it.
@@ -183,6 +213,9 @@ export default function PaymentScreen() {
     },
     [draft, amountPaise, busy, note, categoryKey, repos, apps],
   );
+
+  const payViaGalleryQrRef = useRef<(packageName: string | null) => Promise<void>>(async () => undefined);
+  payViaGalleryQrRef.current = payViaGalleryQr;
 
   const handleQrReady = useCallback((png: string) => {
     qrResolver.current?.(png);
@@ -328,7 +361,7 @@ export default function PaymentScreen() {
           <ActivityIndicator color={colors.tint} />
         ) : apps.length > 0 ? (
           <>
-            <SlideToPay appName={selected?.name ?? 'UPI app'} disabled={!canPay || busy} resetToken={resetToken} onSuccess={() => void (directFirst ? startPayment({ packageName: selected?.packageName ?? null }) : payViaGalleryQr(selected?.packageName ?? null))} />
+            <SlideToPay appName={selected?.name ?? 'UPI app'} disabled={!canPay || busy} resetToken={resetToken} onSuccess={() => void (directFirst ? startPayment({ packageName: selected?.packageName ?? null }) : selected?.packageName === GPAY_PACKAGE && hasNativeUpi ? payViaGooglePay() : payViaGalleryQr(selected?.packageName ?? null))} />
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.appRow} keyboardShouldPersistTaps="handled">
               {apps.map((app) => {
                 const active = app.packageName === selectedApp;

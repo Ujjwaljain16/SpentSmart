@@ -1,5 +1,5 @@
 import { Linking } from 'react-native';
-import { KNOWN_UPI_APPS, knownAppByPackage } from '@/constants/upi-apps';
+import { GPAY_PACKAGE, KNOWN_UPI_APPS, knownAppByPackage } from '@/constants/upi-apps';
 import { Repositories } from '@/db/repositories';
 import { PaymentAttempt } from '@/db/repositories/attempts';
 import { PaymentDraft } from '@/domain/payment-draft';
@@ -147,6 +147,35 @@ export async function beginQrGalleryPayment(repos: Repositories, input: BeginQrG
   if (saved === 'saved') return { kind: 'ready', attempt };
   await repos.attempts.discard(attempt.id);
   return saved === 'denied' ? { kind: 'permission_denied' } : { kind: 'failed' };
+}
+
+/**
+ * Send the payee's QR image straight to Google Pay (ACTION_SEND), which reads it like a scanned code: one tap,
+ * no gallery step. The QR must be a plain personal-payment QR (pa, pn, am, cu, tn). Adding a transaction
+ * reference (`tr`) makes UPI apps treat it as a shop payment and refuse it for personal UPI IDs.
+ */
+export async function beginGooglePayQrShare(repos: Repositories, input: BeginQrGalleryInput): Promise<QrGalleryOutcome> {
+  const attempt = await repos.attempts.create({
+    vpa: input.draft.vpa,
+    payeeName: input.draft.payeeName,
+    amountPaise: input.amountPaise ?? null,
+    note: input.note ?? null,
+    categoryKey: input.categoryKey,
+    appPackage: GPAY_PACKAGE,
+    txnRef: null,
+  });
+  const png = await input.renderQr();
+  let shared = false;
+  if (png && native) {
+    try {
+      shared = await native.shareImage(GPAY_PACKAGE, png);
+    } catch (error) {
+      log.warn('QR share to Google Pay failed', error);
+    }
+  }
+  if (shared) return { kind: 'ready', attempt };
+  await repos.attempts.discard(attempt.id);
+  return { kind: 'failed' };
 }
 
 export async function openAppLauncher(packageName: string): Promise<boolean> {

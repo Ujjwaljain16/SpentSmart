@@ -24,7 +24,7 @@ import { useThemeColors } from '@/hooks/use-theme-colors';
 import { clearPaymentDraft, peekPaymentDraft } from '@/lib/payment-draft-store';
 import { log } from '@/lib/logger';
 import { routes } from '@/lib/routes';
-import { UpiAppChoice, beginPayment, beginQrSharePayment, listUpiApps } from '@/services/payments';
+import { UpiAppChoice, beginPayment, beginQrGalleryPayment, listUpiApps, openAppLauncher } from '@/services/payments';
 
 export default function PaymentScreen() {
   const colors = useThemeColors();
@@ -53,6 +53,8 @@ export default function PaymentScreen() {
 
   const amountPaise: Paise | null = parseRupees(amountText);
   const canPay = amountPaise !== null && draft !== null;
+  // Shops can be paid by a direct intent; personal UPI IDs cannot (see payViaGalleryQr).
+  const directFirst = draft?.source?.isMerchant === true;
 
   useEffect(() => {
     let alive = true;
@@ -127,28 +129,60 @@ export default function PaymentScreen() {
     [draft, amountPaise, busy, note, categoryKey, repos, setSetting],
   );
 
-  const payWithGooglePayQr = useCallback(async () => {
-    if (!draft || amountPaise === null || busy) return;
-    setBusy(true);
-    try {
-      const attempt = await beginQrSharePayment(repos, {
-        draft,
-        amountPaise,
-        note: note.trim() || undefined,
-        categoryKey,
-        renderQr: (txnRef) =>
-          new Promise<string | null>((resolve) => {
-            qrResolver.current = resolve;
-            setQrValue(buildPayUri({ vpa: draft.vpa, payeeName: draft.payeeName, amountPaise, note: note.trim() || undefined, txnRef, source: draft.source }));
-            setTimeout(() => resolve(null), 4000);
-          }),
-      });
-      if (attempt) awaitingReturn.current = attempt.id;
-      else Alert.alert('Google Pay unavailable', 'The QR code could not be sent to Google Pay.');
-    } finally {
-      setBusy(false);
-    }
-  }, [draft, amountPaise, busy, note, categoryKey, repos]);
+  /**
+   * Personal UPI IDs can't be paid by an intent from another app (UPI apps show the payee but won't continue).
+   * An ordinary QR scan is accepted, so: save the QR to the gallery, open the UPI app, and let the user import it.
+   */
+  const payViaGalleryQr = useCallback(
+    async (packageName: string | null) => {
+      if (!draft || amountPaise === null || busy) return;
+      setBusy(true);
+      try {
+        const outcome = await beginQrGalleryPayment(repos, {
+          draft,
+          amountPaise,
+          note: note.trim() || undefined,
+          categoryKey,
+          appPackage: packageName,
+          renderQr: () =>
+            new Promise<string | null>((resolve) => {
+              qrResolver.current = resolve;
+              setQrValue(buildPayUri({ vpa: draft.vpa, payeeName: draft.payeeName, amountPaise, note: note.trim() || undefined, source: draft.source }));
+              setTimeout(() => resolve(null), 4000);
+            }),
+        });
+
+        if (outcome.kind === 'permission_denied') {
+          Alert.alert('Permission needed', 'Allow saving photos so the payment QR can be saved to your gallery. SpentSmart cannot read your photos.');
+          setResetToken((n) => n + 1);
+          return;
+        }
+        if (outcome.kind === 'failed') {
+          Alert.alert('Could not create the QR', 'Try “Show QR code” and scan it from another phone, or enter the payment in your UPI app.');
+          setResetToken((n) => n + 1);
+          return;
+        }
+
+        const appName = apps?.find((a) => a.packageName === packageName)?.name ?? 'your UPI app';
+        awaitingReturn.current = outcome.attempt.id;
+        Alert.alert(
+          'QR saved to your gallery',
+          `In ${appName}: tap Scan, then choose the gallery/upload option and pick the newest image. Then pay. Come back here afterwards to confirm.`,
+          [
+            {
+              text: `Open ${appName}`,
+              onPress: () => {
+                if (packageName) void openAppLauncher(packageName);
+              },
+            },
+          ],
+        );
+      } finally {
+        setBusy(false);
+      }
+    },
+    [draft, amountPaise, busy, note, categoryKey, repos, apps],
+  );
 
   const handleQrReady = useCallback((png: string) => {
     qrResolver.current?.(png);
@@ -185,6 +219,12 @@ export default function PaymentScreen() {
     await repos.attempts.snooze(attempt.id);
     setReview(null);
     router.replace(routes.home);
+  };
+
+  const retryViaQr = async (attempt: PaymentAttempt) => {
+    await repos.attempts.discard(attempt.id);
+    setReview(null);
+    await payViaGalleryQr(attempt.appPackage);
   };
 
   const retryWithoutAmount = async (attempt: PaymentAttempt) => {
@@ -288,7 +328,7 @@ export default function PaymentScreen() {
           <ActivityIndicator color={colors.tint} />
         ) : apps.length > 0 ? (
           <>
-            <SlideToPay appName={selected?.name ?? 'UPI app'} disabled={!canPay || busy} resetToken={resetToken} onSuccess={() => void startPayment({ packageName: selected?.packageName ?? null })} />
+            <SlideToPay appName={selected?.name ?? 'UPI app'} disabled={!canPay || busy} resetToken={resetToken} onSuccess={() => void (directFirst ? startPayment({ packageName: selected?.packageName ?? null }) : payViaGalleryQr(selected?.packageName ?? null))} />
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.appRow} keyboardShouldPersistTaps="handled">
               {apps.map((app) => {
                 const active = app.packageName === selectedApp;
@@ -308,17 +348,33 @@ export default function PaymentScreen() {
             </ScrollView>
           </>
         ) : (
-          <Button label="Choose a UPI app" disabled={!canPay || busy} loading={busy} onPress={() => void startPayment({ packageName: null })} />
+          <Button label="Choose a UPI app" disabled={!canPay || busy} loading={busy} onPress={() => void (directFirst ? startPayment({ packageName: null }) : payViaGalleryQr(null))} />
         )}
+
+        {!directFirst && apps !== null ? (
+          <Text style={[styles.fixed, { color: colors.textSecondary }]}>
+            Personal UPI IDs can’t be paid straight from another app. SpentSmart saves a QR to your gallery; you import it in your UPI app.
+          </Text>
+        ) : null}
 
         <View style={styles.altRow}>
           <Button label="Show QR code" variant="secondary" onPress={() => setShowQr(true)} style={styles.flex} disabled={busy} />
-          {apps?.some((a) => a.packageName === GPAY_PACKAGE) ? (
-            <Button label="Send QR to GPay" variant="secondary" onPress={() => void payWithGooglePayQr()} style={styles.flex} disabled={!canPay || busy} accessibilityLabel="Send this payment as a QR code to Google Pay" />
-          ) : null}
+          <Button
+            label={directFirst ? 'Pay via QR' : 'Try direct'}
+            variant="secondary"
+            onPress={() => void (directFirst ? payViaGalleryQr(selected?.packageName ?? null) : startPayment({ packageName: selected?.packageName ?? null }))}
+            style={styles.flex}
+            disabled={!canPay || busy}
+            accessibilityLabel={directFirst ? 'Pay by saving a QR code to the gallery' : 'Try paying directly in the UPI app'}
+          />
         </View>
         {apps !== null && apps.length > 0 ? (
-          <Button label="Use another UPI app…" variant="ghost" disabled={!canPay || busy} onPress={() => void startPayment({ packageName: null })} />
+          <Button
+            label="Use another UPI app…"
+            variant="ghost"
+            disabled={!canPay || busy}
+            onPress={() => void (directFirst ? startPayment({ packageName: null }) : payViaGalleryQr(null))}
+          />
         ) : null}
       </View>
 
@@ -333,6 +389,7 @@ export default function PaymentScreen() {
                 onDiscard={() => void discard(review)}
                 onSnooze={() => void snooze(review)}
                 onRetryWithoutAmount={!draft.source?.isSigned && review.amountPaise !== null ? () => void retryWithoutAmount(review) : undefined}
+                onPayViaQr={() => void retryViaQr(review)}
               />
             ) : null}
           </ScrollView>

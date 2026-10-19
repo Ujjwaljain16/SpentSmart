@@ -1,5 +1,5 @@
 import { Linking } from 'react-native';
-import { KNOWN_UPI_APPS, GPAY_PACKAGE, knownAppByPackage } from '@/constants/upi-apps';
+import { KNOWN_UPI_APPS, knownAppByPackage } from '@/constants/upi-apps';
 import { Repositories } from '@/db/repositories';
 import { PaymentAttempt } from '@/db/repositories/attempts';
 import { PaymentDraft } from '@/domain/payment-draft';
@@ -8,6 +8,7 @@ import { buildPayUri, buildPayUriWithoutAmount, generateTxnRef } from '@/domain/
 import { suggestionFor, UpiResponse } from '@/domain/upi/response';
 import { log } from '@/lib/logger';
 import { InstalledUpiApp, loadUpiIntent } from '@/modules/upi-intent';
+import { saveQrToGallery } from '../qr-gallery';
 import { LaunchOutcome, launchPayment, sortApps } from './launcher';
 
 const native = loadUpiIntent();
@@ -110,51 +111,42 @@ export async function beginPayment(repos: Repositories, input: BeginPaymentInput
   return { attempt, launch, response: null };
 }
 
-export interface BeginQrShareInput {
+export interface BeginQrGalleryInput {
   draft: PaymentDraft;
   amountPaise: Paise | undefined;
   note: string | undefined;
   categoryKey: string;
-  /** Called with the txnRef that must be embedded in the QR so the attempt can be matched to it. */
-  renderQr: (txnRef: string) => Promise<string | null>;
+  appPackage: string | null;
+  /** Draw the QR for the payment and return its PNG (base64), or null if it could not be drawn. */
+  renderQr: () => Promise<string | null>;
 }
 
+export type QrGalleryOutcome =
+  | { kind: 'ready'; attempt: PaymentAttempt }
+  | { kind: 'permission_denied' }
+  | { kind: 'failed' };
+
 /**
- * Pay by sending the payee's QR to Google Pay as an image. The attempt is persisted first; if the image
- * cannot be shared, the attempt is discarded again so nothing phantom is left behind.
+ * Pay via "scan from gallery": save the payee's QR to the gallery, then the user imports it in their UPI app.
+ * This is the route UPI apps accept for personal UPI IDs (they block payments *started by another app* for
+ * those), because to the UPI app it is an ordinary QR scan. The attempt is persisted first and discarded again
+ * if the QR could not be saved, so nothing phantom is left behind.
  */
-export async function beginQrSharePayment(repos: Repositories, input: BeginQrShareInput): Promise<PaymentAttempt | null> {
-  const txnRef = generateTxnRef(Date.now());
+export async function beginQrGalleryPayment(repos: Repositories, input: BeginQrGalleryInput): Promise<QrGalleryOutcome> {
   const attempt = await repos.attempts.create({
     vpa: input.draft.vpa,
     payeeName: input.draft.payeeName,
     amountPaise: input.amountPaise ?? null,
     note: input.note ?? null,
     categoryKey: input.categoryKey,
-    appPackage: GPAY_PACKAGE,
-    txnRef,
+    appPackage: input.appPackage,
+    txnRef: null,
   });
-  const png = await input.renderQr(txnRef);
-  const shared = png ? await shareQrToGooglePay(png) : false;
-  if (!shared) {
-    await repos.attempts.discard(attempt.id);
-    return null;
-  }
-  return attempt;
-}
-
-/**
- * Share the payee's QR image to Google Pay, which then reads it like a scanned code. Works for payees whose
- * QR carries details the intent route loses, and without any network access (the image is rendered locally).
- */
-export async function shareQrToGooglePay(base64Png: string): Promise<boolean> {
-  if (!native) return false;
-  try {
-    return await native.shareImage(GPAY_PACKAGE, base64Png);
-  } catch (error) {
-    log.warn('QR share to Google Pay failed', error);
-    return false;
-  }
+  const png = await input.renderQr();
+  const saved = png ? await saveQrToGallery(png) : 'error';
+  if (saved === 'saved') return { kind: 'ready', attempt };
+  await repos.attempts.discard(attempt.id);
+  return saved === 'denied' ? { kind: 'permission_denied' } : { kind: 'failed' };
 }
 
 export async function openAppLauncher(packageName: string): Promise<boolean> {

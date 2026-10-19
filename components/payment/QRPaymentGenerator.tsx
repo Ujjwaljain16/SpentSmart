@@ -1,6 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { File, Paths } from 'expo-file-system';
-import * as MediaLibrary from 'expo-media-library';
 import React, { useCallback, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
@@ -10,8 +8,7 @@ import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { BorderRadius, FontSizes, Spacing } from '@/constants/theme';
 import { Paise, formatPaise } from '@/domain/money';
 import { useThemeColors } from '@/hooks/use-theme-colors';
-import { log } from '@/lib/logger';
-import { hasNativeUpi, shareQrToGooglePay } from '@/services/payments';
+import { saveQrToGallery } from '@/services/qr-gallery';
 
 interface QRPaymentGeneratorProps {
   upiUrl: string;
@@ -33,41 +30,19 @@ export function QRPaymentGenerator({ upiUrl, payeeName, upiId, amountPaise, onCl
   const [busy, setBusy] = useState(false);
   const handleReady = useCallback((data: string) => setPng(data), []);
 
-  const shareToGPay = async () => {
-    if (!png) return;
-    setBusy(true);
-    try {
-      if (!(await shareQrToGooglePay(png))) {
-        Alert.alert('Google Pay unavailable', 'Google Pay could not be opened. Scan the QR code from any UPI app instead.');
-      }
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const saveToGallery = async () => {
     if (!png) return;
     setBusy(true);
-    const file = new File(Paths.cache, `spentsmart-qr-${Date.now()}.png`);
     try {
-      const permission = await MediaLibrary.requestPermissionsAsync(true);
-      if (!permission.granted) {
+      const result = await saveQrToGallery(png);
+      if (result === 'saved') {
+        Alert.alert('Saved', 'Open your UPI app, choose scan, then pick this QR from the gallery.');
+      } else if (result === 'denied') {
         Alert.alert('Permission needed', 'Allow saving photos to keep the QR code in your gallery.');
-        return;
+      } else {
+        Alert.alert('Could not save', 'The QR code could not be saved to your gallery.');
       }
-      file.create({ overwrite: true });
-      file.write(png.replace(/^data:image\/png;base64,/, ''), { encoding: 'base64' });
-      await MediaLibrary.saveToLibraryAsync(file.uri);
-      Alert.alert('Saved', 'Open your UPI app, choose “Scan from gallery”, and pick this QR code.');
-    } catch (error) {
-      log.warn('Saving QR failed', error);
-      Alert.alert('Could not save', 'The QR code could not be saved to your gallery.');
     } finally {
-      try {
-        if (file.exists) file.delete();
-      } catch {
-        /* temp file cleanup is best effort */
-      }
       setBusy(false);
     }
   };
@@ -85,10 +60,7 @@ export function QRPaymentGenerator({ upiUrl, payeeName, upiId, amountPaise, onCl
         </View>
 
         <View style={styles.actions}>
-          {hasNativeUpi ? (
-            <Button label="Send to Google Pay" accessibilityLabel="Send this QR code to Google Pay" disabled={!png} loading={busy} onPress={() => void shareToGPay()} />
-          ) : null}
-          <Button label="Save QR to gallery" variant="secondary" disabled={!png || busy} onPress={() => void saveToGallery()} />
+          <Button label="Save QR to gallery" loading={busy} disabled={!png} onPress={() => void saveToGallery()} />
           <Button label="I've paid" variant="secondary" accessibilityLabel="I paid using this QR code" onPress={onPaidViaQr} />
         </View>
 

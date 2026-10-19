@@ -16,13 +16,15 @@ interface AttemptReviewProps {
   onSnooze: () => void;
   /** Offered when the UPI app reported a failure: some apps refuse pre-filled amounts to personal accounts. */
   onRetryWithoutAmount?: () => void;
+  /** Offered after a failure: pay the same payee by importing a QR from the gallery instead. */
+  onPayViaQr?: () => void;
 }
 
 /**
  * "Did this payment go through?" — the single place where a payment attempt becomes a record.
  * The UPI app's answer pre-selects the likely choice; the user always has the final say.
  */
-export function AttemptReview({ attempt, busy, onRecord, onDiscard, onSnooze, onRetryWithoutAmount }: AttemptReviewProps) {
+export function AttemptReview({ attempt, busy, onRecord, onDiscard, onSnooze, onRetryWithoutAmount, onPayViaQr }: AttemptReviewProps) {
   const colors = useThemeColors();
   const [amountText, setAmountText] = useState(attempt.amountPaise ? paiseToDecimal(attempt.amountPaise) : '');
   const amount = parseRupees(amountText);
@@ -101,6 +103,15 @@ export function AttemptReview({ attempt, busy, onRecord, onDiscard, onSnooze, on
             variant="secondary"
             disabled={busy}
             onPress={onRetryWithoutAmount}
+          />
+        ) : null}
+        {onPayViaQr && attempt.suggestion === 'not_paid' ? (
+          <Button
+            label="Pay with QR from gallery"
+            accessibilityLabel="Pay this payee by importing a QR code from your gallery"
+            variant="secondary"
+            disabled={busy}
+            onPress={onPayViaQr}
           />
         ) : null}
         <Button label="Decide later" variant="ghost" disabled={busy} onPress={onSnooze} />

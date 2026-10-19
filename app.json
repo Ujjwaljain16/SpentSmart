@@ -2,55 +2,28 @@
   "expo": {
     "name": "SpentSmart",
     "slug": "spentsmart",
-    "version": "2.0.0",
+    "version": "2.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "spentsmart",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.ujjwaljain.spentsmart",
-      "infoPlist": {
-        "NSCameraUsageDescription": "ExpenseTracker needs camera access to scan UPI QR codes for payment tracking.",
-        "NSFaceIDUsageDescription": "ExpenseTracker needs FaceID to secure your financial data.",
-        "NSContactsUsageDescription": "ExpenseTracker uses your contacts to help you easily select payees for manual transactions."
-      }
-    },
+    "platforms": ["android"],
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#0A0A0A",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
+      "allowBackup": false,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.USE_BIOMETRIC",
-        "android.permission.READ_CONTACTS"
+        "android.permission.READ_CONTACTS",
+        "android.permission.POST_NOTIFICATIONS"
       ],
-      "package": "com.ujjwaljain.spentsmart",
-      "intentFilters": [
-        {
-          "action": "android.intent.action.VIEW",
-          "autoVerify": true,
-          "data": [
-            {
-              "scheme": "upi"
-            }
-          ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
-        }
-      ]
-    },
-    "web": {
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "package": "com.ujjwaljain.spentsmart"
     },
     "plugins": [
       "expo-router",
@@ -69,12 +42,36 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "ExpenseTracker needs camera access to scan UPI QR codes for payment tracking."
+          "cameraPermission": "SpentSmart uses the camera only to scan UPI QR codes."
         }
       ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "SpentSmart reads only the contact you pick, to fill in a name."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "savePhotosPermission": "SpentSmart saves QR codes you create to your gallery."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#14B8A6"
+        }
+      ],
+      [
+        "expo-sqlite",
+        {
+          "useSQLCipher": true
+        }
+      ],
+      "expo-secure-store",
       "./modules/upi-intent/app.plugin.js"
     ],
-    "reactCompiler": true,
     "updates": {
       "url": "https://u.expo.dev/14d0fdab-c65f-4488-9356-a157d43b5c37",
       "fallbackToCacheTimeout": 0

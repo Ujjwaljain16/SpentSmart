@@ -7,4 +7,11 @@ appId: com.ujjwaljain.spentsmart
 - inputText: "Maestro"
 - tapOn: "Avatar rocket"
 - tapOn: "Continue"
+# Payday, budget and app lock are optional; skip all three.
+- assertVisible: "When do you get paid?"
+- tapOn: "Skip"
+- assertVisible: "Set a monthly budget?"
+- tapOn: "Skip"
+- assertVisible: "Lock the app?"
+- tapOn: "Skip"
 - assertVisible: "hey, maestro"

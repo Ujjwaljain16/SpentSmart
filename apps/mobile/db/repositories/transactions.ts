@@ -87,6 +87,9 @@ export interface TransactionFilter {
   since?: number | null;
   /** Exclusive upper bound on occurredAt. */
   until?: number | null;
+  /** Inclusive bounds on the amount in paise. */
+  minPaise?: number | null;
+  maxPaise?: number | null;
 }
 
 export interface TransactionCursor {
@@ -171,6 +174,14 @@ function buildWhere(filter: TransactionFilter): { clauses: string[]; params: Sql
   if (filter.until != null) {
     clauses.push('t.occurred_at < ?');
     params.push(filter.until);
+  }
+  if (filter.minPaise != null) {
+    clauses.push('t.amount_paise >= ?');
+    params.push(filter.minPaise);
+  }
+  if (filter.maxPaise != null) {
+    clauses.push('t.amount_paise <= ?');
+    params.push(filter.maxPaise);
   }
   const search = filter.search?.trim();
   if (search) {
@@ -496,6 +507,16 @@ export function createTransactionsRepo(db: AnyExecutor, deps: RepoDeps) {
         params,
       );
       return { count: row?.c ?? 0, netPaise: row?.net ?? 0 };
+    },
+
+    /** Tags on live transactions, most used first. */
+    async tags(limit = 30): Promise<string[]> {
+      const rows = await db.all<{ tag: string }>(
+        `SELECT g.tag FROM transaction_tags g JOIN transactions t ON t.id = g.transaction_id
+         WHERE t.deleted_at IS NULL GROUP BY g.tag ORDER BY COUNT(*) DESC, g.tag ASC LIMIT ?`,
+        [limit],
+      );
+      return rows.map((r) => r.tag);
     },
 
     async count(): Promise<number> {

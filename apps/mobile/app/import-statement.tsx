@@ -110,7 +110,9 @@ export default function ImportStatementScreen() {
               {fileName}
             </Text>
             <Text style={[styles.hint, { color: colors.textSecondary }]}>
-              Read columns: {preview.columns.date} · {preview.columns.description} · {preview.columns.amount}
+              {preview.restore
+                ? `SpentSmart export: types, categories and notes are kept.${preview.transfersSkipped > 0 ? ` ${preview.transfersSkipped} transfer entries are left out; re-enter transfers by hand.` : ''}`
+                : `Read columns: ${preview.columns.date} · ${preview.columns.description} · ${preview.columns.amount}`}
             </Text>
             <Text style={[styles.big, { color: colors.text }]}>{preview.fresh.length} new</Text>
             <Text style={[styles.hint, { color: colors.textSecondary }]}>

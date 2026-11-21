@@ -14,7 +14,8 @@ import { useThemeColors } from '@/hooks/use-theme-colors';
 import { log } from '@/lib/logger';
 import { routes } from '@/lib/routes';
 import { scanReceipt, useVoiceCapture } from '@/services/capture';
-import { parseQuickAdd } from '@spentsmart/finance/quick-add';
+import { learnCategories, parseQuickAdd } from '@spentsmart/finance/quick-add';
+import { useLiveQuery } from '@/hooks/use-live-query';
 import { TransactionSource } from '@spentsmart/finance/types';
 import { sanitizeText } from '@spentsmart/finance/upi/vpa';
 
@@ -61,7 +62,9 @@ export default function QuickAddScreen() {
     }
   };
 
-  const draft = useMemo(() => (text.trim() ? parseQuickAdd(text, categories, new Date()) : null), [text, categories]);
+  // The user's own past filing teaches the parser payees no dictionary knows.
+  const { data: learned } = useLiveQuery(async (r) => learnCategories((await r.transactions.list({ type: 'expense' }, 500)).items));
+  const draft = useMemo(() => (text.trim() ? parseQuickAdd(text, categories, new Date(), { learned }) : null), [text, categories, learned]);
   const ready = draft !== null && draft.amountPaise !== null;
 
   const save = async () => {

@@ -1,4 +1,4 @@
-import { parseQuickAdd } from '@spentsmart/finance/quick-add';
+import { learnCategories, parseQuickAdd } from '@spentsmart/finance/quick-add';
 import { StatementRow, findDuplicates, parseStatement } from '@spentsmart/finance/import/statement';
 import { INCOME_CATEGORY_KEY } from '@spentsmart/finance/categories';
 import { DEFAULT_CASH_ACCOUNT_ID } from '@/db/migrations';
@@ -33,12 +33,13 @@ export async function previewImport(repos: Repositories, csvText: string, accoun
 
   const { fresh, duplicates } = findDuplicates(parsed.rows, existing);
   const categories = await repos.categories.list();
+  const learned = learnCategories((await repos.transactions.list({ type: 'expense' }, 500)).items);
   return {
     fresh: fresh.map((row) => ({
       ...row,
       toCash: row.type === 'expense' && accountId !== DEFAULT_CASH_ACCOUNT_ID && CASH_WITHDRAWAL.test(row.description),
       // The quick-add merchant dictionary already knows "Swiggy" is food; reuse it for bank narrations.
-      categoryKey: row.type === 'income' ? INCOME_CATEGORY_KEY : parseQuickAdd(row.payeeName, categories, new Date(row.occurredAt)).categoryKey,
+      categoryKey: row.type === 'income' ? INCOME_CATEGORY_KEY : parseQuickAdd(row.payeeName, categories, new Date(row.occurredAt), { learned }).categoryKey,
     })),
     duplicates: duplicates.length,
     skipped: parsed.skipped,

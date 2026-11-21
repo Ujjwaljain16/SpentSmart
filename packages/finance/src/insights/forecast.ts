@@ -4,6 +4,21 @@ import { spendingEffect } from '../ledger';
 import { DAY_MS, Evidence, InsightTxn, median, payeeKey } from './common';
 import { RecurringPayment } from './recurring';
 
+const ONE_OFF_MIN_PAISE = 2_000_00;
+
+/**
+ * Day-to-day spending in a window, leaving out one-off payments: a single expense of at least ₹2,000 that is 40% or
+ * more of the window's total (rent before it's recognised as a bill, a phone, a flight). Those count as spent but
+ * aren't spread over the days ahead, or one big payment would project a second one by month end.
+ */
+function dayToDay(rows: readonly InsightTxn[]): { total: number; oneOffs: number[] } {
+  const total = Math.max(0, rows.reduce((s, t) => s + spendingEffect(t), 0));
+  const oneOffs = rows.filter((t) => t.type === 'expense' && t.amountPaise >= ONE_OFF_MIN_PAISE && t.amountPaise >= total * 0.4).map((t) => t.amountPaise);
+  return { total: Math.max(0, total - oneOffs.reduce((s, a) => s + a, 0)), oneOffs };
+}
+
+const toRupee = (paise: number) => Math.round(paise / 100) * 100;
+
 export interface MonthForecast {
   spentPaise: Paise;
   /** Recurring bills expected later this month that haven't been paid yet. */
@@ -39,7 +54,7 @@ export function forecastMonth(
 
   const thisMonth = transactions.filter((t) => t.occurredAt >= monthStart && t.occurredAt <= nowMs);
   const spentPaise = Math.max(0, thisMonth.reduce((s, t) => s + spendingEffect(t), 0));
-  const variableSoFar = Math.max(0, thisMonth.filter((t) => !isBill(t)).reduce((s, t) => s + spendingEffect(t), 0));
+  const current = dayToDay(thisMonth.filter((t) => !isBill(t)));
 
   // A bill counts as upcoming when its next date falls in the rest of this month and it hasn't been paid this month.
   const paidThisMonth = new Set(thisMonth.filter(isBill).map(payeeKey));
@@ -64,14 +79,13 @@ export function forecastMonth(
     // A month holding only bills (or nothing) says the user wasn't tracking day-to-day spending then, not that it was zero.
     const rows = transactions.filter((t) => t.occurredAt >= start.getTime() && t.occurredAt < end && !isBill(t));
     if (!rows.some((t) => t.type === 'expense')) continue;
-    const variable = Math.max(0, rows.reduce((s, t) => s + spendingEffect(t), 0));
-    const rate = variable / getDaysInMonth(start);
+    const rate = dayToDay(rows).total / getDaysInMonth(start);
     rates.push(rate);
-    rateNotes.push(`${formatPaise(Math.round(rate))}/day`);
+    rateNotes.push(`${formatPaise(toRupee(rate))}/day`);
   }
-  const currentRate = variableSoFar / elapsedDays;
+  const currentRate = current.total / elapsedDays;
   rates.push(currentRate);
-  rateNotes.push(`${formatPaise(Math.round(currentRate))}/day this month`);
+  rateNotes.push(`${formatPaise(toRupee(currentRate))}/day this month`);
 
   const sorted = [...rates].sort((a, b) => a - b);
   // With a single rate there is nothing to measure spread from, so allow ±25%.
@@ -79,7 +93,8 @@ export function forecastMonth(
   const highRate = sorted.length > 1 ? sorted[sorted.length - 1]! : currentRate * 1.25;
   const likelyRate = median(rates);
 
-  const project = (rate: number) => Math.round(spentPaise + upcomingPaise + rate * daysLeft);
+  // An estimate, so whole rupees: paise would suggest a precision it doesn't have.
+  const project = (rate: number) => toRupee(spentPaise + upcomingPaise + rate * daysLeft);
 
   const ids = [...thisMonth.map((t) => t.id)];
   return {
@@ -93,9 +108,10 @@ export function forecastMonth(
     evidence: {
       transactionIds: ids,
       formula:
-        `${formatPaise(spentPaise)} spent so far + ${formatPaise(upcomingPaise)} in ${upcomingBills.length} upcoming bill` +
-        `${upcomingBills.length === 1 ? '' : 's'} + ${daysLeft} day${daysLeft === 1 ? '' : 's'} × day-to-day spending ` +
-        `(${rateNotes.join(', ')}).`,
+        `${formatPaise(spentPaise)} spent so far` +
+        (upcomingBills.length > 0 ? ` + ${formatPaise(upcomingPaise)} in ${upcomingBills.length} upcoming bill${upcomingBills.length === 1 ? '' : 's'}` : '') +
+        ` + ${daysLeft} day${daysLeft === 1 ? '' : 's'} × day-to-day spending (${rateNotes.join(', ')}).` +
+        (current.oneOffs.length > 0 ? ` One-off payments this month (${current.oneOffs.map((a) => formatPaise(a)).join(', ')}) are counted once, not projected.` : ''),
       period: { start: monthStart, end: monthEnd },
     },
   };

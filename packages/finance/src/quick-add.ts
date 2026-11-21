@@ -63,7 +63,7 @@ const KEYWORDS: Record<string, Hint> = {
   fuel: 'transport', diesel: 'transport', parking: 'transport', toll: 'transport',
   flight: 'travel', train: 'travel', hotel: 'travel', trip: 'travel',
   electricity: 'bills', wifi: 'bills', internet: 'bills', recharge: 'bills', bill: 'bills', gas: 'bills', water: 'bills',
-  rent: 'rent', pg: 'rent', hostel: 'rent',
+  rent: 'rent', pg: 'rent', hostel: 'rent', landlord: 'rent', flat: 'rent', maintenance: 'rent',
   movie: 'entertainment', movies: 'entertainment', concert: 'entertainment', game: 'entertainment',
   medicine: 'health', medicines: 'health', doctor: 'health', pharmacy: 'health', gym: 'health',
   fees: 'education', fee: 'education', books: 'education', course: 'education', college: 'education', tuition: 'education',

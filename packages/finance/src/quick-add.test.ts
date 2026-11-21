@@ -71,6 +71,7 @@ describe('parseQuickAdd types and categories', () => {
     ['electricity bill 1200', 'utility'],
     ['wifi 599', 'utility'],
     ['pg 8000', 'rent'],
+    ['landlord 15000', 'rent'],
     ['rent 12000', 'rent'],
     ['tuition fees 5000', 'college'],
     ['random thing 50', 'other'],

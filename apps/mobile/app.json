@@ -26,7 +26,10 @@
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.RECORD_AUDIO"
       ],
-      "package": "com.ujjwaljain.spentsmart"
+      "package": "com.ujjwaljain.spentsmart",
+      "blockedPermissions": [
+        "android.permission.WRITE_CONTACTS"
+      ]
     },
     "plugins": [
       "expo-router",
@@ -57,7 +60,10 @@
       [
         "expo-media-library",
         {
-          "savePhotosPermission": "SpentSmart saves QR codes you create to your gallery."
+          "savePhotosPermission": "SpentSmart saves QR codes you create to your gallery.",
+          "granularPermissions": [
+            "photo"
+          ]
         }
       ],
       [

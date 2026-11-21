@@ -50,13 +50,14 @@ Full policy: [PRIVACY.md](PRIVACY.md). You can see what is stored in **Settings 
 
 ## Getting started
 
-Requires Node 22+, JDK 17+ and the Android SDK. The app uses a custom native module and SQLCipher, so it
+Requires Node 22+, pnpm 10, JDK 17+ and the Android SDK. The app uses a custom native module and SQLCipher, so it
 **does not run in Expo Go**; use a development build.
 
 ```bash
 git clone https://github.com/Ujjwaljain16/SpentSmart.git
 cd SpentSmart
-npm ci
+pnpm install
+cd apps/mobile
 npx expo run:android        # builds and installs a development build
 ```
 
@@ -64,14 +65,15 @@ npx expo run:android        # builds and installs a development build
 
 | Command | What it does |
 |---|---|
-| `npm run check` | typecheck + lint + tests (what CI runs) |
-| `npm test` | unit tests (domain, database, payment launcher, reports) |
-| `npm run typecheck` | `tsc --noEmit` |
-| `npm run lint` | ESLint (no `console`, no `any`) |
+| `pnpm check` | typecheck + lint + tests in every package (what CI runs) |
+| `pnpm test` | unit tests: `packages/finance` (money, UPI, periods, reports) and `apps/mobile` (database, launcher) |
+| `pnpm typecheck` | `tsc --noEmit` per package |
+| `pnpm lint` | ESLint (no `console`, no `any`) |
 
 ### Release builds
 
 ```bash
+cd apps/mobile
 eas build --platform android --profile preview      # installable APK
 eas build --platform android --profile production   # Play Store bundle
 eas update --channel preview --message "what changed"
@@ -80,6 +82,12 @@ eas update --channel preview --message "what changed"
 Bump `version` in `app.json` whenever native code or config changes; OTA updates are scoped by it.
 
 ## Project layout and design
+
+```
+apps/mobile        the Android app (Expo)
+packages/finance   pure money, UPI, period and report logic, shared with the future API
+```
+
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The October 2026 review that drove the current design is in
 [docs/AUDIT-2026-10.md](docs/AUDIT-2026-10.md).

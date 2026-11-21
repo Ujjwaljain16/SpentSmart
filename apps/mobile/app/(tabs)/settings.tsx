@@ -15,6 +15,7 @@ import { useSettings } from '@/contexts/settings-context';
 import { ThemeMode, useTheme } from '@/contexts/theme-context';
 import { useLiveQuery } from '@/hooks/use-live-query';
 import { useThemeColors } from '@/hooks/use-theme-colors';
+import { crashLog } from '@/lib/app-crash-log';
 import { getRecentLogs } from '@/lib/logger';
 import { routes } from '@/lib/routes';
 import { ExportScope, exportCsv, exportPdf } from '@/services/export';
@@ -143,7 +144,17 @@ export default function SettingsScreen() {
           .map((l) => `${new Date(l.at).toLocaleTimeString()} ${l.level.toUpperCase()} ${l.message}`)
           .join('\n')
       : 'No warnings or errors recorded in this session.';
-    Alert.alert('Diagnostics (this session)', `${text}\n\nUPI IDs and amounts are removed from these messages. Nothing is sent anywhere.`);
+    const crashes = crashLog.list();
+    const crashText = crashes.length
+      ? `\n\nEarlier crashes (kept on this phone):\n${crashes
+          .slice(-5)
+          .map((c) => `${new Date(c.at).toLocaleString()} ${c.message.split('\n')[0]}`)
+          .join('\n')}`
+      : '';
+    Alert.alert('Diagnostics', `${text}${crashText}\n\nUPI IDs, amounts and emails are removed. Nothing is sent anywhere.`, [
+      ...(crashes.length ? [{ text: 'Clear crashes', onPress: () => crashLog.clear() }] : []),
+      { text: 'OK' },
+    ]);
   };
 
   const Row = ({

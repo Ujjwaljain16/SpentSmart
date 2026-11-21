@@ -13,12 +13,18 @@ export interface LogEntry {
   message: string;
 }
 
+// Also matches email addresses, which have the same shape.
 const VPA = /[A-Za-z0-9._-]+@[A-Za-z0-9.]{2,}/g;
 const AMOUNT_PARAM = /\b(am|amount|mam)=[^&\s]+/gi;
 const SIGN_PARAM = /\b(sign|pa|pn|tn)=[^&\s]+/gi;
+const RUPEES = /(₹|\bRs\.?|\bINR)\s?[\d,]+(\.\d+)?/gi;
 
 export function redact(text: string): string {
-  return text.replace(SIGN_PARAM, '$1=***').replace(AMOUNT_PARAM, '$1=***').replace(VPA, '***@***');
+  return text
+    .replace(SIGN_PARAM, '$1=***')
+    .replace(AMOUNT_PARAM, '$1=***')
+    .replace(VPA, '***@***')
+    .replace(RUPEES, (_m, sign: string) => `${sign}${/^(Rs|INR)/i.test(sign) ? ' ' : ''}***`);
 }
 
 function describe(value: unknown): string {

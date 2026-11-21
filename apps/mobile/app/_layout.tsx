@@ -4,6 +4,8 @@ import { StatusBar } from 'expo-status-bar';
 import React, { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import 'react-native-reanimated';
+// Records uncaught errors from the very start, so a crash during start-up is still kept for Diagnostics.
+import '@/lib/app-crash-log';
 // Registers the background sync task before anything renders; Android may launch the app only to run it.
 import '@/services/cloud/background-sync';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';

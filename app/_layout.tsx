@@ -2,6 +2,7 @@ import { DarkTheme, DefaultTheme, ThemeProvider as NavigationThemeProvider } fro
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect } from 'react';
+import { StyleSheet, View } from 'react-native';
 import 'react-native-reanimated';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { GlobalErrorBoundary } from '@/components/GlobalErrorBoundary';
@@ -34,28 +35,34 @@ function RootNavigator() {
     void syncReminders(settings.remindersEnabled);
   }, [settings.remindersEnabled]);
 
-  if (!isUnlocked) return <LockScreen />;
-
   return (
     <NavigationThemeProvider value={navTheme(scheme)}>
-      <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
-        <Stack.Protected guard={onboarded}>
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="scanner" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
-          <Stack.Screen name="manual-entry" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-          <Stack.Screen name="payment" />
-          <Stack.Screen name="recover-pending" />
-          <Stack.Screen name="receive" />
-          <Stack.Screen name="category-manager" />
-          <Stack.Screen name="analytics-detail" />
-          <Stack.Screen name="edit-transaction" />
-          <Stack.Screen name="edit-profile" />
-          <Stack.Screen name="privacy-dashboard" />
-        </Stack.Protected>
-        <Stack.Protected guard={!onboarded}>
-          <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
-        </Stack.Protected>
-      </Stack>
+      {/* The lock covers the app instead of replacing it, so unlocking returns to the exact screen and state. */}
+      <View style={styles.fill} importantForAccessibility={isUnlocked ? 'auto' : 'no-hide-descendants'}>
+        <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+          <Stack.Protected guard={onboarded}>
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="scanner" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="manual-entry" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="payment" />
+            <Stack.Screen name="recover-pending" />
+            <Stack.Screen name="receive" />
+            <Stack.Screen name="category-manager" />
+            <Stack.Screen name="analytics-detail" />
+            <Stack.Screen name="edit-transaction" />
+            <Stack.Screen name="edit-profile" />
+            <Stack.Screen name="privacy-dashboard" />
+          </Stack.Protected>
+          <Stack.Protected guard={!onboarded}>
+            <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
+          </Stack.Protected>
+        </Stack>
+      </View>
+      {!isUnlocked ? (
+        <View style={StyleSheet.absoluteFill}>
+          <LockScreen />
+        </View>
+      ) : null}
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
     </NavigationThemeProvider>
   );
@@ -80,3 +87,7 @@ export default function RootLayout() {
     </GestureHandlerRootView>
   );
 }
+
+const styles = StyleSheet.create({
+  fill: { flex: 1 },
+});

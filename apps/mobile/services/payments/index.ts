@@ -1,5 +1,5 @@
 import { Linking } from 'react-native';
-import { GPAY_PACKAGE, KNOWN_UPI_APPS, knownAppByPackage } from '@/constants/upi-apps';
+import { KNOWN_UPI_APPS, knownAppByPackage } from '@/constants/upi-apps';
 import { Repositories } from '@/db/repositories';
 import { PaymentAttempt } from '@/db/repositories/attempts';
 import { PaymentDraft } from '@spentsmart/finance/payment-draft';
@@ -152,30 +152,61 @@ export async function beginQrGalleryPayment(repos: Repositories, input: BeginQrG
   return saved === 'denied' ? { kind: 'permission_denied' } : { kind: 'failed' };
 }
 
+/** Draw the payment QR natively in the background so the pay tap only has to hand it over. */
+export function prepareQr(upiUri: string): void {
+  native?.prepareQr(upiUri).catch(() => undefined);
+}
+
+/** The QR as base64 PNG drawn natively, or null when the native module is missing or fails. */
+export async function nativeQrPng(upiUri: string): Promise<string | null> {
+  if (!native) return null;
+  try {
+    return await native.qrPng(upiUri);
+  } catch {
+    return null;
+  }
+}
+
+/** Which of these UPI apps accept a shared image, so they can take the QR in one tap. */
+export async function qrShareTargets(packageNames: string[]): Promise<Set<string>> {
+  if (!native || packageNames.length === 0) return new Set();
+  try {
+    return new Set(await native.qrShareTargets(packageNames));
+  } catch {
+    return new Set();
+  }
+}
+
+export interface BeginQrShareInput extends Omit<BeginQrGalleryInput, 'renderQr' | 'appPackage'> {
+  appPackage: string;
+  upiUri: string;
+}
+
 /**
- * Send the payee's QR image straight to Google Pay (ACTION_SEND), which reads it like a scanned code: one tap,
+ * Send the payee's QR image straight to a UPI app (ACTION_SEND), which reads it like a scanned code: one tap,
  * no gallery step. The QR must be a plain personal-payment QR (pa, pn, am, cu, tn). Adding a transaction
  * reference (`tr`) makes UPI apps treat it as a shop payment and refuse it for personal UPI IDs.
+ * The attempt row and the share run together so the database write doesn't delay opening the app.
  */
-export async function beginGooglePayQrShare(repos: Repositories, input: BeginQrGalleryInput): Promise<QrGalleryOutcome> {
-  const attempt = await repos.attempts.create({
-    vpa: input.draft.vpa,
-    payeeName: input.draft.payeeName,
-    amountPaise: input.amountPaise ?? null,
-    note: input.note ?? null,
-    categoryKey: input.categoryKey,
-    appPackage: GPAY_PACKAGE,
-    txnRef: null,
-  });
-  const png = await input.renderQr();
-  let shared = false;
-  if (png && native) {
-    try {
-      shared = await native.shareImage(GPAY_PACKAGE, png);
-    } catch (error) {
-      log.warn('QR share to Google Pay failed', error);
-    }
-  }
+export async function beginQrShare(repos: Repositories, input: BeginQrShareInput): Promise<QrGalleryOutcome> {
+  const share = native
+    ? native.shareQr(input.appPackage, input.upiUri).catch((error: unknown) => {
+        log.warn('QR share to UPI app failed', error);
+        return false;
+      })
+    : Promise.resolve(false);
+  const [attempt, shared] = await Promise.all([
+    repos.attempts.create({
+      vpa: input.draft.vpa,
+      payeeName: input.draft.payeeName,
+      amountPaise: input.amountPaise ?? null,
+      note: input.note ?? null,
+      categoryKey: input.categoryKey,
+      appPackage: input.appPackage,
+      txnRef: null,
+    }),
+    share,
+  ]);
   if (shared) return { kind: 'ready', attempt };
   await repos.attempts.discard(attempt.id);
   return { kind: 'failed' };

@@ -1,22 +1,31 @@
 package expo.modules.upiintent
 
 import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
 import android.util.Base64
 import androidx.core.content.FileProvider
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.EncodeHintType
+import com.google.zxing.qrcode.QRCodeWriter
+import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.io.File
+import java.io.FileOutputStream
 import java.util.UUID
 
 private const val REQUEST_UPI_PAY = 7421
 private const val SHARE_DIR = "qr_share"
 private const val SHARE_MAX_AGE_MS = 60L * 60L * 1000L
 private const val MAX_IMAGE_BYTES = 4 * 1024 * 1024
+private const val QR_TARGET_PX = 600
 
 /**
  * Android-only bridge to UPI apps.
@@ -129,6 +138,43 @@ class UpiIntentModule : Module() {
       }
     }
 
+    // Draw the QR ahead of the tap (while the user is still typing), so sharing only has to fire the intent.
+    AsyncFunction("prepareQr") { upiUri: String ->
+      val context = appContext.reactContext ?: return@AsyncFunction false
+      return@AsyncFunction qrFileFor(context, upiUri) != null
+    }
+
+    // Draw (or reuse) the QR natively and hand it to one app, which reads it like a scanned code.
+    AsyncFunction("shareQr") { packageName: String, upiUri: String ->
+      val context = appContext.reactContext ?: return@AsyncFunction false
+      val file = qrFileFor(context, upiUri) ?: return@AsyncFunction false
+      try {
+        context.startActivity(shareIntent(context, file, packageName))
+        return@AsyncFunction true
+      } catch (e: ActivityNotFoundException) {
+        return@AsyncFunction false
+      } catch (e: IllegalArgumentException) {
+        return@AsyncFunction false
+      }
+    }
+
+    // The QR as base64 PNG, for saving to the gallery.
+    AsyncFunction("qrPng") { upiUri: String ->
+      val context = appContext.reactContext ?: return@AsyncFunction null
+      val file = qrFileFor(context, upiUri) ?: return@AsyncFunction null
+      return@AsyncFunction Base64.encodeToString(file.readBytes(), Base64.NO_WRAP)
+    }
+
+    // Which of these apps accept a shared image, i.e. can take the QR in one tap instead of via the gallery.
+    AsyncFunction("qrShareTargets") { packageNames: List<String> ->
+      val context = appContext.reactContext ?: return@AsyncFunction emptyList<String>()
+      val pm = context.packageManager
+      return@AsyncFunction packageNames.filter { pkg ->
+        val probe = Intent(Intent.ACTION_SEND).apply { type = "image/png"; setPackage(pkg) }
+        pm.queryIntentActivities(probe, PackageManager.MATCH_DEFAULT_ONLY).isNotEmpty()
+      }
+    }
+
     OnActivityResult { _, payload ->
       if (payload.requestCode != REQUEST_UPI_PAY) return@OnActivityResult
       val promise = pendingPayment ?: return@OnActivityResult
@@ -139,6 +185,59 @@ class UpiIntentModule : Module() {
           "response" to extractResponse(payload.data)
         )
       )
+    }
+  }
+
+  @Volatile private var preparedUri: String? = null
+  @Volatile private var preparedFile: File? = null
+
+  @Synchronized
+  private fun qrFileFor(context: Context, upiUri: String): File? {
+    if (!upiUri.startsWith("upi://pay?", ignoreCase = true)) return null
+    val cached = preparedFile
+    if (preparedUri == upiUri && cached != null && cached.exists()) return cached
+    return try {
+      val dir = File(context.cacheDir, SHARE_DIR).apply { mkdirs() }
+      val now = System.currentTimeMillis()
+      dir.listFiles()?.forEach { if (now - it.lastModified() > SHARE_MAX_AGE_MS) it.delete() }
+      val file = File(dir, "qr_${UUID.randomUUID()}.png")
+      FileOutputStream(file).use { encodeQr(upiUri).compress(Bitmap.CompressFormat.PNG, 100, it) }
+      preparedUri = upiUri
+      preparedFile = file
+      file
+    } catch (e: Exception) {
+      null
+    }
+  }
+
+  // Low error correction keeps the code small (fewer modules), which UPI apps decode fastest from a clean image.
+  private fun encodeQr(text: String): Bitmap {
+    val hints = mapOf(
+      EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.L,
+      EncodeHintType.CHARACTER_SET to "UTF-8",
+      EncodeHintType.MARGIN to 4,
+    )
+    val matrix = QRCodeWriter().encode(text, BarcodeFormat.QR_CODE, 0, 0, hints)
+    val scale = maxOf(1, QR_TARGET_PX / matrix.width)
+    val size = matrix.width * scale
+    val pixels = IntArray(size * size)
+    for (y in 0 until size) {
+      val row = y * size
+      for (x in 0 until size) {
+        pixels[row + x] = if (matrix.get(x / scale, y / scale)) Color.BLACK else Color.WHITE
+      }
+    }
+    return Bitmap.createBitmap(pixels, size, size, Bitmap.Config.ARGB_8888)
+  }
+
+  private fun shareIntent(context: Context, file: File, packageName: String): Intent {
+    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+    return Intent(Intent.ACTION_SEND).apply {
+      type = "image/png"
+      putExtra(Intent.EXTRA_STREAM, uri)
+      setPackage(packageName)
+      addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+      addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
   }
 

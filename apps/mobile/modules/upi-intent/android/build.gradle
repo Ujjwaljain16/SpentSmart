@@ -22,3 +22,8 @@ android {
     abortOnError false
   }
 }
+
+dependencies {
+  // Encoder only (no camera or scanning code), so the payment QR is drawn natively in a few milliseconds.
+  implementation 'com.google.zxing:core:3.5.3'
+}

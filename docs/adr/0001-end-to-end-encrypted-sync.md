@@ -59,6 +59,18 @@ Deleted on one side and edited on the other keeps the edited record and writes a
 an edit is worse than an extra row the user can delete. The merged record is pushed with the remote version as its
 base.
 
+Details that came out of the two-phone tests:
+
+* Only data that means the same on every phone syncs. Created/updated times, the local edit counter, payment-attempt
+  links and revision history stay on the device.
+* Category keys and the two starting accounts aren't UUIDs, so their record ids are derived from the key. The default
+  "Food" category on two phones is the same record and merges without a conflict.
+* One active budget per category: a budget set locally and not uploaded yet beats an incoming one; otherwise the
+  incoming one replaces the local one. The losing budget is archived and the archive syncs.
+* Change tracking is done with SQLite triggers, so no write path can forget to queue an upload. The engine mutes them
+  while it applies remote changes.
+* "Delete all data" on a phone clears its sync state too and never uploads tombstones.
+
 ## Server stack (changes the plan)
 
 The plan said NestJS + Prisma. With end-to-end encryption the API is six tables of opaque rows and one

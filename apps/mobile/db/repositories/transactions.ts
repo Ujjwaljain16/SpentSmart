@@ -239,6 +239,48 @@ export function createTransactionsRepo(db: AnyExecutor, deps: RepoDeps) {
     ]);
   }
 
+  /** One insert inside an open transaction; idempotent on attempt id. */
+  async function insertIn(tx: SqlExecutor, input: NewTransaction): Promise<{ id: string; created: boolean }> {
+    validateNew(input);
+    const tags = cleanTags(input.tags);
+    const accountId = input.accountId ?? (input.paymentMethod === 'cash' ? DEFAULT_CASH_ACCOUNT_ID : DEFAULT_BANK_ACCOUNT_ID);
+
+    if (input.attemptId) {
+      const existing = await tx.first<{ id: string }>('SELECT id FROM transactions WHERE attempt_id = ?', [input.attemptId]);
+      if (existing) return { id: existing.id, created: false };
+    }
+    await assertAccount(tx, accountId);
+    const id = newId();
+    const t = now();
+    await tx.run(
+      `INSERT INTO transactions
+         (id, amount_paise, type, category_key, payee_name, payee_vpa, payment_method, note, occurred_at, created_at,
+          updated_at, verified_by, upi_txn_id, upi_txn_ref, attempt_id, account_id, source, version)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [
+        id,
+        input.amountPaise,
+        input.type,
+        input.categoryKey,
+        input.payeeName.trim().slice(0, MAX_TEXT),
+        input.payeeVpa ?? null,
+        input.paymentMethod,
+        input.note?.trim().slice(0, MAX_TEXT) || null,
+        input.occurredAt ?? t,
+        t,
+        t,
+        input.verifiedBy,
+        input.upiTxnId ?? null,
+        input.upiTxnRef ?? null,
+        input.attemptId ?? null,
+        accountId,
+        input.source ?? (input.attemptId ? 'scan' : 'manual'),
+      ],
+    );
+    await writeTags(tx, id, tags);
+    return { id, created: true };
+  }
+
   return {
     getById,
 
@@ -247,46 +289,7 @@ export function createTransactionsRepo(db: AnyExecutor, deps: RepoDeps) {
      * the same payment attempt returns the existing row instead of creating a duplicate.
      */
     async insert(input: NewTransaction): Promise<Transaction> {
-      validateNew(input);
-      const tags = cleanTags(input.tags);
-      const accountId = input.accountId ?? (input.paymentMethod === 'cash' ? DEFAULT_CASH_ACCOUNT_ID : DEFAULT_BANK_ACCOUNT_ID);
-
-      const result = await atomically(db, async (tx) => {
-        if (input.attemptId) {
-          const existing = await tx.first<{ id: string }>('SELECT id FROM transactions WHERE attempt_id = ?', [input.attemptId]);
-          if (existing) return { id: existing.id, created: false };
-        }
-        await assertAccount(tx, accountId);
-        const id = newId();
-        const t = now();
-        await tx.run(
-          `INSERT INTO transactions
-             (id, amount_paise, type, category_key, payee_name, payee_vpa, payment_method, note, occurred_at, created_at,
-              updated_at, verified_by, upi_txn_id, upi_txn_ref, attempt_id, account_id, source, version)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-          [
-            id,
-            input.amountPaise,
-            input.type,
-            input.categoryKey,
-            input.payeeName.trim().slice(0, MAX_TEXT),
-            input.payeeVpa ?? null,
-            input.paymentMethod,
-            input.note?.trim().slice(0, MAX_TEXT) || null,
-            input.occurredAt ?? t,
-            t,
-            t,
-            input.verifiedBy,
-            input.upiTxnId ?? null,
-            input.upiTxnRef ?? null,
-            input.attemptId ?? null,
-            accountId,
-            input.source ?? (input.attemptId ? 'scan' : 'manual'),
-          ],
-        );
-        await writeTags(tx, id, tags);
-        return { id, created: true };
-      });
+      const result = await atomically(db, (tx) => insertIn(tx, input));
 
       const row = await readRow(db, result.id, true);
       if (!row) throw new Error('Failed to read back inserted transaction.');
@@ -295,6 +298,18 @@ export function createTransactionsRepo(db: AnyExecutor, deps: RepoDeps) {
     },
 
     /** Move money between two of the user's accounts. Stored as two linked rows; never counts as spending. */
+    /** Many inserts as one all-or-nothing transaction (statement import), with a single change notification. */
+    async insertMany(inputs: readonly NewTransaction[]): Promise<number> {
+      if (inputs.length === 0) return 0;
+      const created = await atomically(db, async (tx) => {
+        let n = 0;
+        for (const input of inputs) if ((await insertIn(tx, input)).created) n++;
+        return n;
+      });
+      notify();
+      return created;
+    },
+
     async createTransfer(input: NewTransfer): Promise<{ transferId: string; out: Transaction; in: Transaction }> {
       if (!isValidPaise(input.amountPaise)) throw new ValidationError('Invalid amount.');
       if (input.fromAccountId === input.toAccountId) throw new ValidationError('Choose two different accounts.');

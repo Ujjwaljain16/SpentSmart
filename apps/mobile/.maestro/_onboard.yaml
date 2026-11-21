@@ -1,0 +1,10 @@
+# Fresh install -> past onboarding. Used by the other flows.
+appId: com.ujjwaljain.spentsmart
+---
+- launchApp:
+    clearState: true
+- tapOn: "Display name"
+- inputText: "Maestro"
+- hideKeyboard
+- tapOn: "Continue"
+- assertVisible: "hey, maestro"

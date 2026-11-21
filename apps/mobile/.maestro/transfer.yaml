@@ -1,0 +1,12 @@
+appId: com.ujjwaljain.spentsmart
+name: Bank to cash transfer moves balances but is not spending
+---
+- runFlow: _onboard.yaml
+- tapOn: "Move money between your accounts"
+- inputText: "2000"
+- hideKeyboard
+- tapOn: "Save transfer"
+- tapOn: "Set account balances"
+- assertVisible: "Accounts"
+- assertVisible: ".*Bank & UPI.*2,000.00.*"
+- assertVisible: ".*Cash.*2,000.00.*"

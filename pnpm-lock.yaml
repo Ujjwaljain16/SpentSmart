@@ -75,6 +75,9 @@ importers:
       '@react-navigation/native':
         specifier: ^7.1.8
         version: 7.5.2(react-native@0.81.5(@babel/core@7.29.13)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
+      '@spentsmart/assistant':
+        specifier: workspace:*
+        version: link:../../packages/assistant
       '@spentsmart/finance':
         specifier: workspace:*
         version: link:../../packages/finance

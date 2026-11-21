@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_CATEGORIES } from '@spentsmart/finance/categories';
+import { runInsights } from '@spentsmart/finance/insights/run';
 import { NewTransaction } from '@spentsmart/finance/types';
 import { createNodeDriver, createTestContext } from '@/tests/helpers/node-driver';
 import { createSerializedDriver, SqlExecutor } from './driver';
@@ -401,6 +402,30 @@ describe('analytics repo', () => {
     const cmp = await repos.analytics.categoryComparison(c.key, NOW);
     expect(cmp).toMatchObject({ currentPaise: 300, previousPaise: 200, trend: { percent: 50, direction: 'up' } });
   });
+
+  it('feeds the insight detectors from stored rows, skipping deleted ones', async () => {
+    const { repos } = await createTestContext();
+    for (let m = 0; m < 5; m++) {
+      await repos.transactions.insert(tx({ payeeName: 'Netflix', amountPaise: 64_900, occurredAt: new Date(2026, m, 5, 10).getTime() }));
+    }
+    const deleted = await repos.transactions.insert(tx({ payeeName: 'Gone', occurredAt: at(3) }));
+    await repos.transactions.remove(deleted.id);
+
+    const rows = await repos.analytics.insightRows(new Date(2025, 0, 1).getTime(), NOW.getTime() + 1);
+    expect(rows).toHaveLength(5);
+    expect(rows[0]).toEqual({
+      id: expect.any(String),
+      type: 'expense',
+      amountPaise: 64_900,
+      occurredAt: new Date(2026, 0, 5, 10).getTime(),
+      payeeName: 'Netflix',
+      payeeVpa: null,
+      categoryKey: 'food',
+    });
+    const result = runInsights(rows, NOW.getTime());
+    expect(result.recurring).toEqual([expect.objectContaining({ payeeName: 'Netflix', cadence: 'monthly', active: true })]);
+    expect(result.recurringMonthlyPaise).toBe(64_900);
+  });
 });
 
 describe('erase everything', () => {
@@ -445,15 +470,23 @@ describe('scale', () => {
     const search = await time(() => repos.transactions.list({ search: 'merchant 399' }, 50));
     const summary = await time(() => repos.transactions.summarize({ categoryKey: 'food' }));
     const insights = await time(() => repos.analytics.insights('year', new Date(base)));
+    let detectorRows = 0;
+    const detectors = await time(async () => {
+      const rows = await repos.analytics.insightRows(base - 400 * DAY, base + 1);
+      detectorRows = rows.length;
+      runInsights(rows, base);
+    });
     // Generous ceilings (CI machines vary); typical local numbers are single-digit milliseconds.
     expect(page).toBeLessThan(100);
     expect(deep).toBeLessThan(100);
     expect(search).toBeLessThan(1500);
     expect(summary).toBeLessThan(500);
     expect(insights).toBeLessThan(1500);
+    expect(detectors).toBeLessThan(5000);
     console.info(
       `[scale] 100k rows: first page ${page.toFixed(1)}ms, deep page ${deep.toFixed(1)}ms, search ${search.toFixed(1)}ms, ` +
-        `summary ${summary.toFixed(1)}ms, year insights ${insights.toFixed(1)}ms`,
+        `summary ${summary.toFixed(1)}ms, year insights ${insights.toFixed(1)}ms, ` +
+        `detectors over ${detectorRows} rows ${detectors.toFixed(1)}ms`,
     );
   }, 120_000);
 });

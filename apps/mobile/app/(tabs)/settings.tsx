@@ -6,14 +6,12 @@ import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Button } from '@/components/ui/Button';
 import { ISSUES_URL, PRIVACY_POLICY_URL } from '@/constants/app';
 import { BorderRadius, FontSizes, MIN_TOUCH_TARGET, Spacing } from '@/constants/theme';
 import { useRepos } from '@/contexts/database-context';
 import { useSecurity } from '@/contexts/security-context';
 import { useSettings } from '@/contexts/settings-context';
 import { ThemeMode, useTheme } from '@/contexts/theme-context';
-import { paiseToDecimal, parseRupees } from '@spentsmart/finance/money';
 import { useLiveQuery } from '@/hooks/use-live-query';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { getRecentLogs } from '@/lib/logger';
@@ -43,13 +41,23 @@ export default function SettingsScreen() {
   const { isBioLockEnabled, isPrivacyModeEnabled, canUseLock, lockTimeoutSeconds, setBioLockEnabled, setPrivacyModeEnabled, setLockTimeoutSeconds, verifyOwner } = useSecurity();
 
   const { data: counts } = useLiveQuery(async (r) => ({ transactions: await r.transactions.count(), categories: (await r.categories.list()).length }));
-  const { data: overallBudget } = useLiveQuery(async (r) => (await r.budgets.listActive()).find((b) => b.categoryKey === null) ?? null);
-  const [budgetText, setBudgetText] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
+  const [paydayText, setPaydayText] = useState(settings.payday ? String(settings.payday) : '');
 
   useEffect(() => {
-    setBudgetText(overallBudget ? paiseToDecimal(overallBudget.limitPaise) : '');
-  }, [overallBudget]);
+    setPaydayText(settings.payday ? String(settings.payday) : '');
+  }, [settings.payday]);
+
+  const savePayday = () => {
+    const trimmed = paydayText.trim();
+    const day = trimmed === '' ? 0 : Number(trimmed);
+    if (!Number.isInteger(day) || day < 0 || day > 31) {
+      Alert.alert('Payday', 'Enter a day of the month from 1 to 31, or leave it empty.');
+      setPaydayText(settings.payday ? String(settings.payday) : '');
+      return;
+    }
+    if (day !== settings.payday) void setSetting('payday', day);
+  };
 
   const run = async (key: string, task: () => Promise<void>, errorMessage: string) => {
     setBusy(key);
@@ -78,27 +86,6 @@ export default function SettingsScreen() {
     await setSetting('remindersEnabled', active);
     if (enabled && !active) Alert.alert('Reminders', 'Notifications are turned off for SpentSmart. Enable them in system settings to get reminders.');
   };
-
-  const saveBudget = () =>
-    run(
-      'budget',
-      async () => {
-        const trimmed = budgetText.trim();
-        if (trimmed === '') {
-          await repos.budgets.remove(null);
-          Alert.alert('Budget removed', 'You no longer have a monthly budget.');
-          return;
-        }
-        const paise = parseRupees(trimmed);
-        if (paise === null) {
-          Alert.alert('Invalid amount', 'Enter a budget like 15000 or 15000.50.');
-          return;
-        }
-        await repos.budgets.set(null, paise, overallBudget?.rollover ?? false);
-        Alert.alert('Saved', 'Monthly budget updated.');
-      },
-      'The budget could not be saved.',
-    );
 
   const chooseScope = (title: string, onChoose: (scope: ExportScope) => void) => {
     const now = new Date();
@@ -250,20 +237,29 @@ export default function SettingsScreen() {
           />
         </Section>
 
-        <Section title="BUDGET">
-          <View style={styles.padded}>
-            <Text style={[styles.rowTitle, { color: colors.text }]}>Monthly limit (₹)</Text>
-            <TextInput
-              accessibilityLabel="Monthly budget in rupees"
-              style={[styles.budgetInput, { color: colors.text, borderColor: colors.border }]}
-              value={budgetText}
-              onChangeText={setBudgetText}
-              placeholder="e.g. 15000 (leave empty for none)"
-              placeholderTextColor={colors.textSecondary}
-              keyboardType="decimal-pad"
-            />
-            <Button label="Save budget" onPress={() => void saveBudget()} loading={busy === 'budget'} />
-          </View>
+        <Section title="MONEY">
+          <Row icon="pie-chart-outline" title="Budgets & goals" subtitle="Monthly limits, category budgets, savings goals" onPress={() => router.push(routes.budgets)} />
+          <Divider />
+          <Row icon="wallet-outline" title="Accounts" subtitle="Bank, cash, wallets and their balances" onPress={() => router.push(routes.accounts)} />
+          <Divider />
+          <Row
+            icon="calendar-outline"
+            title="Payday"
+            subtitle="Day of the month your income arrives. Safe to spend lasts until then."
+            right={
+              <TextInput
+                accessibilityLabel="Payday, day of the month"
+                style={[styles.paydayInput, { color: colors.text, borderColor: colors.border }]}
+                value={paydayText}
+                onChangeText={setPaydayText}
+                onEndEditing={savePayday}
+                placeholder="—"
+                placeholderTextColor={colors.textSecondary}
+                keyboardType="number-pad"
+                maxLength={2}
+              />
+            }
+          />
         </Section>
 
         <Section title="CATEGORIES">
@@ -338,7 +334,7 @@ const styles = StyleSheet.create({
   padded: { padding: Spacing.md, gap: Spacing.sm },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
   chip: { paddingHorizontal: Spacing.md, minHeight: 40, borderRadius: BorderRadius.full, borderWidth: 1, justifyContent: 'center' },
-  budgetInput: { fontSize: FontSizes.lg, fontWeight: '600', paddingVertical: Spacing.sm, borderBottomWidth: 1 },
+  paydayInput: { fontSize: FontSizes.lg, fontWeight: '600', minWidth: 48, minHeight: MIN_TOUCH_TARGET, textAlign: 'center', borderBottomWidth: 1 },
   themeRow: { flexDirection: 'row', padding: Spacing.sm, gap: Spacing.sm },
   themeOption: { flex: 1, minHeight: MIN_TOUCH_TARGET, alignItems: 'center', justifyContent: 'center', borderRadius: BorderRadius.md, borderWidth: 1 },
 });

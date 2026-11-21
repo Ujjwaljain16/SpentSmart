@@ -17,6 +17,8 @@ export interface SettingsShape {
   /** The user's own UPI ID (for receiving). */
   myVpa: string;
   myPayName: string;
+  /** Day of the month income usually arrives (1-31); 0 when not set. */
+  payday: number;
 }
 
 export const SETTINGS_DEFAULTS: SettingsShape = {
@@ -31,6 +33,7 @@ export const SETTINGS_DEFAULTS: SettingsShape = {
   preferredUpiApp: '',
   myVpa: '',
   myPayName: '',
+  payday: 0,
 };
 
 export type SettingKey = keyof SettingsShape;

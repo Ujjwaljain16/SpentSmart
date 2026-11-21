@@ -88,7 +88,7 @@ export default function HistoryScreen() {
 
       <View style={[styles.header, { paddingTop: insets.top + Spacing.md }]}>
         <Text style={[styles.title, { color: colors.text }]} accessibilityRole="header">
-          History
+          Activity
         </Text>
 
         <View style={[styles.search, { backgroundColor: colors.card, borderColor: colors.border }]}>

@@ -10,8 +10,9 @@ type IconName = keyof typeof Ionicons.glyphMap;
 
 const TABS: readonly { name: string; title: string; icon: IconName }[] = [
   { name: 'index', title: 'Home', icon: 'home-outline' },
-  { name: 'charts', title: 'Charts', icon: 'bar-chart-outline' },
-  { name: 'history', title: 'History', icon: 'time-outline' },
+  { name: 'history', title: 'Activity', icon: 'list-outline' },
+  { name: 'budgets', title: 'Budgets', icon: 'pie-chart-outline' },
+  { name: 'charts', title: 'Insights', icon: 'bar-chart-outline' },
   { name: 'settings', title: 'Settings', icon: 'settings-outline' },
 ];
 

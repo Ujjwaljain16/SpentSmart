@@ -31,4 +31,18 @@ export const routes = {
   }),
   analyticsDetail: (categoryKey: string): Href => ({ pathname: '/analytics-detail', params: { category: categoryKey } }),
   editTransaction: (id: string): Href => ({ pathname: '/edit-transaction', params: { id } }),
+  budgets: '/(tabs)/budgets' as Href,
+  activity: '/(tabs)/history' as Href,
+  quickAdd: '/quick-add' as Href,
+  transfer: '/transfer' as Href,
+  accounts: '/accounts' as Href,
+  newAccount: '/account-edit' as Href,
+  editAccount: (id: string): Href => ({ pathname: '/account-edit', params: { id } }),
+  /** `null` edits the overall budget; a key edits that category's; no argument starts a new one. */
+  editBudget: (categoryKey?: string | null): Href => ({
+    pathname: '/budget-edit',
+    params: categoryKey === undefined ? {} : categoryKey === null ? { overall: '1' } : { category: categoryKey },
+  }),
+  newGoal: '/goal-edit' as Href,
+  editGoal: (id: string): Href => ({ pathname: '/goal-edit', params: { id } }),
 };

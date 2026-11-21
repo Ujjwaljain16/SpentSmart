@@ -7,6 +7,22 @@ line in an engineering interview.
 Source: the "PULSE" product blueprint, adapted to what this repo already has. Where this plan disagrees with the
 blueprint, the reason is written down.
 
+## Status (22 Nov 2026)
+
+| Phase | State | Left / blocked |
+|---|---|---|
+| 0 · Close out v1 | Done | Merchant UPI intent untested on a phone |
+| 1 · Monorepo | Done | — |
+| 2 · Ledger v2 | Done | — |
+| 3 · UX + quick add | Done | Parser 99.6% on 255 phrases, 95% on a 40-phrase blind set. TalkBack: automated check of unnamed or small tap targets; a manual pass with TalkBack is still owed |
+| 4 · Insights | Done | — |
+| 5 · Sync | Built and tested on the emulator against the local API (backup → wipe → restore) | **Blocked on accounts:** Google OAuth client (sign-in), Neon + Render (deploy). Two-phone test on real devices |
+| 6 · Assistant, voice, receipts, import | Built; assistant tested on the emulator with the fake model | **Blocked on an API key:** live eval against Claude (costs money). Voice and receipt scanning on a real phone |
+| 7 · Hardening, beta | Not started | Crash reporting, low-end performance, backup/restore drill, privacy policy (draft in `docs/v2/PRIVACY-DRAFT.md`), Play listing, beta |
+
+How it's tested: `pnpm turbo run typecheck lint test`, plus Maestro flows in `apps/mobile/.maestro` on the emulator
+(see `docs/DEV-LOOP.md`).
+
 ---
 
 ## 1. Where we start (v1, branch `hardening/audit-fixes`)

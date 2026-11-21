@@ -211,10 +211,11 @@ class UpiIntentModule : Module() {
   }
 
   // Low error correction keeps the code small (fewer modules), which UPI apps decode fastest from a clean image.
+  // No character-set hint: UPI URIs are percent-encoded ASCII, and the hint would add an ECI header some scanners
+  // handle badly.
   private fun encodeQr(text: String): Bitmap {
     val hints = mapOf(
       EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.L,
-      EncodeHintType.CHARACTER_SET to "UTF-8",
       EncodeHintType.MARGIN to 4,
     )
     val matrix = QRCodeWriter().encode(text, BarcodeFormat.QR_CODE, 0, 0, hints)

@@ -63,6 +63,13 @@ class UpiIntentModule : Module() {
       }
 
       val base = Intent(Intent.ACTION_VIEW, Uri.parse(uri))
+      // An empty system chooser gives no result and no error; report "no app" so the UI can say so.
+      val handlers = activity.packageManager.queryIntentActivities(base, PackageManager.MATCH_DEFAULT_ONLY)
+        .filter { it.activityInfo.packageName != activity.packageName }
+      if (handlers.isEmpty() || (!packageName.isNullOrEmpty() && handlers.none { it.activityInfo.packageName == packageName })) {
+        promise.reject("ERR_NO_UPI_APP", "No app can handle this UPI payment", null)
+        return@AsyncFunction
+      }
       val intent = if (packageName.isNullOrEmpty()) {
         Intent.createChooser(base, "Pay with")
       } else {

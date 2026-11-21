@@ -239,6 +239,46 @@ export function createTransactionsRepo(db: AnyExecutor, deps: RepoDeps) {
     ]);
   }
 
+  /** Both legs of one transfer inside an open transaction. Returns the out and in leg ids. */
+  async function transferIn(tx: SqlExecutor, input: NewTransfer, transferId: string): Promise<string[]> {
+    if (!isValidPaise(input.amountPaise)) throw new ValidationError('Invalid amount.');
+    if (input.fromAccountId === input.toAccountId) throw new ValidationError('Choose two different accounts.');
+    await assertAccount(tx, input.fromAccountId);
+    await assertAccount(tx, input.toAccountId);
+    const names = await tx.all<{ id: string; name: string }>('SELECT id, name FROM accounts WHERE id IN (?, ?)', [
+      input.fromAccountId,
+      input.toAccountId,
+    ]);
+    const nameOf = (id: string) => names.find((n) => n.id === id)?.name ?? 'account';
+    const t = now();
+    const legs: Array<{ id: string; role: TransferRole; account: string; label: string }> = [
+      { id: newId(), role: 'out', account: input.fromAccountId, label: `To ${nameOf(input.toAccountId)}` },
+      { id: newId(), role: 'in', account: input.toAccountId, label: `From ${nameOf(input.fromAccountId)}` },
+    ];
+    for (const leg of legs) {
+      await tx.run(
+        `INSERT INTO transactions
+           (id, amount_paise, type, category_key, payee_name, payment_method, note, occurred_at, created_at, updated_at,
+            verified_by, account_id, source, version, transfer_id, transfer_role)
+         VALUES (?, ?, 'transfer', ?, ?, 'bank', ?, ?, ?, ?, 'manual', ?, 'manual', 1, ?, ?)`,
+        [
+          leg.id,
+          input.amountPaise,
+          TRANSFER_CATEGORY_KEY,
+          leg.label,
+          input.note?.trim().slice(0, MAX_TEXT) || null,
+          input.occurredAt ?? t,
+          t,
+          t,
+          leg.account,
+          transferId,
+          leg.role,
+        ],
+      );
+    }
+    return legs.map((l) => l.id);
+  }
+
   /** One insert inside an open transaction; idempotent on attempt id. */
   async function insertIn(tx: SqlExecutor, input: NewTransaction): Promise<{ id: string; created: boolean }> {
     validateNew(input);
@@ -298,12 +338,16 @@ export function createTransactionsRepo(db: AnyExecutor, deps: RepoDeps) {
     },
 
     /** Move money between two of the user's accounts. Stored as two linked rows; never counts as spending. */
-    /** Many inserts as one all-or-nothing transaction (statement import), with a single change notification. */
-    async insertMany(inputs: readonly NewTransaction[]): Promise<number> {
-      if (inputs.length === 0) return 0;
+    /** Many inserts (and transfers) as one all-or-nothing transaction, with a single change notification. */
+    async insertMany(inputs: readonly NewTransaction[], transfers: readonly NewTransfer[] = []): Promise<number> {
+      if (inputs.length === 0 && transfers.length === 0) return 0;
       const created = await atomically(db, async (tx) => {
         let n = 0;
         for (const input of inputs) if ((await insertIn(tx, input)).created) n++;
+        for (const t of transfers) {
+          await transferIn(tx, t, newId());
+          n++;
+        }
         return n;
       });
       notify();
@@ -311,46 +355,8 @@ export function createTransactionsRepo(db: AnyExecutor, deps: RepoDeps) {
     },
 
     async createTransfer(input: NewTransfer): Promise<{ transferId: string; out: Transaction; in: Transaction }> {
-      if (!isValidPaise(input.amountPaise)) throw new ValidationError('Invalid amount.');
-      if (input.fromAccountId === input.toAccountId) throw new ValidationError('Choose two different accounts.');
-
       const transferId = newId();
-      const ids = await atomically(db, async (tx) => {
-        await assertAccount(tx, input.fromAccountId);
-        await assertAccount(tx, input.toAccountId);
-        const names = await tx.all<{ id: string; name: string }>('SELECT id, name FROM accounts WHERE id IN (?, ?)', [
-          input.fromAccountId,
-          input.toAccountId,
-        ]);
-        const nameOf = (id: string) => names.find((n) => n.id === id)?.name ?? 'account';
-        const t = now();
-        const legs: Array<{ id: string; role: TransferRole; account: string; label: string }> = [
-          { id: newId(), role: 'out', account: input.fromAccountId, label: `To ${nameOf(input.toAccountId)}` },
-          { id: newId(), role: 'in', account: input.toAccountId, label: `From ${nameOf(input.fromAccountId)}` },
-        ];
-        for (const leg of legs) {
-          await tx.run(
-            `INSERT INTO transactions
-               (id, amount_paise, type, category_key, payee_name, payment_method, note, occurred_at, created_at, updated_at,
-                verified_by, account_id, source, version, transfer_id, transfer_role)
-             VALUES (?, ?, 'transfer', ?, ?, 'bank', ?, ?, ?, ?, 'manual', ?, 'manual', 1, ?, ?)`,
-            [
-              leg.id,
-              input.amountPaise,
-              TRANSFER_CATEGORY_KEY,
-              leg.label,
-              input.note?.trim().slice(0, MAX_TEXT) || null,
-              input.occurredAt ?? t,
-              t,
-              t,
-              leg.account,
-              transferId,
-              leg.role,
-            ],
-          );
-        }
-        return legs.map((l) => l.id);
-      });
+      const ids = await atomically(db, (tx) => transferIn(tx, input, transferId));
 
       notify();
       const [outRow, inRow] = await Promise.all([readRow(db, ids[0]!), readRow(db, ids[1]!)]);

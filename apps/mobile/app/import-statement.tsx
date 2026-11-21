@@ -76,7 +76,8 @@ export default function ImportStatementScreen() {
     }
   };
 
-  const spend = preview?.fresh.filter((r) => r.type === 'expense').reduce((s, r) => s + r.amountPaise, 0) ?? 0;
+  const spend = preview?.fresh.filter((r) => r.type === 'expense' && !r.toCash).reduce((s, r) => s + r.amountPaise, 0) ?? 0;
+  const toCash = preview?.fresh.filter((r) => r.toCash).reduce((s, r) => s + r.amountPaise, 0) ?? 0;
   const income = preview?.fresh.filter((r) => r.type === 'income').reduce((s, r) => s + r.amountPaise, 0) ?? 0;
 
   return (
@@ -113,10 +114,15 @@ export default function ImportStatementScreen() {
             </Text>
             <Text style={[styles.big, { color: colors.text }]}>{preview.fresh.length} new</Text>
             <Text style={[styles.hint, { color: colors.textSecondary }]}>
-              {money(spend)} spent, {money(income)} received
+              {money(spend)} spent, {money(income)} received{toCash > 0 ? `, ${money(toCash)} moved to Cash` : ''}
               {preview.duplicates > 0 ? ` · ${preview.duplicates} already recorded, skipped` : ''}
               {preview.skipped.length > 0 ? ` · ${preview.skipped.length} line${preview.skipped.length === 1 ? '' : 's'} couldn’t be read (${preview.skipped.slice(0, 3).map((s) => s.line).join(', ')}${preview.skipped.length > 3 ? '…' : ''})` : ''}
             </Text>
+            {preview.fresh.length > 0 ? (
+              <Button label={`Import ${preview.fresh.length} transaction${preview.fresh.length === 1 ? '' : 's'}`} onPress={() => void confirm()} loading={busy} />
+            ) : (
+              <Text style={[styles.hint, { color: colors.textSecondary }]}>Nothing new to import.</Text>
+            )}
             {preview.fresh.slice(0, 8).map((r) => (
               <View key={r.line} style={[styles.row, { borderTopColor: colors.border }]}>
                 <View style={styles.flex}>
@@ -124,11 +130,11 @@ export default function ImportStatementScreen() {
                     {r.payeeName}
                   </Text>
                   <Text style={[styles.meta, { color: colors.textSecondary }]}>
-                    {new Date(r.occurredAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} · {resolve(r.categoryKey).label}
+                    {new Date(r.occurredAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} · {r.toCash ? 'Transfer to Cash' : resolve(r.categoryKey).label}
                   </Text>
                 </View>
-                <Text style={[styles.amount, { color: r.type === 'income' ? colors.success : colors.text }]}>
-                  {r.type === 'income' ? '+' : '-'}
+                <Text style={[styles.amount, { color: r.type === 'income' ? colors.success : r.toCash ? colors.textSecondary : colors.text }]}>
+                  {r.type === 'income' ? '+' : r.toCash ? '' : '-'}
                   {money(r.amountPaise)}
                 </Text>
               </View>
@@ -137,11 +143,6 @@ export default function ImportStatementScreen() {
           </FormCard>
         ) : null}
 
-        {preview && preview.fresh.length > 0 ? (
-          <Button label={`Import ${preview.fresh.length} transaction${preview.fresh.length === 1 ? '' : 's'}`} onPress={() => void confirm()} loading={busy} />
-        ) : preview ? (
-          <Text style={[styles.hint, { color: colors.textSecondary }]}>Nothing new to import.</Text>
-        ) : null}
       </ScrollView>
     </View>
   );

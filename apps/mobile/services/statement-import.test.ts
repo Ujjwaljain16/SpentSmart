@@ -22,7 +22,7 @@ describe('statement import', () => {
     expect(preview.duplicates).toBe(1);
     expect(preview.fresh.map((r) => [r.payeeName, r.type, r.amountPaise, r.categoryKey])).toEqual([
       ['Acme Technologies Salary Nov', 'income', 60_000_00, 'income'],
-      ['Landlord', 'expense', 15_000_00, 'other'],
+      ['Landlord', 'expense', 15_000_00, 'rent'],
       ['Chai Point', 'expense', 20_00, 'food'],
     ]);
     // Preview changes nothing.
@@ -48,6 +48,24 @@ describe('statement import', () => {
     await repos.transactions.insert({ amountPaise: 20_00, type: 'expense', categoryKey: 'food', payeeName: 'Chai Point', paymentMethod: 'cash', verifiedBy: 'manual', occurredAt: new Date(2026, 10, 4, 9).getTime() });
     // The cash chai is a different payment from the UPI chai in the bank statement.
     expect((await previewImport(repos, STATEMENT, 'default-bank')).duplicates).toBe(0);
+  });
+
+  it('an ATM withdrawal becomes a transfer to Cash, not spending', async () => {
+    const { repos } = await createTestContext(NOW);
+    const csv = STATEMENT + '\n10/11/26,ATM CASH WDL MG ROAD,0,10/11/26,"2,000.00",,"55,140.00"';
+    const preview = await previewImport(repos, csv, 'default-bank');
+    expect(preview.fresh.filter((r) => r.toCash).map((r) => r.amountPaise)).toEqual([2_000_00]);
+    expect(await commitImport(repos, preview.fresh, 'default-bank')).toBe(5);
+
+    const accounts = await repos.accounts.list();
+    expect(accounts.find((a) => a.id === 'default-cash')!.balancePaise).toBe(2_000_00);
+    const transfers = (await repos.transactions.list({ type: 'transfer' }, 10)).items;
+    expect(transfers.map((t) => t.transferRole).sort()).toEqual(['in', 'out']);
+    // Spending this month leaves the withdrawal out.
+    const summary = await repos.analytics.insights('month', new Date(NOW));
+    expect(summary.expensePaise).toBe(15_000_00 + 340_00 + 20_00);
+    // Importing again recognises the transfer and adds nothing.
+    expect((await previewImport(repos, csv, 'default-bank')).fresh).toEqual([]);
   });
 
   it('a failure halfway saves nothing', async () => {

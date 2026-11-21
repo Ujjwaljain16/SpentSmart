@@ -1,11 +1,15 @@
 import { parseQuickAdd } from '@spentsmart/finance/quick-add';
 import { StatementRow, findDuplicates, parseStatement } from '@spentsmart/finance/import/statement';
 import { INCOME_CATEGORY_KEY } from '@spentsmart/finance/categories';
+import { DEFAULT_CASH_ACCOUNT_ID } from '@/db/migrations';
 import { Repositories } from '@/db/repositories';
+
+/** ATM and cash-withdrawal narrations: money moving to the Cash account, not spending. */
+const CASH_WITHDRAWAL = /\b(atm|nwd|cash\s*wdl|cash\s*withdrawal|atw)\b/i;
 
 export interface ImportPreview {
   /** Rows not already in the app, each with the category the merchant dictionary suggests. */
-  fresh: (StatementRow & { categoryKey: string })[];
+  fresh: (StatementRow & { categoryKey: string; toCash: boolean })[];
   duplicates: number;
   skipped: { line: number; reason: string }[];
   columns: { date: string; description: string; amount: string };
@@ -32,6 +36,7 @@ export async function previewImport(repos: Repositories, csvText: string, accoun
   return {
     fresh: fresh.map((row) => ({
       ...row,
+      toCash: row.type === 'expense' && accountId !== DEFAULT_CASH_ACCOUNT_ID && CASH_WITHDRAWAL.test(row.description),
       // The quick-add merchant dictionary already knows "Swiggy" is food; reuse it for bank narrations.
       categoryKey: row.type === 'income' ? INCOME_CATEGORY_KEY : parseQuickAdd(row.payeeName, categories, new Date(row.occurredAt)).categoryKey,
     })),
@@ -41,10 +46,10 @@ export async function previewImport(repos: Repositories, csvText: string, accoun
   };
 }
 
-/** Save previewed rows into one account. All or nothing. */
+/** Save previewed rows into one account; cash withdrawals become transfers to Cash. All or nothing. */
 export async function commitImport(repos: Repositories, rows: ImportPreview['fresh'], accountId: string): Promise<number> {
-  await repos.transactions.insertMany(
-    rows.map((r) => ({
+  return repos.transactions.insertMany(
+    rows.filter((r) => !r.toCash).map((r) => ({
       amountPaise: r.amountPaise,
       type: r.type,
       categoryKey: r.categoryKey,
@@ -58,6 +63,8 @@ export async function commitImport(repos: Repositories, rows: ImportPreview['fre
       accountId,
       source: 'import' as const,
     })),
+    rows
+      .filter((r) => r.toCash)
+      .map((r) => ({ fromAccountId: accountId, toAccountId: DEFAULT_CASH_ACCOUNT_ID, amountPaise: r.amountPaise, occurredAt: r.occurredAt, note: r.payeeName })),
   );
-  return rows.length;
 }

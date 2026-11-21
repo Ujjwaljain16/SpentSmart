@@ -10,6 +10,7 @@ import { ISSUES_URL, PRIVACY_POLICY_URL } from '@/constants/app';
 import { BorderRadius, FontSizes, MIN_TOUCH_TARGET, Spacing } from '@/constants/theme';
 import { useRepos } from '@/contexts/database-context';
 import { useSecurity } from '@/contexts/security-context';
+import { useCloud } from '@/contexts/cloud-context';
 import { useSettings } from '@/contexts/settings-context';
 import { ThemeMode, useTheme } from '@/contexts/theme-context';
 import { useLiveQuery } from '@/hooks/use-live-query';
@@ -42,6 +43,9 @@ export default function SettingsScreen() {
 
   const { data: counts } = useLiveQuery(async (r) => ({ transactions: await r.transactions.count(), categories: (await r.categories.list()).length }));
   const [busy, setBusy] = useState<string | null>(null);
+  const { status: cloudStatus } = useCloud();
+  const cloudSubtitle =
+    cloudStatus?.state === 'ready' ? 'On · end-to-end encrypted' : cloudStatus?.state === 'needs-key' ? 'Finish setting up' : 'Off · back up and use on another phone';
   const [paydayText, setPaydayText] = useState(settings.payday ? String(settings.payday) : '');
 
   useEffect(() => {
@@ -234,6 +238,17 @@ export default function SettingsScreen() {
             title="Daily reminders"
             subtitle="10:00 and 20:00, on this device only"
             right={<Switch accessibilityLabel="Daily reminders" value={settings.remindersEnabled} onValueChange={(v) => void toggleReminders(v)} trackColor={{ true: colors.tint }} />}
+          />
+        </Section>
+
+        <Section title="SYNC & LABS">
+          <Row icon="cloud-outline" title="Sync & backup" subtitle={cloudSubtitle} onPress={() => router.push(routes.sync)} />
+          <Divider />
+          <Row
+            icon="sparkles-outline"
+            title="Assistant (lab)"
+            subtitle="Ask questions about your money. Needs Sync & backup sign-in."
+            right={<Switch accessibilityLabel="Assistant" value={settings.assistantEnabled} onValueChange={(v) => void setSetting('assistantEnabled', v)} trackColor={{ true: colors.tint }} />}
           />
         </Section>
 

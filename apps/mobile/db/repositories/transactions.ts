@@ -354,7 +354,60 @@ export function createTransactionsRepo(db: AnyExecutor, deps: RepoDeps) {
       if (inputs.length === 0 && transfers.length === 0) return 0;
       const created = await atomically(db, async (tx) => {
         let n = 0;
-        for (const input of inputs) if ((await insertIn(tx, input)).created) n++;
+        // Rows tied to a payment attempt keep the idempotent one-by-one path; the rest go in multi-row statements.
+        // On the phone every statement is a trip between JavaScript and native code, so 100k imports would
+        // otherwise take minutes.
+        const plain = inputs.filter((i) => !i.attemptId);
+        for (const input of inputs) if (input.attemptId && (await insertIn(tx, input)).created) n++;
+
+        const prepared = plain.map((input) => {
+          validateNew(input);
+          return { input, tags: cleanTags(input.tags), accountId: input.accountId ?? (input.paymentMethod === 'cash' ? DEFAULT_CASH_ACCOUNT_ID : DEFAULT_BANK_ACCOUNT_ID) };
+        });
+        for (const accountId of new Set(prepared.map((p) => p.accountId))) await assertAccount(tx, accountId);
+
+        const t0 = now();
+        const COLS = 17;
+        const CHUNK = 50; // 50 rows x 17 values stays under SQLite's 999-parameter limit on every Android version
+        for (let i = 0; i < prepared.length; i += CHUNK) {
+          const chunk = prepared.slice(i, i + CHUNK);
+          const values: SqlValue[] = [];
+          const ids: string[] = [];
+          for (const { input, accountId } of chunk) {
+            const id = newId();
+            ids.push(id);
+            values.push(
+              id,
+              input.amountPaise,
+              input.type,
+              input.categoryKey,
+              input.payeeName.trim().slice(0, MAX_TEXT),
+              input.payeeVpa ?? null,
+              input.paymentMethod,
+              input.note?.trim().slice(0, MAX_TEXT) || null,
+              input.occurredAt ?? t0,
+              t0,
+              t0,
+              input.verifiedBy,
+              input.upiTxnId ?? null,
+              input.upiTxnRef ?? null,
+              null,
+              accountId,
+              input.source ?? 'manual',
+            );
+          }
+          await tx.run(
+            `INSERT INTO transactions
+               (id, amount_paise, type, category_key, payee_name, payee_vpa, payment_method, note, occurred_at, created_at,
+                updated_at, verified_by, upi_txn_id, upi_txn_ref, attempt_id, account_id, source, version)
+             VALUES ${chunk.map(() => `(${new Array(COLS).fill('?').join(', ')}, 1)`).join(', ')}`,
+            values,
+          );
+          for (let j = 0; j < chunk.length; j++) {
+            for (const tag of chunk[j]!.tags) await tx.run('INSERT INTO transaction_tags (transaction_id, tag) VALUES (?, ?)', [ids[j]!, tag]);
+          }
+          n += chunk.length;
+        }
         for (const t of transfers) {
           await transferIn(tx, t, newId());
           n++;

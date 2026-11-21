@@ -318,7 +318,9 @@ export default function PaymentScreen() {
         <View style={[styles.banner, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Ionicons name={draft.source?.isMerchant ? 'storefront-outline' : 'person-outline'} size={16} color={colors.textSecondary} />
           <Text style={[styles.bannerText, { color: colors.textSecondary }]}>
-            The name comes from the QR code and isn’t verified. Check the UPI ID before you pay.
+            {draft.source
+              ? 'The name comes from the QR code and isn’t verified. Check the UPI ID before you pay.'
+              : 'Check the UPI ID before you pay. Money sent to a wrong ID usually can’t be recovered.'}
           </Text>
         </View>
 

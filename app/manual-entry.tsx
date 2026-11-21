@@ -14,6 +14,7 @@ import { parseRupees } from '@/domain/money';
 import { PAYMENT_METHODS, PaymentMethod, TransactionType } from '@/domain/types';
 import { isValidVpa, normalizeVpa, sanitizeText } from '@/domain/upi/vpa';
 import { useThemeColors } from '@/hooks/use-theme-colors';
+import { cancelExternalTrip, expectExternalTrip } from '@/lib/external-trip';
 import { log } from '@/lib/logger';
 import { routes } from '@/lib/routes';
 import { setPaymentDraft } from '@/lib/payment-draft-store';
@@ -21,13 +22,16 @@ import { setPaymentDraft } from '@/lib/payment-draft-store';
 /** Pick one contact with the system picker. Nothing but the chosen name is read, and nothing is stored. */
 async function pickContactName(): Promise<string | null> {
   try {
+    expectExternalTrip();
     return (await Contacts.presentContactPickerAsync())?.name ?? null;
   } catch {
+    cancelExternalTrip();
     const permission = await Contacts.requestPermissionsAsync();
     if (!permission.granted) {
       Alert.alert('Permission needed', 'Allow access to contacts to pick a name. SpentSmart only reads the contact you choose.');
       return null;
     }
+    expectExternalTrip();
     return (await Contacts.presentContactPickerAsync())?.name ?? null;
   }
 }
@@ -118,7 +122,9 @@ export default function ManualEntryScreen() {
       style={[styles.chip, { backgroundColor: active ? tone ?? colors.tint : colors.surface, borderColor: active ? tone ?? colors.tint : colors.border }]}
       onPress={onPress}
     >
-      <Text style={{ color: active ? colors.onTint : colors.textSecondary, fontSize: FontSizes.xs, fontWeight: '700' }}>{label}</Text>
+      <Text numberOfLines={1} style={{ color: active ? colors.onTint : colors.textSecondary, fontSize: FontSizes.xs, fontWeight: '700' }}>
+        {label}
+      </Text>
     </TouchableOpacity>
   );
 
@@ -212,7 +218,7 @@ const styles = StyleSheet.create({
   content: { padding: Spacing.lg, gap: Spacing.md },
   typeRow: { flexDirection: 'row', gap: Spacing.sm },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-  chip: { flex: 1, minHeight: MIN_TOUCH_TARGET - 8, paddingHorizontal: Spacing.md, borderRadius: BorderRadius.full, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  chip: { flex: 1, minHeight: MIN_TOUCH_TARGET - 8, paddingHorizontal: Spacing.xs, borderRadius: BorderRadius.full, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   amountRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   currency: { fontSize: 40, fontWeight: '700', marginRight: 8 },
   amountInput: { fontSize: 56, fontWeight: '700', minWidth: 120 },

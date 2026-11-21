@@ -41,6 +41,31 @@ export interface CategoryComparison {
   trend: Trend;
 }
 
+export async function loadInsightRows(db: SqlExecutor, since: number, until: number): Promise<InsightTxn[]> {
+  const rows = await db.all<{
+    id: string;
+    type: InsightTxn['type'];
+    amount_paise: number;
+    occurred_at: number;
+    payee_name: string;
+    payee_vpa: string | null;
+    category_key: string;
+  }>(
+    `SELECT id, type, amount_paise, occurred_at, payee_name, payee_vpa, category_key FROM transactions
+     WHERE deleted_at IS NULL AND occurred_at >= ? AND occurred_at < ? ORDER BY occurred_at ASC`,
+    [since, until],
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    type: r.type,
+    amountPaise: r.amount_paise,
+    occurredAt: r.occurred_at,
+    payeeName: r.payee_name,
+    payeeVpa: r.payee_vpa,
+    categoryKey: r.category_key,
+  }));
+}
+
 export function createAnalyticsRepo(db: SqlExecutor) {
   async function totals(range: Range): Promise<PeriodTotals> {
     const rows = await db.all<{ type: string; s: number }>(
@@ -73,30 +98,7 @@ export function createAnalyticsRepo(db: SqlExecutor) {
     categoryTotal,
 
     /** The columns the insight detectors read, for non-deleted rows in [since, until). */
-    async insightRows(since: number, until: number): Promise<InsightTxn[]> {
-      const rows = await db.all<{
-        id: string;
-        type: InsightTxn['type'];
-        amount_paise: number;
-        occurred_at: number;
-        payee_name: string;
-        payee_vpa: string | null;
-        category_key: string;
-      }>(
-        `SELECT id, type, amount_paise, occurred_at, payee_name, payee_vpa, category_key FROM transactions
-         WHERE deleted_at IS NULL AND occurred_at >= ? AND occurred_at < ? ORDER BY occurred_at ASC`,
-        [since, until],
-      );
-      return rows.map((r) => ({
-        id: r.id,
-        type: r.type,
-        amountPaise: r.amount_paise,
-        occurredAt: r.occurred_at,
-        payeeName: r.payee_name,
-        payeeVpa: r.payee_vpa,
-        categoryKey: r.category_key,
-      }));
-    },
+    insightRows: (since: number, until: number) => loadInsightRows(db, since, until),
 
     async insights(period: Period, now: Date = new Date()): Promise<PeriodInsights> {
       const { current, previous } = periodRanges(period, now);

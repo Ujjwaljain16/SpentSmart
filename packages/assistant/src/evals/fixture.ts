@@ -1,4 +1,6 @@
 import { DEFAULT_CATEGORIES } from '@spentsmart/finance/categories';
+import { budgetProjection } from '@spentsmart/finance/insights/budget-forecast';
+import { detectRecurring } from '@spentsmart/finance/insights/recurring';
 import { budgetStatus, spendingEffect } from '@spentsmart/finance/ledger';
 import { periodRanges } from '@spentsmart/finance/periods';
 import { Category, Goal } from '@spentsmart/finance/types';
@@ -76,11 +78,13 @@ export function fixtureLedger(rows: AssistantTxn[] = fixtureTransactions()): Led
     },
     async budgets(now) {
       const { current } = periodRanges('month', new Date(now));
+      const recurring = detectRecurring(rows, now);
       return BUDGETS.map((b) => {
         const spent = rows
           .filter((t) => t.occurredAt >= current.start && t.occurredAt < current.end && (b.categoryKey === null || t.categoryKey === b.categoryKey))
           .reduce((s, t) => s + spendingEffect(t), 0);
-        return { categoryKey: b.categoryKey, status: budgetStatus({ limitPaise: b.limitPaise, spentPaise: spent, period: current, now }) };
+        const projectedPaise = budgetProjection(rows, recurring, b.categoryKey, now);
+        return { categoryKey: b.categoryKey, status: budgetStatus({ limitPaise: b.limitPaise, spentPaise: spent, period: current, now, projectedPaise }) };
       });
     },
     async goals() {

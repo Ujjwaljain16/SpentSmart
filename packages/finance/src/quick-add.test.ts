@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_CATEGORIES } from './categories';
 import { parseQuickAdd } from './quick-add';
+import { Expected, HELD_OUT, PHRASES } from './quick-add.phrases';
 import { Category } from './types';
 
 // Wednesday 18 Nov 2026, 14:30 local time.
@@ -168,6 +169,74 @@ describe('parseQuickAdd dates', () => {
   });
 });
 
+describe('parseQuickAdd typos, Hinglish and number forms', () => {
+  it.each([
+    ['swigy 280', 'Swiggy', 'food'],
+    ['zomto 300', 'Zomato', 'food'],
+    ['uberr 200', 'Uber', 'other'],
+    ['big basket 1200', 'BigBasket', 'food'],
+    ['book my show 560', 'BookMyShow', 'other'],
+  ])('%s -> %s / %s', (text, payee, category) => {
+    expect(parse(text)).toMatchObject({ payeeName: payee, categoryKey: category });
+  });
+
+  it('fixes one slip in a known word but leaves real words alone', () => {
+    expect(parse('resturant 900').categoryKey).toBe('food');
+    expect(parse('salry 40000').type).toBe('income');
+    expect(parse('refnd 200 amazon').type).toBe('refund');
+    expect(parse('chair 1500').categoryKey).toBe('other');
+    expect(parse('later 50').categoryKey).toBe('other');
+  });
+
+  it.each([
+    ['1 lakh laptop', 1_00_000_00],
+    ['1.5 lakh bike', 1_50_000_00],
+    ['5 k shoes', 5_000_00],
+    ['2 hazar rent', 2_000_00],
+  ])('reads a unit typed as its own word: %s', (text, paise) => {
+    const d = parse(text);
+    expect(d.amountPaise).toBe(paise);
+    expect(d.payeeName).not.toMatch(/lakh|hazar|k/i);
+  });
+
+  it('treats a small count before an item as a quantity, not the price', () => {
+    expect(parse('2 chai 30')).toMatchObject({ amountPaise: 3_000, payeeName: '2 Chai', categoryKey: 'food' });
+    expect(parse('auto 80 gate 2').amountPaise).toBe(8_000);
+  });
+
+  it('prefers an amount written as money over an earlier plain number', () => {
+    expect(parse('gate 2 auto ₹80').amountPaise).toBe(8_000);
+    expect(parse('gate 2 auto rs 80').amountPaise).toBe(8_000);
+  });
+
+  it('reads money coming in from Hinglish and "got ... from"', () => {
+    expect(parse('papa se 2000 mile')).toMatchObject({ type: 'income', payeeName: 'Papa', amountPaise: 2_000_00 });
+    expect(parse('got 500 from mom')).toMatchObject({ type: 'income', payeeName: 'Mom' });
+    expect(parse('pocket money 3000')).toMatchObject({ type: 'income', payeeName: 'Pocket Money' });
+    expect(parse('got haircut 150').type).toBe('expense');
+  });
+
+  it('drops Hinglish particles from the payee', () => {
+    expect(parse('sabji wale ko 80 cash')).toMatchObject({ payeeName: 'Sabji', categoryKey: 'food', paymentMethod: 'cash' });
+    expect(parse('ghar ka kiraya 9000')).toMatchObject({ payeeName: 'Ghar Kiraya', categoryKey: 'rent' });
+  });
+
+  it.each([
+    ['kal swiggy 300', day(2026, 11, 17)],
+    ['yday dinner 400', day(2026, 11, 17)],
+    ['parso auto 60', day(2026, 11, 16)],
+    ['15 nov chai 20', day(2026, 11, 15)],
+    ['chai 20 nov 15', day(2026, 11, 15)],
+    ['chai 20 25 december', day(2025, 12, 25)],
+    ['lunch 250 on 5th', day(2026, 11, 5)],
+    ['lunch 250 on 25th', day(2026, 10, 25)],
+  ])('date: %s', (text, expected) => {
+    const d = parse(text);
+    expect(d.occurredAt).toBe(expected);
+    expect(d.amountPaise).not.toBeNull();
+  });
+});
+
 describe('parseQuickAdd tags', () => {
   it('collects, lowercases and dedupes hashtags', () => {
     const d = parse('swiggy 340 #Goa #trip #goa');
@@ -191,5 +260,31 @@ describe('parseQuickAdd tags', () => {
       occurredAt: day(2026, 11, 17),
       tags: ['office'],
     });
+  });
+});
+
+const missesIn = (set: readonly Expected[]) =>
+  set
+    .filter(([text, rupees, type, category]) => {
+      const d = parse(text);
+      return d.amountPaise !== (rupees === null ? null : Math.round(rupees * 100)) || d.type !== type || d.categoryKey !== category;
+    })
+    .map(([text]) => text);
+
+describe('parseQuickAdd accuracy (amount, type and category all right)', () => {
+  it('scores at least 90% on the 200+ phrase set', () => {
+    const misses = missesIn(PHRASES);
+    expect(PHRASES.length).toBeGreaterThanOrEqual(200);
+    // Listed so a fix or a regression shows up here. "water bottle" reads as a water bill.
+    expect(misses).toEqual(['water bottle 20']);
+    expect((PHRASES.length - misses.length) / PHRASES.length).toBeGreaterThanOrEqual(0.9);
+  });
+
+  // Not tuned on, so this is the honest number for new phrases: 33/40 (82.5%). Misses are dishes and products the
+  // dictionary has never seen; the fix is learning from the user's own history, not adding these words here.
+  it('keeps its score on held-out phrases it was not tuned on', () => {
+    const misses = missesIn(HELD_OUT);
+    expect(misses).toEqual(['swiggy genie 120', 'chole bhature 140', 'vada pav 30', 'paneer 180', 'chicken 320', 'aata chawal 900', 'textbooks 1100']);
+    expect((HELD_OUT.length - misses.length) / HELD_OUT.length).toBeGreaterThanOrEqual(0.8);
   });
 });

@@ -23,7 +23,8 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "99783042621-qf4dik3ts1522e4ts1cd0tmgvegp6b6s.apps.googleusercontent.com"
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "99783042621-qf4dik3ts1522e4ts1cd0tmgvegp6b6s.apps.googleusercontent.com",
+        "EXPO_PUBLIC_API_URL": "https://spentsmart.onrender.com"
       }
     },
     "production": {
@@ -33,7 +34,8 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "99783042621-qf4dik3ts1522e4ts1cd0tmgvegp6b6s.apps.googleusercontent.com"
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "99783042621-qf4dik3ts1522e4ts1cd0tmgvegp6b6s.apps.googleusercontent.com",
+        "EXPO_PUBLIC_API_URL": "https://spentsmart.onrender.com"
       }
     },
     "emulator": {

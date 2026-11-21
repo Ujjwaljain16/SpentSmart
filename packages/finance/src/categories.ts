@@ -2,6 +2,8 @@ import { Category } from './types';
 
 export const OTHER_CATEGORY_KEY = 'other';
 export const INCOME_CATEGORY_KEY = 'income';
+/** Hidden system category used by both legs of a transfer. Never shown in pickers or spending charts. */
+export const TRANSFER_CATEGORY_KEY = 'transfer';
 export const DEFAULT_EXPENSE_CATEGORY_KEY = 'food';
 
 export const CATEGORY_ICONS = [
@@ -10,7 +12,7 @@ export const CATEGORY_ICONS = [
   'wallet', 'card', 'cash', 'business', 'briefcase', 'construct', 'hammer', 'bulb', 'water', 'wifi',
   'phone-portrait', 'desktop', 'laptop', 'tv', 'headset', 'book', 'library', 'newspaper',
   'document-text', 'people', 'person', 'heart', 'paw', 'leaf', 'flower', 'globe', 'train', 'bus',
-  'boat', 'bicycle',
+  'boat', 'bicycle', 'swap-horizontal',
 ] as const;
 
 export const CATEGORY_COLORS = [
@@ -25,9 +27,10 @@ export const DEFAULT_CATEGORIES: readonly Category[] = [
   { key: 'rent', label: 'Rent', icon: 'home', color: '#EC4899', sortOrder: 3, isSystem: false },
   { key: INCOME_CATEGORY_KEY, label: 'Income', icon: 'wallet', color: '#10B981', sortOrder: 4, isSystem: true },
   { key: OTHER_CATEGORY_KEY, label: 'Other', icon: 'pricetag', color: '#6B7280', sortOrder: 5, isSystem: true },
+  { key: TRANSFER_CATEGORY_KEY, label: 'Transfer', icon: 'swap-horizontal', color: '#64748B', sortOrder: 99, isSystem: true },
 ];
 
-const FALLBACK: Category = DEFAULT_CATEGORIES[DEFAULT_CATEGORIES.length - 1]!;
+const FALLBACK: Category = DEFAULT_CATEGORIES.find((c) => c.key === OTHER_CATEGORY_KEY)!;
 
 export function isKnownIcon(icon: string): boolean {
   return (CATEGORY_ICONS as readonly string[]).includes(icon);

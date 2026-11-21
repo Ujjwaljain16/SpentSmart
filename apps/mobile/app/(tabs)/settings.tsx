@@ -43,12 +43,13 @@ export default function SettingsScreen() {
   const { isBioLockEnabled, isPrivacyModeEnabled, canUseLock, lockTimeoutSeconds, setBioLockEnabled, setPrivacyModeEnabled, setLockTimeoutSeconds, verifyOwner } = useSecurity();
 
   const { data: counts } = useLiveQuery(async (r) => ({ transactions: await r.transactions.count(), categories: (await r.categories.list()).length }));
-  const [budgetText, setBudgetText] = useState(settings.budgetPaise ? paiseToDecimal(settings.budgetPaise) : '');
+  const { data: overallBudget } = useLiveQuery(async (r) => (await r.budgets.listActive()).find((b) => b.categoryKey === null) ?? null);
+  const [budgetText, setBudgetText] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
 
   useEffect(() => {
-    setBudgetText(settings.budgetPaise ? paiseToDecimal(settings.budgetPaise) : '');
-  }, [settings.budgetPaise]);
+    setBudgetText(overallBudget ? paiseToDecimal(overallBudget.limitPaise) : '');
+  }, [overallBudget]);
 
   const run = async (key: string, task: () => Promise<void>, errorMessage: string) => {
     setBusy(key);
@@ -84,7 +85,7 @@ export default function SettingsScreen() {
       async () => {
         const trimmed = budgetText.trim();
         if (trimmed === '') {
-          await setSetting('budgetPaise', 0);
+          await repos.budgets.remove(null);
           Alert.alert('Budget removed', 'You no longer have a monthly budget.');
           return;
         }
@@ -93,7 +94,7 @@ export default function SettingsScreen() {
           Alert.alert('Invalid amount', 'Enter a budget like 15000 or 15000.50.');
           return;
         }
-        await setSetting('budgetPaise', paise);
+        await repos.budgets.set(null, paise, overallBudget?.rollover ?? false);
         Alert.alert('Saved', 'Monthly budget updated.');
       },
       'The budget could not be saved.',

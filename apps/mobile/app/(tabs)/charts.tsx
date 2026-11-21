@@ -6,7 +6,6 @@ import { BalanceCard } from '@/components/home/BalanceCard';
 import { Money, useFormatMoney } from '@/components/ui/Money';
 import { BorderRadius, FontSizes, Spacing } from '@/constants/theme';
 import { useCategories } from '@/contexts/categories-context';
-import { useSettings } from '@/contexts/settings-context';
 import { Period, budgetUsage, dayBuckets, monthBuckets, weekBucketsOfMonth } from '@spentsmart/finance/periods';
 import { useLiveQuery } from '@/hooks/use-live-query';
 import { useThemeColors } from '@/hooks/use-theme-colors';
@@ -17,7 +16,6 @@ const BAR_AREA = 120;
 export default function ChartsScreen() {
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
-  const { settings } = useSettings();
   const { resolve } = useCategories();
   const format = useFormatMoney();
   const [period, setPeriod] = useState<Period>('month');
@@ -27,12 +25,14 @@ export default function ChartsScreen() {
     async (repos) => {
       const now = new Date();
       const buckets = period === 'week' ? dayBuckets(7, now) : period === 'month' ? weekBucketsOfMonth(now) : monthBuckets(12, now);
-      const [insights, monthly, trend] = await Promise.all([
+      const [insights, monthly, budgets, trend] = await Promise.all([
         repos.analytics.insights(period, now),
         repos.analytics.insights('month', now),
+        repos.budgets.statuses(now),
         repos.analytics.bucketTotals(buckets),
       ]);
-      return { insights, monthSpent: monthly.expensePaise, trend };
+      return { insights, monthSpent: monthly.expensePaise,
+        overallBudget: budgets.find((b) => b.categoryKey === null) ?? null, trend };
     },
     [period],
   );
@@ -44,7 +44,8 @@ export default function ChartsScreen() {
   };
 
   const insights = data?.insights;
-  const usage = data ? budgetUsage(data.monthSpent, settings.budgetPaise || null) : null;
+  const overall = data?.overallBudget ?? null;
+  const usage = overall ? budgetUsage(overall.status.spentPaise, overall.status.availablePaise) : null;
   const maxBucket = data ? Math.max(...data.trend.map((b) => b.amountPaise), 1) : 1;
   const top = insights?.categories.slice(0, 5) ?? [];
 
@@ -68,7 +69,7 @@ export default function ChartsScreen() {
               trend={insights.trend}
               period={period}
               onPeriodChange={setPeriod}
-              budget={usage ? { budgetPaise: settings.budgetPaise, spentPaise: data.monthSpent, usage } : null}
+              budget={usage && overall ? { budgetPaise: overall.status.availablePaise, spentPaise: overall.status.spentPaise, usage } : null}
             />
 
             {top.length > 0 && (

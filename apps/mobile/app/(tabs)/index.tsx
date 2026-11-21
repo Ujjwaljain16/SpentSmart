@@ -24,12 +24,14 @@ export default function HomeScreen() {
   const { data, loading, refresh } = useLiveQuery(
     async (repos) => {
       const now = new Date();
-      const [insights, monthly, open] = await Promise.all([
+      const [insights, monthly, budgets, open] = await Promise.all([
         repos.analytics.insights(period, now),
         repos.analytics.insights('month', now),
+        repos.budgets.statuses(now),
         repos.attempts.listOpen(),
       ]);
-      return { insights, monthSpent: monthly.expensePaise, openAttempts: open.length };
+      return { insights, monthSpent: monthly.expensePaise,
+        overallBudget: budgets.find((b) => b.categoryKey === null) ?? null, openAttempts: open.length };
     },
     [period],
   );
@@ -41,7 +43,8 @@ export default function HomeScreen() {
   };
 
   const insights = data?.insights;
-  const usage = data ? budgetUsage(data.monthSpent, settings.budgetPaise || null) : null;
+  const overall = data?.overallBudget ?? null;
+  const usage = overall ? budgetUsage(overall.status.spentPaise, overall.status.availablePaise) : null;
   const greetingName = settings.profileName.trim().toLowerCase() || 'there';
 
   return (
@@ -89,7 +92,7 @@ export default function HomeScreen() {
               trend={insights.trend}
               period={period}
               onPeriodChange={setPeriod}
-              budget={usage ? { budgetPaise: settings.budgetPaise, spentPaise: data!.monthSpent, usage } : null}
+              budget={usage && overall ? { budgetPaise: overall.status.availablePaise, spentPaise: overall.status.spentPaise, usage } : null}
             />
 
             <View style={styles.quickRow}>

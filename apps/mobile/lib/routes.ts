@@ -45,5 +45,8 @@ export const routes = {
   }),
   newGoal: '/goal-edit' as Href,
   importStatement: '/import-statement' as Href,
+  sync: '/sync' as Href,
+  syncConflicts: '/sync-conflicts' as Href,
+  assistant: '/assistant' as Href,
   editGoal: (id: string): Href => ({ pathname: '/goal-edit', params: { id } }),
 };

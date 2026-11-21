@@ -9,6 +9,7 @@ import { GlobalErrorBoundary } from '@/components/GlobalErrorBoundary';
 import { LockScreen } from '@/components/security/LockScreen';
 import { Colors } from '@/constants/theme';
 import { CategoriesProvider } from '@/contexts/categories-context';
+import { CloudProvider } from '@/contexts/cloud-context';
 import { DatabaseProvider } from '@/contexts/database-context';
 import { SecurityProvider, useSecurity } from '@/contexts/security-context';
 import { SettingsProvider, useSettings } from '@/contexts/settings-context';
@@ -59,6 +60,9 @@ function RootNavigator() {
             <Stack.Screen name="budget-edit" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
             <Stack.Screen name="goal-edit" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
             <Stack.Screen name="import-statement" />
+            <Stack.Screen name="sync" />
+            <Stack.Screen name="sync-conflicts" />
+            <Stack.Screen name="assistant" />
           </Stack.Protected>
           <Stack.Protected guard={!onboarded}>
             <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
@@ -84,7 +88,9 @@ export default function RootLayout() {
             <ThemeProvider>
               <SecurityProvider>
                 <CategoriesProvider>
-                  <RootNavigator />
+                  <CloudProvider>
+                    <RootNavigator />
+                  </CloudProvider>
                 </CategoriesProvider>
               </SecurityProvider>
             </ThemeProvider>

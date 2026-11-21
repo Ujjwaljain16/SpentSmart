@@ -8,3 +8,6 @@ export const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/+$/, '
 export const TEST_SIGN_IN_BUILD = process.env.EXPO_PUBLIC_TEST_SIGN_IN === '1';
 
 export const CLOUD_CONFIGURED = API_URL !== '';
+
+/** Google OAuth web client id: the audience the API checks. Client ids are public; the secret is never in the app. */
+export const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? '';

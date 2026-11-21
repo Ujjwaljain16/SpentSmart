@@ -10,7 +10,8 @@ import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { BorderRadius, FontSizes, MIN_TOUCH_TARGET, Spacing } from '@/constants/theme';
 import { useCloud } from '@/contexts/cloud-context';
 import { useThemeColors } from '@/hooks/use-theme-colors';
-import { CLOUD_CONFIGURED, TEST_SIGN_IN_BUILD } from '@/lib/cloud-config';
+import { CLOUD_CONFIGURED, GOOGLE_WEB_CLIENT_ID, TEST_SIGN_IN_BUILD } from '@/lib/cloud-config';
+import { googleIdToken, googleSignOut } from '@/services/cloud/google';
 import { log } from '@/lib/logger';
 import { routes } from '@/lib/routes';
 import { Device as CloudDevice } from '@/services/cloud/api-client';
@@ -95,8 +96,18 @@ export default function SyncScreen() {
                   Back up your data and use it on another phone. Everything is locked on this phone before it’s sent; the server can’t read your amounts, payees or categories.
                 </Text>
               </FormCard>
-              <Button label="Sign in with Google" disabled onPress={() => undefined} accessibilityLabel="Sign in with Google, coming soon" />
-              <Text style={[styles.hint, { color: colors.textSecondary }]}>Google sign-in is coming soon.</Text>
+              <Button
+                label="Sign in with Google"
+                loading={busy}
+                disabled={!GOOGLE_WEB_CLIENT_ID}
+                onPress={() =>
+                  void run(async () => {
+                    const token = await googleIdToken();
+                    if (token) await client.signInWithGoogle(token, deviceName());
+                  }, 'Google sign-in failed.')
+                }
+              />
+              <Text style={[styles.hint, { color: colors.textSecondary }]}>We only see your Google account id and email, to tell your phones apart from other people’s.</Text>
               {TEST_SIGN_IN_BUILD ? (
                 <FormCard>
                   <FieldLabel>Test build: sign in with any name</FieldLabel>
@@ -236,7 +247,7 @@ export default function SyncScreen() {
                 onPress={() =>
                   Alert.alert('Stop syncing?', 'Your data stays on this phone. The backup stays in the cloud for your other phones.', [
                     { text: 'Cancel', style: 'cancel' },
-                    { text: 'Stop syncing', onPress: () => void run(() => cloud.signOut(false), 'Couldn’t stop syncing.') },
+                    { text: 'Stop syncing', onPress: () => void run(() => cloud.signOut(false).then(googleSignOut), 'Couldn’t stop syncing.') },
                   ])
                 }
               />
@@ -246,7 +257,7 @@ export default function SyncScreen() {
                 onPress={() =>
                   Alert.alert('Delete the cloud backup?', 'This permanently deletes the backup and signs out every phone. Data on your phones is not deleted. This can’t be undone.', [
                     { text: 'Cancel', style: 'cancel' },
-                    { text: 'Delete backup', style: 'destructive', onPress: () => void run(() => cloud.signOut(true), 'Couldn’t delete the backup.') },
+                    { text: 'Delete backup', style: 'destructive', onPress: () => void run(() => cloud.signOut(true).then(googleSignOut), 'Couldn’t delete the backup.') },
                   ])
                 }
               />

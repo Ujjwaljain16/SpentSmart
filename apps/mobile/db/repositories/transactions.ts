@@ -509,6 +509,16 @@ export function createTransactionsRepo(db: AnyExecutor, deps: RepoDeps) {
       return { count: row?.c ?? 0, netPaise: row?.net ?? 0 };
     },
 
+    /** Tags on live transactions, most used first. */
+    async tags(limit = 30): Promise<string[]> {
+      const rows = await db.all<{ tag: string }>(
+        `SELECT g.tag FROM transaction_tags g JOIN transactions t ON t.id = g.transaction_id
+         WHERE t.deleted_at IS NULL GROUP BY g.tag ORDER BY COUNT(*) DESC, g.tag ASC LIMIT ?`,
+        [limit],
+      );
+      return rows.map((r) => r.tag);
+    },
+
     async count(): Promise<number> {
       const row = await db.first<{ c: number }>('SELECT COUNT(*) AS c FROM transactions WHERE deleted_at IS NULL');
       return row?.c ?? 0;

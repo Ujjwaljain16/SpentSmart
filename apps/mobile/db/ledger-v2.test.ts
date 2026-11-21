@@ -214,6 +214,15 @@ describe('soft delete, versions, revisions and tags', () => {
     await expect(repos.transactions.insert(tx({ tags: Array.from({ length: 11 }, (_, i) => `t${i}`) }))).rejects.toBeInstanceOf(ValidationError);
   });
 
+  it('lists tags on live transactions, most used first', async () => {
+    const { repos } = await createTestContext();
+    await repos.transactions.insert(tx({ tags: ['work', 'goa'] }));
+    await repos.transactions.insert(tx({ tags: ['goa'] }));
+    const gone = await repos.transactions.insert(tx({ tags: ['old'] }));
+    await repos.transactions.remove(gone.id);
+    expect(await repos.transactions.tags()).toEqual(['goa', 'work']);
+  });
+
   it('records payments made through the scanner with source "scan", once', async () => {
     const { repos } = await createTestContext();
     const a = await repos.attempts.create({ vpa: 'a.b@ybl', payeeName: 'Shop', amountPaise: 100, note: null, categoryKey: 'food', appPackage: null, txnRef: null });

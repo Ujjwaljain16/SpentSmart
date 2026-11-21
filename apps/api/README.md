@@ -40,6 +40,23 @@ pnpm --filter @spentsmart/api dev:neon
 
 starts the API on `127.0.0.1:3100` against that database with test sign-in on. Local testing only.
 
+## Deploy (Render)
+
+Live at `https://spentsmart.onrender.com`. The database is Neon in AWS Singapore, and the server runs in Render's
+Singapore region too: each request makes several database calls, so the two must be close.
+
+- Web service from this repo: build `corepack enable && pnpm install --frozen-lockfile`, start
+  `pnpm --filter @spentsmart/api start`, health check `/healthz`.
+- Environment: `DATABASE_URL` (Neon pooled), `DATABASE_URL_UNPOOLED` (Neon direct, for migrations),
+  `ACCESS_TOKEN_SECRET` (48+ random characters), `GOOGLE_CLIENT_IDS` (the Google **web** client id, which is the
+  audience of the ID tokens the app sends), `NODE_ENV=production`, `NODE_VERSION=22`. Never set `TEST_SIGN_IN`; the
+  server refuses to start with it in production.
+- Migrations run on start-up. The free plan sleeps after about 15 idle minutes, so the first request after that is slow.
+- The app's `preview` and `production` EAS profiles point at this URL (`EXPO_PUBLIC_API_URL` in `apps/mobile/eas.json`).
+
+Quick checks after a deploy: `/healthz` returns `{"ok":true}`, `/v1/config` shows `"testSignIn":false`, and
+`/v1/sync/pull` without a token returns 401.
+
 ## Endpoints
 
 | Method | Path | |

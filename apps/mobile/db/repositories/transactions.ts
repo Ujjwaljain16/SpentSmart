@@ -87,6 +87,9 @@ export interface TransactionFilter {
   since?: number | null;
   /** Exclusive upper bound on occurredAt. */
   until?: number | null;
+  /** Inclusive bounds on the amount in paise. */
+  minPaise?: number | null;
+  maxPaise?: number | null;
 }
 
 export interface TransactionCursor {
@@ -171,6 +174,14 @@ function buildWhere(filter: TransactionFilter): { clauses: string[]; params: Sql
   if (filter.until != null) {
     clauses.push('t.occurred_at < ?');
     params.push(filter.until);
+  }
+  if (filter.minPaise != null) {
+    clauses.push('t.amount_paise >= ?');
+    params.push(filter.minPaise);
+  }
+  if (filter.maxPaise != null) {
+    clauses.push('t.amount_paise <= ?');
+    params.push(filter.maxPaise);
   }
   const search = filter.search?.trim();
   if (search) {

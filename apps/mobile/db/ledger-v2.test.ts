@@ -186,6 +186,22 @@ describe('soft delete, versions, revisions and tags', () => {
     ]);
   });
 
+  it('filters by account and by an inclusive amount range', async () => {
+    const { repos } = await createTestContext();
+    const small = await repos.transactions.insert(tx({ amountPaise: 5_000, paymentMethod: 'cash' }));
+    const mid = await repos.transactions.insert(tx({ amountPaise: 10_000 }));
+    const big = await repos.transactions.insert(tx({ amountPaise: 50_000 }));
+    const ids = async (filter: Parameters<typeof repos.transactions.list>[0]) =>
+      (await repos.transactions.list(filter)).items.map((x) => x.id).sort();
+
+    expect(await ids({ accountId: DEFAULT_CASH_ACCOUNT_ID })).toEqual([small.id]);
+    expect(await ids({ minPaise: 10_000 })).toEqual([mid.id, big.id].sort());
+    expect(await ids({ maxPaise: 10_000 })).toEqual([small.id, mid.id].sort());
+    expect(await ids({ minPaise: 10_000, maxPaise: 10_000 })).toEqual([mid.id]);
+    expect(await ids({ minPaise: 60_000 })).toEqual([]);
+    expect(await repos.transactions.summarize({ minPaise: 10_000, accountId: DEFAULT_BANK_ACCOUNT_ID })).toMatchObject({ count: 2 });
+  });
+
   it('stores normalised, de-duplicated tags and can filter and search by them', async () => {
     const { repos } = await createTestContext();
     const t = await repos.transactions.insert(tx({ tags: ['Goa Trip', 'goa-trip', '  work  '] }));

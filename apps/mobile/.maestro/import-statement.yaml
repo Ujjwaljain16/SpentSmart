@@ -6,6 +6,7 @@ name: Import a bank statement CSV, skipping duplicates on a second import
 - tapOn: "Settings"
 - scrollUntilVisible:
     element: "Import bank statement"
+    centerElement: true
 - tapOn: "Import bank statement"
 - tapOn: "Choose CSV file"
 - runFlow:

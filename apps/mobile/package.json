@@ -66,6 +66,7 @@
     "upi-intent": "file:./modules/upi-intent"
   },
   "devDependencies": {
+    "@anthropic-ai/sdk": "^1.12.0",
     "@expo/cli": "^54.0.20",
     "@types/node": "^22.20.5",
     "@types/react": "~19.1.0",

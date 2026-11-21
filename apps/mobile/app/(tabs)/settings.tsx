@@ -146,7 +146,24 @@ export default function SettingsScreen() {
     Alert.alert('Diagnostics (this session)', `${text}\n\nUPI IDs and amounts are removed from these messages. Nothing is sent anywhere.`);
   };
 
-  const Row = ({ icon, title, subtitle, right, onPress, danger }: { icon: keyof typeof Ionicons.glyphMap; title: string; subtitle?: string; right?: React.ReactNode; onPress?: () => void; danger?: boolean }) => {
+  const Row = ({
+    icon,
+    title,
+    subtitle,
+    right,
+    onPress,
+    danger,
+    toggle,
+  }: {
+    icon: keyof typeof Ionicons.glyphMap;
+    title: string;
+    subtitle?: string;
+    right?: React.ReactNode;
+    onPress?: () => void;
+    danger?: boolean;
+    /** A switch row: the whole row is the touch target and reads as one switch to TalkBack. */
+    toggle?: { value: boolean; onChange: (v: boolean) => void; disabled?: boolean };
+  }) => {
     const content = (
       <>
         <View style={[styles.iconBox, { backgroundColor: danger ? `${colors.error}33` : colors.surface }]}>
@@ -156,9 +173,30 @@ export default function SettingsScreen() {
           <Text style={[styles.rowTitle, { color: danger ? colors.error : colors.text }]}>{title}</Text>
           {subtitle ? <Text style={[styles.rowSub, { color: colors.textSecondary }]}>{subtitle}</Text> : null}
         </View>
-        {right ?? (onPress ? <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} /> : null)}
+        {toggle ? (
+          <View pointerEvents="none" importantForAccessibility="no-hide-descendants">
+            <Switch value={toggle.value} disabled={toggle.disabled} trackColor={{ true: colors.tint }} />
+          </View>
+        ) : (
+          right ?? (onPress ? <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} /> : null)
+        )}
       </>
     );
+    if (toggle) {
+      return (
+        <TouchableOpacity
+          accessibilityRole="switch"
+          accessibilityLabel={title}
+          accessibilityHint={subtitle}
+          accessibilityState={{ checked: toggle.value, disabled: !!toggle.disabled }}
+          disabled={toggle.disabled}
+          style={styles.row}
+          onPress={() => toggle.onChange(!toggle.value)}
+        >
+          {content}
+        </TouchableOpacity>
+      );
+    }
     return onPress ? (
       <TouchableOpacity accessibilityRole="button" accessibilityLabel={title} style={styles.row} onPress={onPress}>
         {content}
@@ -195,7 +233,7 @@ export default function SettingsScreen() {
             icon="finger-print"
             title="App lock"
             subtitle={canUseLock ? 'Require fingerprint, face or passcode' : 'Set up a screen lock on this device first'}
-            right={<Switch accessibilityLabel="App lock" value={isBioLockEnabled} onValueChange={toggleLock} disabled={!canUseLock && !isBioLockEnabled} trackColor={{ true: colors.tint }} />}
+            toggle={{ value: isBioLockEnabled, onChange: (v) => void toggleLock(v), disabled: !canUseLock && !isBioLockEnabled }}
           />
           {isBioLockEnabled && (
             <>
@@ -228,7 +266,7 @@ export default function SettingsScreen() {
             icon="eye-off-outline"
             title="Privacy mode"
             subtitle="Hide amounts everywhere in the app"
-            right={<Switch accessibilityLabel="Privacy mode" value={isPrivacyModeEnabled} onValueChange={(v) => void setPrivacyModeEnabled(v)} trackColor={{ true: colors.tint }} />}
+            toggle={{ value: isPrivacyModeEnabled, onChange: (v) => void setPrivacyModeEnabled(v) }}
           />
         </Section>
 
@@ -237,7 +275,7 @@ export default function SettingsScreen() {
             icon="notifications-outline"
             title="Daily reminders"
             subtitle="10:00 and 20:00, on this device only"
-            right={<Switch accessibilityLabel="Daily reminders" value={settings.remindersEnabled} onValueChange={(v) => void toggleReminders(v)} trackColor={{ true: colors.tint }} />}
+            toggle={{ value: settings.remindersEnabled, onChange: (v) => void toggleReminders(v) }}
           />
         </Section>
 
@@ -248,7 +286,7 @@ export default function SettingsScreen() {
             icon="sparkles-outline"
             title="Assistant (lab)"
             subtitle="Ask questions about your money. Needs Sync & backup sign-in."
-            right={<Switch accessibilityLabel="Assistant" value={settings.assistantEnabled} onValueChange={(v) => void setSetting('assistantEnabled', v)} trackColor={{ true: colors.tint }} />}
+            toggle={{ value: settings.assistantEnabled, onChange: (v) => void setSetting('assistantEnabled', v) }}
           />
         </Section>
 

@@ -7,6 +7,7 @@ import { TransactionFilter } from '@/db/repositories/transactions';
 import { buildCsv, buildReportHtml } from '@/domain/report';
 import { periodRanges } from '@/domain/periods';
 import { Transaction } from '@/domain/types';
+import { cancelExternalTrip, expectExternalTrip } from '@/lib/external-trip';
 import { log } from '@/lib/logger';
 
 const PAGE = 1000;
@@ -57,10 +58,14 @@ async function loadRows(repos: Repositories, filter: TransactionFilter, limit = 
 async function shareAndClean(file: File, mimeType: string, dialogTitle: string): Promise<void> {
   try {
     if (await Sharing.isAvailableAsync()) {
+      expectExternalTrip();
       await Sharing.shareAsync(file.uri, { mimeType, dialogTitle });
     } else {
       throw new Error('Sharing is not available on this device.');
     }
+  } catch (error) {
+    cancelExternalTrip();
+    throw error;
   } finally {
     // The export contains financial data: never leave it behind in app storage.
     try {

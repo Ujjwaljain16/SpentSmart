@@ -6,6 +6,7 @@ import { PaymentDraft } from '@/domain/payment-draft';
 import { Paise } from '@/domain/money';
 import { buildPayUri, buildPayUriWithoutAmount, generateTxnRef } from '@/domain/upi/build';
 import { suggestionFor, UpiResponse } from '@/domain/upi/response';
+import { cancelExternalTrip, expectExternalTrip } from '@/lib/external-trip';
 import { log } from '@/lib/logger';
 import { InstalledUpiApp, loadUpiIntent } from '@/modules/upi-intent';
 import { saveQrToGallery } from '../qr-gallery';
@@ -88,6 +89,7 @@ export async function beginPayment(repos: Repositories, input: BeginPaymentInput
   const uriInput = { vpa: draft.vpa, payeeName: draft.payeeName, amountPaise, note, txnRef, source: draft.source };
   const uri = withoutAmount ? buildPayUriWithoutAmount(uriInput) : buildPayUri(uriInput);
 
+  expectExternalTrip();
   const launch = await launchPayment(
     { native, openUrl: (url) => Linking.openURL(url) },
     uri,
@@ -103,6 +105,7 @@ export async function beginPayment(repos: Repositories, input: BeginPaymentInput
   }
 
   if (launch.kind === 'no_app' || launch.kind === 'error') {
+    cancelExternalTrip();
     // Nothing was launched: do not leave a phantom "awaiting confirmation" payment behind.
     await repos.attempts.discard(attempt.id);
     return { attempt: { ...attempt, status: 'discarded' }, launch, response: null };
@@ -180,9 +183,13 @@ export async function beginGooglePayQrShare(repos: Repositories, input: BeginQrG
 
 export async function openAppLauncher(packageName: string): Promise<boolean> {
   if (!native) return false;
+  expectExternalTrip();
   try {
-    return await native.launchApp(packageName);
+    const opened = await native.launchApp(packageName);
+    if (!opened) cancelExternalTrip();
+    return opened;
   } catch {
+    cancelExternalTrip();
     return false;
   }
 }

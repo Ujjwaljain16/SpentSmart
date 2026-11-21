@@ -2,6 +2,7 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import * as ScreenCapture from 'expo-screen-capture';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
+import { consumeExternalTrip } from '@/lib/external-trip';
 import { log } from '@/lib/logger';
 import { useSettings } from './settings-context';
 
@@ -52,15 +53,14 @@ export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const backgroundedAt = useRef<number | null>(null);
   const prompting = useRef(false);
 
-  useEffect(() => {
-    let alive = true;
-    deviceLevel().then((level) => alive && setCanUseLock(level !== LocalAuthentication.SecurityLevel.NONE));
-    return () => {
-      alive = false;
-    };
+  const refreshCanUseLock = useCallback(() => {
+    void deviceLevel().then((level) => setCanUseLock(level !== LocalAuthentication.SecurityLevel.NONE));
   }, []);
 
-  // Lock after the configured time in the background.
+  useEffect(refreshCanUseLock, [refreshCanUseLock]);
+
+  // Lock after the configured time in the background, unless the app itself sent the user out (UPI payment,
+  // share sheet, contact picker) and they are coming back from that.
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'background') {
@@ -68,13 +68,16 @@ export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       } else if (state === 'active') {
         const since = backgroundedAt.current;
         backgroundedAt.current = null;
-        if (bioLockEnabled && since !== null && Date.now() - since >= lockTimeoutSeconds * 1000) {
+        const plannedTrip = consumeExternalTrip();
+        // The user may have added or removed a screen lock while away.
+        refreshCanUseLock();
+        if (!plannedTrip && bioLockEnabled && since !== null && Date.now() - since >= lockTimeoutSeconds * 1000) {
           setIsUnlocked(false);
         }
       }
     });
     return () => subscription.remove();
-  }, [bioLockEnabled, lockTimeoutSeconds]);
+  }, [bioLockEnabled, lockTimeoutSeconds, refreshCanUseLock]);
 
   // While the lock is on, hide the app in the recents screen and block screenshots/recordings.
   useEffect(() => {

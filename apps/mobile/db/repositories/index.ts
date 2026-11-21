@@ -13,6 +13,8 @@ export type { RepoDeps } from './deps';
 
 export function createRepositories(db: SqlDriver, deps: RepoDeps) {
   return {
+    /** The underlying driver, for services that work across tables (sync). */
+    driver: db,
     transactions: createTransactionsRepo(db, deps),
     categories: createCategoriesRepo(db, deps),
     attempts: createAttemptsRepo(db, deps),

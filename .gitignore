@@ -60,3 +60,5 @@ Desktop.ini
 
 # App-specific
 app-example/
+# Native module build output
+modules/*/android/build/

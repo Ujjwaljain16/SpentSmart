@@ -44,5 +44,6 @@ export const routes = {
     params: categoryKey === undefined ? {} : categoryKey === null ? { overall: '1' } : { category: categoryKey },
   }),
   newGoal: '/goal-edit' as Href,
+  importStatement: '/import-statement' as Href,
   editGoal: (id: string): Href => ({ pathname: '/goal-edit', params: { id } }),
 };

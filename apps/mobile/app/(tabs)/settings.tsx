@@ -267,6 +267,8 @@ export default function SettingsScreen() {
         </Section>
 
         <Section title="DATA">
+          <Row icon="cloud-download-outline" title="Import bank statement" subtitle="CSV from your bank or UPI app; duplicates are skipped" onPress={() => router.push(routes.importStatement)} />
+          <Divider />
           <Row
             icon="document-text-outline"
             title={busy === 'csv' ? 'Exporting…' : 'Export CSV'}

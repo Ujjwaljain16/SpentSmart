@@ -12,7 +12,9 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.12.0",
     "@fastify/rate-limit": "^10.3.0",
+    "@spentsmart/assistant": "workspace:*",
     "@spentsmart/sync-core": "workspace:*",
     "fastify": "^5.12.8",
     "jose": "^6.2.18",

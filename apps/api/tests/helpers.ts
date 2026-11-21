@@ -3,7 +3,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { encryptRecord, generateKey } from '@spentsmart/sync-core/crypto';
 import { PushOp, TokenResponse } from '@spentsmart/sync-core/contracts';
 import { SignJWT, exportJWK, generateKeyPair, createLocalJWKSet } from 'jose';
-import { buildApp } from '../src/app';
+import { AppDeps, buildApp } from '../src/app';
 import { googleVerifier } from '../src/auth/google';
 import { Config } from '../src/config';
 import { Db, Queryable, migrate } from '../src/db';
@@ -49,12 +49,12 @@ export const testConfig: Config = {
   refreshTokenTtlDays: 60,
 };
 
-export async function createTestApp(opts: { rateLimits?: { global: number; auth: number } } = {}) {
+export async function createTestApp(opts: { rateLimits?: { global: number; auth: number }; assistant?: AppDeps['assistant'] } = {}) {
   const pg = new PGlite();
   const db = pgliteDb(pg);
   await migrate(db);
   const google = await fakeGoogle();
-  const app = await buildApp({ db, config: testConfig, verifyGoogle: googleVerifier(testConfig.googleClientIds, google.keys), rateLimits: opts.rateLimits ?? { global: 10_000, auth: 10_000 } });
+  const app = await buildApp({ db, config: testConfig, verifyGoogle: googleVerifier(testConfig.googleClientIds, google.keys), rateLimits: opts.rateLimits ?? { global: 10_000, auth: 10_000 }, assistant: opts.assistant });
 
   async function signIn(sub: string, deviceName = 'Pixel'): Promise<TokenResponse> {
     const idToken = await google.sign({ sub, email: `${sub}@example.com` });

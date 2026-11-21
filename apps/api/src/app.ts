@@ -10,6 +10,7 @@ import {
 } from '@spentsmart/sync-core/contracts';
 import Fastify, { FastifyRequest } from 'fastify';
 import { ZodError, ZodTypeAny, z } from 'zod';
+import { CreateTurn, UpstreamError, perUserLimit, turnRequest } from './assistant';
 import { GoogleVerifier, InvalidGoogleTokenError } from './auth/google';
 import { AuthError, Session, issueRefreshToken, rotateRefreshToken, signAccessToken, verifyAccessToken } from './auth/tokens';
 import { Config } from './config';
@@ -23,6 +24,8 @@ export interface AppDeps {
   /** Requests per minute per client, overall and for sign-in routes. Lowered in tests. */
   rateLimits?: { global: number; auth: number };
   logger?: boolean;
+  /** Model access for the assistant. Without it (the default) the assistant routes don't exist. */
+  assistant?: { createTurn: CreateTurn; turnsPerMinute?: number };
 }
 
 declare module 'fastify' {
@@ -31,7 +34,7 @@ declare module 'fastify' {
   }
 }
 
-export async function buildApp({ db, config, verifyGoogle, rateLimits = { global: 300, auth: 20 }, logger = false }: AppDeps) {
+export async function buildApp({ db, config, verifyGoogle, rateLimits = { global: 300, auth: 20 }, logger = false, assistant }: AppDeps) {
   const app = Fastify({
     logger: logger ? { redact: ['req.headers.authorization', 'req.body.idToken', 'req.body.refreshToken'] } : false,
     bodyLimit: 2 * 1024 * 1024,
@@ -44,6 +47,7 @@ export async function buildApp({ db, config, verifyGoogle, rateLimits = { global
   app.setErrorHandler((error, _req, reply) => {
     if (error instanceof ZodError) return reply.status(400).send({ error: 'invalid_request', issues: error.issues.map((i) => i.path.join('.')) });
     if (error instanceof AuthError || error instanceof InvalidGoogleTokenError) return reply.status(401).send({ error: 'unauthorized' });
+    if (error instanceof UpstreamError) return reply.status(error.status).send({ error: 'assistant_unavailable', message: error.message });
     const status = (error as { statusCode?: number }).statusCode;
     if (status === 429) return reply.status(429).send({ error: 'rate_limited' });
     if (status && status >= 400 && status < 500) return reply.status(status).send({ error: 'bad_request' });
@@ -159,6 +163,17 @@ export async function buildApp({ db, config, verifyGoogle, rateLimits = { global
       }).catch(() => ({ rows: [] as unknown[] }));
       return reply.status(rows.length > 0 ? 204 : 404).send();
     });
+
+    if (assistant) {
+      const allow = perUserLimit(assistant.turnsPerMinute ?? 30, 60_000);
+      // One model turn. The phone runs the tools and sends the results back in the next call; conversations are not
+      // stored here, and request bodies are never logged.
+      authed.post('/v1/assistant/turn', async (req, reply) => {
+        if (!allow(req.session.userId)) return reply.status(429).send({ error: 'rate_limited' });
+        const { messages } = parse(turnRequest, req.body);
+        return assistant.createTurn(messages as never);
+      });
+    }
 
     // Deletes the user row; every other table cascades from it.
     authed.delete('/v1/account', async (req, reply) => {

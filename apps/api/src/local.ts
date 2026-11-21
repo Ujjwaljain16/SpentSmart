@@ -10,3 +10,5 @@ process.env.ASSISTANT_MODE ??= 'fake';
 process.env.PORT ??= '3000';
 
 await import('./server');
+
+export {};

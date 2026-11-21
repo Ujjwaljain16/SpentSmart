@@ -26,7 +26,19 @@ Needs a Postgres database (local or a free Neon project).
 pnpm --filter @spentsmart/api dev
 ```
 
-Migrations in `migrations/` run on start-up (or with `pnpm --filter @spentsmart/api migrate`).
+Migrations in `migrations/` run on start-up (or with `pnpm --filter @spentsmart/api migrate`). When
+`DATABASE_URL_UNPOOLED` is set (Neon), migrations use that direct connection and requests use the pooled `DATABASE_URL`.
+
+### Against Neon
+
+The repo is linked to a Neon project (`neon.ts`, `.neon`). `neon deploy` (or `neon env pull`) in the repo root writes
+`DATABASE_URL` and `DATABASE_URL_UNPOOLED` to `.env.local`, then:
+
+```
+pnpm --filter @spentsmart/api dev:neon
+```
+
+starts the API on `127.0.0.1:3100` against that database with test sign-in on. Local testing only.
 
 ## Endpoints
 

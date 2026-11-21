@@ -10,7 +10,8 @@
     "migrate": "tsx src/migrate-cli.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "dev:local": "tsx src/local.ts"
+    "dev:local": "tsx src/local.ts",
+    "dev:neon": "tsx src/neon.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.12.0",

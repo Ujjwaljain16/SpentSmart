@@ -12,7 +12,7 @@ export interface Config {
   testSignIn?: boolean;
 }
 
-export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config & { databaseUrl: string; port: number } {
+export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config & { databaseUrl: string; migrationDatabaseUrl: string; port: number } {
   const testSignIn = env.TEST_SIGN_IN === 'true';
   if (testSignIn && env.NODE_ENV === 'production') throw new Error('TEST_SIGN_IN must never be enabled in production');
   const required = ['DATABASE_URL', 'ACCESS_TOKEN_SECRET', ...(testSignIn ? [] : ['GOOGLE_CLIENT_IDS'])];
@@ -22,6 +22,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config & { dat
   if (secret.length < 32) throw new Error('ACCESS_TOKEN_SECRET must be at least 32 characters');
   return {
     databaseUrl: env.DATABASE_URL!,
+    // Neon's DATABASE_URL goes through PgBouncer in transaction mode; migrations take the direct connection instead.
+    migrationDatabaseUrl: env.DATABASE_URL_UNPOOLED || env.DATABASE_URL!,
     port: Number(env.PORT ?? 3000),
     googleClientIds: (env.GOOGLE_CLIENT_IDS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
     accessTokenSecret: secret,

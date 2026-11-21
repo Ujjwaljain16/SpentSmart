@@ -67,3 +67,4 @@ apps/mobile/modules/*/android/build/
 
 # Local API test database
 apps/api/.local-data/
+.neon

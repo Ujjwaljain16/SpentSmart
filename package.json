@@ -9,6 +9,7 @@
     "check": "turbo run typecheck lint test"
   },
   "devDependencies": {
+    "@neon/config": "^1.14.6",
     "turbo": "^2.5.8"
   }
 }

@@ -10,7 +10,7 @@ import { BorderRadius, FontSizes, MIN_TOUCH_TARGET, Spacing } from '@/constants/
 import { useRepos } from '@/contexts/database-context';
 import { DEFAULT_EXPENSE_CATEGORY_KEY, INCOME_CATEGORY_KEY } from '@spentsmart/finance/categories';
 import { paiseToDecimal, parseRupees } from '@spentsmart/finance/money';
-import { PAYMENT_METHODS, PaymentMethod, Transaction, TransactionType } from '@spentsmart/finance/types';
+import { PAYMENT_METHODS, PaymentMethod, Transaction } from '@spentsmart/finance/types';
 import { sanitizeText } from '@spentsmart/finance/upi/vpa';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { log } from '@/lib/logger';
@@ -24,7 +24,7 @@ export default function EditTransactionScreen() {
   const [amountText, setAmountText] = useState('');
   const [categoryKey, setCategoryKey] = useState(DEFAULT_EXPENSE_CATEGORY_KEY);
   const [note, setNote] = useState('');
-  const [type, setType] = useState<TransactionType>('expense');
+  const [type, setType] = useState<'income' | 'expense' | 'refund'>('expense');
   const [method, setMethod] = useState<PaymentMethod>('upi');
   const [saving, setSaving] = useState(false);
 
@@ -39,7 +39,7 @@ export default function EditTransactionScreen() {
           setAmountText(paiseToDecimal(t.amountPaise));
           setCategoryKey(t.categoryKey);
           setNote(t.note ?? '');
-          setType(t.type);
+          if (t.type !== 'transfer') setType(t.type);
           setMethod(t.paymentMethod);
         }
       })
@@ -86,12 +86,12 @@ export default function EditTransactionScreen() {
     );
   }
 
-  if (original === null) {
+  if (original === null || original.type === 'transfer') {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <ScreenHeader title="Edit transaction" leading="close" />
         <View style={styles.center}>
-          <Text style={{ color: colors.text, fontSize: FontSizes.lg }}>This transaction no longer exists.</Text>
+          <Text style={{ color: colors.text, fontSize: FontSizes.lg }}>{original === null ? 'This transaction no longer exists.' : 'Transfers between accounts can’t be edited here yet.'}</Text>
           <Button label="Go back" onPress={() => router.back()} style={styles.back} />
         </View>
       </View>

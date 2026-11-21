@@ -20,7 +20,9 @@ function TransactionCardComponent({ transaction, onDelete, onEdit }: Transaction
   const { resolve } = useCategories();
   const category = resolve(transaction.categoryKey);
   const iconName = (isKnownIcon(category.icon) ? category.icon : 'pricetag') as keyof typeof Ionicons.glyphMap;
-  const isIncome = transaction.type === 'income';
+  // Money coming in (income, refunds, the receiving leg of a transfer) is shown with a plus.
+  const isIncoming = transaction.type === 'income' || transaction.type === 'refund' || transaction.transferRole === 'in';
+  const isTransfer = transaction.type === 'transfer';
   const date = new Date(transaction.occurredAt);
   const title = transaction.note || category.label;
 
@@ -28,7 +30,7 @@ function TransactionCardComponent({ transaction, onDelete, onEdit }: Transaction
     <View
       style={[styles.container, { backgroundColor: colors.card, borderColor: colors.border }]}
       accessible
-      accessibilityLabel={`${isIncome ? 'Received from' : 'Paid to'} ${transaction.payeeName}, ${title}, ${format(date, 'd MMMM yyyy')}`}
+      accessibilityLabel={`${isTransfer ? 'Transfer' : isIncoming ? 'Received from' : 'Paid to'} ${transaction.payeeName}, ${title}, ${format(date, 'd MMMM yyyy')}`}
     >
       <View style={[styles.iconContainer, { backgroundColor: `${category.color}33` }]}>
         <Ionicons name={iconName} size={20} color={category.color} />
@@ -49,8 +51,8 @@ function TransactionCardComponent({ transaction, onDelete, onEdit }: Transaction
       <View style={styles.right}>
         <Money
           paise={transaction.amountPaise}
-          options={{ sign: isIncome ? '+' : '-' }}
-          style={[styles.amount, { color: isIncome ? colors.success : colors.text }]}
+          options={{ sign: isIncoming ? '+' : '-' }}
+          style={[styles.amount, { color: isTransfer ? colors.textSecondary : isIncoming ? colors.success : colors.text }]}
         />
         {(onEdit || onDelete) && (
           <View style={styles.actions}>

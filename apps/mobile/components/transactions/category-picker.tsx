@@ -3,7 +3,7 @@ import React, { useRef, useState } from 'react';
 import { FlatList, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import { BorderRadius, FontSizes, Spacing } from '@/constants/theme';
 import { useCategories } from '@/contexts/categories-context';
-import { isKnownIcon } from '@spentsmart/finance/categories';
+import { TRANSFER_CATEGORY_KEY, isKnownIcon } from '@spentsmart/finance/categories';
 import { Category } from '@spentsmart/finance/types';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 
@@ -23,7 +23,7 @@ const iconOf = (icon: string) => (isKnownIcon(icon) ? icon : 'pricetag') as keyo
 export function CategoryPicker({ selectedCategory, onSelectCategory, mode = 'list', categories: override, exclude }: CategoryPickerProps) {
   const colors = useThemeColors();
   const { categories: stored } = useCategories();
-  const categories = (override ?? stored).filter((c) => !exclude?.includes(c.key));
+  const categories = (override ?? stored).filter((c) => c.key !== TRANSFER_CATEGORY_KEY && !exclude?.includes(c.key));
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
   const anchor = useRef<View>(null);

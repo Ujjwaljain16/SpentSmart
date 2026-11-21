@@ -1,4 +1,5 @@
 import { format } from 'date-fns';
+import { incomeEffect, spendingEffect } from './ledger';
 import { formatPaise, paiseToDecimal } from './money';
 import { Category, Transaction } from './types';
 import { resolveCategory } from './categories';
@@ -74,12 +75,14 @@ function totalsOf(rows: readonly Transaction[]): Totals {
   let income = 0;
   let expense = 0;
   for (const t of rows) {
-    if (t.type === 'income') income += t.amountPaise;
-    else {
-      expense += t.amountPaise;
-      byCategory.set(t.categoryKey, (byCategory.get(t.categoryKey) ?? 0) + t.amountPaise);
+    income += incomeEffect(t);
+    const spent = spendingEffect(t);
+    if (spent !== 0) {
+      expense += spent;
+      byCategory.set(t.categoryKey, (byCategory.get(t.categoryKey) ?? 0) + spent);
     }
   }
+  for (const [key, value] of byCategory) if (value <= 0) byCategory.delete(key);
   return { income, expense, byCategory };
 }
 
@@ -101,7 +104,7 @@ export function buildReportHtml(input: ReportInput): string {
   const txRows = rows
     .map((t) => {
       const c = resolveCategory(categories, t.categoryKey);
-      const sign = t.type === 'income' ? '+' : '−';
+      const sign = t.type === 'income' || t.type === 'refund' || t.transferRole === 'in' ? '+' : '−';
       return `<tr><td>${escapeHtml(format(new Date(t.occurredAt), 'dd MMM yyyy'))}</td>` +
         `<td><span class="badge" style="color:${safeColor(c.color)}">${escapeHtml(c.label)}</span></td>` +
         `<td>${escapeHtml(t.note ?? '—')}</td><td>${escapeHtml(t.payeeName)}</td>` +

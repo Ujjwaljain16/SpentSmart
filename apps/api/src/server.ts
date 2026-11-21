@@ -17,7 +17,7 @@ if (mode === 'fake' && process.env.NODE_ENV === 'production') throw new Error('A
 const assistant = mode === 'claude' ? { createTurn: anthropicTurns() } : mode === 'fake' ? { createTurn: fakeModel() } : undefined;
 
 const app = await buildApp({ db, config, verifyGoogle: googleVerifier(config.googleClientIds), logger: true, assistant });
-await app.listen({ port: config.port, host: '0.0.0.0' });
+await app.listen({ port: config.port, host: process.env.HOST ?? '0.0.0.0' });
 if (config.testSignIn) console.warn('TEST SIGN-IN IS ON: anyone who can reach this server can sign in by name. Local testing only.');
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {

@@ -8,6 +8,8 @@ process.env.ACCESS_TOKEN_SECRET ??= 'local-testing-secret-not-for-production-use
 process.env.TEST_SIGN_IN ??= 'true';
 process.env.ASSISTANT_MODE ??= 'fake';
 process.env.PORT ??= '3000';
+// Loopback only: test sign-in must not be reachable from the network. The emulator still gets here via 10.0.2.2.
+process.env.HOST ??= '127.0.0.1';
 
 await import('./server');
 

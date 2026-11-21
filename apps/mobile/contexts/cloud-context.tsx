@@ -1,20 +1,14 @@
 import * as Crypto from 'expo-crypto';
-import * as SecureStore from 'expo-secure-store';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { useRepos } from '@/contexts/database-context';
 import { emitDataChanged, subscribeToDataChanges } from '@/db/events';
 import { log } from '@/lib/logger';
 import { API_URL } from '@/lib/cloud-config';
-import { ApiClient, ApiError, SecretStore, createApiClient } from '@/services/cloud/api-client';
+import { ApiClient, ApiError, createApiClient } from '@/services/cloud/api-client';
+import { setBackgroundSync } from '@/services/cloud/background-sync';
+import { secureStore } from '@/services/cloud/secure-store';
 import { Cloud, CloudStatus, createCloud } from '@/services/cloud/cloud';
-
-/** Keystore-backed, this device only, never in backups. Keys can't contain ":" in SecureStore. */
-const secureStore: SecretStore = {
-  get: (k) => SecureStore.getItemAsync(k.replace(/[^A-Za-z0-9._-]/g, '_')),
-  set: (k, v) => SecureStore.setItemAsync(k.replace(/[^A-Za-z0-9._-]/g, '_'), v, { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY }),
-  delete: (k) => SecureStore.deleteItemAsync(k.replace(/[^A-Za-z0-9._-]/g, '_')),
-};
 
 interface CloudContextValue {
   client: ApiClient;
@@ -80,6 +74,11 @@ export function CloudProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     void refreshStatus();
   }, [refreshStatus]);
+
+  // Background sync follows sync being set up on this phone; it stops when sync is turned off.
+  useEffect(() => {
+    if (status) void setBackgroundSync(status.state === 'ready');
+  }, [status]);
 
   // Sync when the app comes back to the foreground, and a few seconds after local changes settle.
   useEffect(() => {

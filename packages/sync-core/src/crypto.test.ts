@@ -37,6 +37,16 @@ describe('encoding', () => {
   });
 });
 
+describe('utf8', () => {
+  it('matches the platform encoder for ASCII, Hindi, rupee signs and emoji', async () => {
+    const { utf8 } = await import('./encoding');
+    for (const text of ['Swiggy 340', 'चाय ₹20', '🎉 बोनस', '', 'mixed ₹1,23,456.70 नमस्ते 👍🏽']) {
+      expect(utf8.encode(text)).toEqual(new TextEncoder().encode(text));
+      expect(utf8.decode(new TextEncoder().encode(text))).toBe(text);
+    }
+  });
+});
+
 describe('recovery key', () => {
   it('formats as 54 characters in groups of four and parses back', () => {
     const key = generateKey(random);

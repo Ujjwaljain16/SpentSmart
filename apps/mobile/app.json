@@ -8,7 +8,9 @@
     "scheme": "spentsmart",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "platforms": ["android"],
+    "platforms": [
+      "android"
+    ],
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#0A0A0A",
@@ -70,7 +72,8 @@
         }
       ],
       "expo-secure-store",
-      "./modules/upi-intent/app.plugin.js"
+      "./modules/upi-intent/app.plugin.js",
+      "./plugins/with-local-cleartext"
     ],
     "updates": {
       "url": "https://u.expo.dev/14d0fdab-c65f-4488-9356-a157d43b5c37",

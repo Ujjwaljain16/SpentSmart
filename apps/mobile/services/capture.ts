@@ -32,7 +32,14 @@ export async function scanReceipt(from: 'camera' | 'gallery'): Promise<{ phrase:
     throw e;
   }
   if (result.canceled || !result.assets[0]) return null;
-  const lines = await extractTextFromImage(result.assets[0].uri);
+  let lines: string[];
+  try {
+    lines = await extractTextFromImage(result.assets[0].uri);
+  } catch {
+    // The usual cause is Google Play services still downloading the text model on this phone; its error says only
+    // "err". It's fetched in the background, so a retry a little later works.
+    throw new Error('Receipt reading is still getting ready on this phone. Try again in a minute, or type it in.');
+  }
   return receiptPhrase(lines);
 }
 

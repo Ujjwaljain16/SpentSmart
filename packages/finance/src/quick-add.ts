@@ -259,7 +259,31 @@ function resolveHint(hint: Hint, categories: readonly Category[]): string {
   return categories.some((c) => c.key === fallback) ? fallback : OTHER_CATEGORY_KEY;
 }
 
-export function parseQuickAdd(input: string, categories: readonly Category[], now: Date): QuickAddDraft {
+/** How a payee is matched against the user's history: case, punctuation and extra spaces don't matter. */
+export function learnKey(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9\u0900-\u097f]+/g, ' ').trim();
+}
+
+/**
+ * The category the user most often gave each payee, from their past expenses. Lets quick add file "Vada Pav Stall"
+ * under Food because the user did so before, which no built-in dictionary can know.
+ */
+export function learnCategories(history: readonly { payeeName: string; categoryKey: string; type: string }[]): Map<string, string> {
+  const counts = new Map<string, Map<string, number>>();
+  for (const t of history) {
+    if (t.type !== 'expense') continue;
+    const key = learnKey(t.payeeName);
+    if (!key) continue;
+    const byCategory = counts.get(key) ?? new Map<string, number>();
+    byCategory.set(t.categoryKey, (byCategory.get(t.categoryKey) ?? 0) + 1);
+    counts.set(key, byCategory);
+  }
+  const out = new Map<string, string>();
+  for (const [key, byCategory] of counts) out.set(key, [...byCategory].sort((a, b) => b[1] - a[1])[0]![0]);
+  return out;
+}
+
+export function parseQuickAdd(input: string, categories: readonly Category[], now: Date, options: { learned?: ReadonlyMap<string, string> } = {}): QuickAddDraft {
   const tokens = input
     .trim()
     .replace(/[₹]\s+/g, '₹')
@@ -412,13 +436,28 @@ export function parseQuickAdd(input: string, categories: readonly Category[], no
 
   const note = rest.length > 0 ? titleCase(rest).slice(0, 80) : null;
 
+  // Compound words: "textbooks", "notebooks", "groceries" end in a word the dictionary knows.
+  if (!hint) {
+    for (const w of rest.map((r) => r.toLowerCase())) {
+      const k = Object.keys(KEYWORDS).find((kw) => kw.length >= 4 && w.length > kw.length && w.endsWith(kw));
+      if (k) {
+        hint = KEYWORDS[k]!;
+        break;
+      }
+    }
+  }
+
+  const payeeName = merchant ?? note ?? (type === 'income' ? 'Income' : 'Expense');
+  // What the user filed this payee under before beats the built-in dictionary, but not a category they typed.
+  const learnedKey = options.learned?.get(learnKey(payeeName));
+  const learned = learnedKey && categories.some((c) => c.key === learnedKey) ? learnedKey : null;
+
   let categoryKey: string;
   if (type === 'income') categoryKey = INCOME_CATEGORY_KEY;
   else if (explicitCategory) categoryKey = explicitCategory;
+  else if (learned) categoryKey = learned;
   else if (hint) categoryKey = resolveHint(hint, categories);
   else categoryKey = OTHER_CATEGORY_KEY;
-
-  const payeeName = merchant ?? note ?? (type === 'income' ? 'Income' : 'Expense');
 
   return {
     amountPaise,

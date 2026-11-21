@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_CATEGORIES } from './categories';
-import { parseQuickAdd } from './quick-add';
+import { learnCategories, parseQuickAdd } from './quick-add';
 import { Expected, HELD_OUT, PHRASES } from './quick-add.phrases';
 import { Category } from './types';
 
@@ -280,11 +280,43 @@ describe('parseQuickAdd accuracy (amount, type and category all right)', () => {
     expect((PHRASES.length - misses.length) / PHRASES.length).toBeGreaterThanOrEqual(0.9);
   });
 
-  // Not tuned on, so this is the honest number for new phrases: 33/40 (82.5%). Misses are dishes and products the
-  // dictionary has never seen; the fix is learning from the user's own history, not adding these words here.
+  // Not tuned on, so this is the honest number for new phrases: 34/40 (85%) with no history. The misses are dishes and
+  // products the dictionary has never seen; learning from the user's own history (below) covers those once filed.
   it('keeps its score on held-out phrases it was not tuned on', () => {
     const misses = missesIn(HELD_OUT);
-    expect(misses).toEqual(['swiggy genie 120', 'chole bhature 140', 'vada pav 30', 'paneer 180', 'chicken 320', 'aata chawal 900', 'textbooks 1100']);
+    expect(misses).toEqual(['swiggy genie 120', 'chole bhature 140', 'vada pav 30', 'paneer 180', 'chicken 320', 'aata chawal 900']);
     expect((HELD_OUT.length - misses.length) / HELD_OUT.length).toBeGreaterThanOrEqual(0.8);
+  });
+});
+
+describe('parseQuickAdd learns from history', () => {
+  const NOW = new Date(2026, 10, 18, 14, 30);
+  const history = [
+    { payeeName: 'Vada Pav', categoryKey: 'food', type: 'expense' },
+    { payeeName: 'vada pav', categoryKey: 'food', type: 'expense' },
+    { payeeName: 'Vada Pav', categoryKey: 'other', type: 'expense' },
+    { payeeName: 'Swiggy', categoryKey: 'college', type: 'expense' },
+    { payeeName: 'Acme', categoryKey: 'income', type: 'income' },
+  ];
+  const learned = learnCategories(history);
+
+  it('uses the category the user most often chose for a payee', () => {
+    expect(parseQuickAdd('vada pav 30', DEFAULT_CATEGORIES, NOW, { learned }).categoryKey).toBe('food');
+    expect(parseQuickAdd('vada pav 30', DEFAULT_CATEGORIES, NOW).categoryKey).toBe('other');
+  });
+
+  it('beats the built-in dictionary but not a category the user typed', () => {
+    expect(parseQuickAdd('swiggy 340', DEFAULT_CATEGORIES, NOW, { learned }).categoryKey).toBe('college');
+    expect(parseQuickAdd('swiggy 340 rent', DEFAULT_CATEGORIES, NOW, { learned }).categoryKey).toBe('rent');
+  });
+
+  it('ignores income history and categories that no longer exist', () => {
+    expect(learned.has('acme')).toBe(false);
+    const stale = new Map([['chai', 'deleted-category']]);
+    expect(parseQuickAdd('chai 20', DEFAULT_CATEGORIES, NOW, { learned: stale }).categoryKey).toBe('food');
+  });
+
+  it('matches known words inside compound words', () => {
+    expect(parseQuickAdd('textbooks 1100', DEFAULT_CATEGORIES, NOW).categoryKey).toBe('college');
   });
 });

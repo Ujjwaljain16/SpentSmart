@@ -16,4 +16,6 @@ name: Create a savings goal and add money to it
 - tapOn: "Amount in rupees"
 - inputText: "5000"
 - tapOn: "Add money"
-- assertVisible: ".*17% saved.*|17%"
+- assertVisible: "₹5,000 of ₹30,000"
+- assertVisible: "17 percent saved"
+- assertVisible: ".*Put aside ₹2,084 a month.*"

@@ -327,12 +327,10 @@ describe('settings repo', () => {
     const { repos } = await createTestContext();
     expect(await repos.settings.loadAll()).toEqual(SETTINGS_DEFAULTS);
     await repos.settings.set('bioLockEnabled', true);
-    await repos.settings.set('budgetPaise', 1_500_000);
     await repos.settings.set('themeMode', 'dark');
     await repos.settings.set('profileName', 'Asha');
     expect(await repos.settings.loadAll()).toMatchObject({
       bioLockEnabled: true,
-      budgetPaise: 1_500_000,
       themeMode: 'dark',
       profileName: 'Asha',
     });
@@ -342,10 +340,10 @@ describe('settings repo', () => {
 
   it('ignores corrupt stored values instead of crashing', async () => {
     const { repos, raw } = await createTestContext();
-    raw.prepare("INSERT INTO settings (key, value) VALUES ('themeMode', 'neon'), ('budgetPaise', 'abc')").run();
+    raw.prepare("INSERT INTO settings (key, value) VALUES ('themeMode', 'neon'), ('lockTimeoutSeconds', 'abc')").run();
     const s = await repos.settings.loadAll();
     expect(s.themeMode).toBe('system');
-    expect(s.budgetPaise).toBe(0);
+    expect(s.lockTimeoutSeconds).toBe(120);
   });
 });
 
@@ -429,9 +427,9 @@ describe('scale', () => {
       const cats = ['food', 'utility', 'college', 'rent', 'other'];
       for (let i = 0; i < 100_000; i++) {
         await x.run(
-          `INSERT INTO transactions (id, amount_paise, type, category_key, payee_name, payee_vpa, payment_method, note, occurred_at, created_at, verified_by)
-           VALUES (?, ?, 'expense', ?, ?, ?, 'upi', 'bulk', ?, ?, 'manual')`,
-          [`id-${i}`, 100 + (i % 5000), cats[i % 5]!, `Merchant ${i % 400}`, `m${i % 400}@ybl`, base - i * 600_000, base],
+          `INSERT INTO transactions (id, amount_paise, type, category_key, payee_name, payee_vpa, payment_method, note, occurred_at, created_at, updated_at, verified_by, account_id, source)
+           VALUES (?, ?, 'expense', ?, ?, ?, 'upi', 'bulk', ?, ?, ?, 'manual', 'default-bank', 'manual')`,
+          [`id-${i}`, 100 + (i % 5000), cats[i % 5]!, `Merchant ${i % 400}`, `m${i % 400}@ybl`, base - i * 600_000, base, base],
         );
       }
     });

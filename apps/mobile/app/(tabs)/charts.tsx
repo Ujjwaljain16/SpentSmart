@@ -3,11 +3,13 @@ import React, { useState } from 'react';
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BalanceCard } from '@/components/home/BalanceCard';
+import { InsightsPanel } from '@/components/insights/InsightsPanel';
 import { Money, useFormatMoney } from '@/components/ui/Money';
 import { BorderRadius, FontSizes, Spacing } from '@/constants/theme';
 import { useCategories } from '@/contexts/categories-context';
 import { Period, budgetUsage, dayBuckets, monthBuckets, weekBucketsOfMonth } from '@spentsmart/finance/periods';
 import { useLiveQuery } from '@/hooks/use-live-query';
+import { runInsights } from '@spentsmart/finance/insights/run';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 
 const TITLES: Record<Period, string> = { week: 'Daily spending', month: 'Weekly spending', year: 'Monthly spending' };
@@ -37,9 +39,16 @@ export default function ChartsScreen() {
     [period],
   );
 
+  // About thirteen months: enough for yearly renewals to show up twice and for three earlier months of comparison.
+  const { data: detected, refresh: refreshDetected } = useLiveQuery(async (repos) => {
+    const now = Date.now();
+    const rows = await repos.analytics.insightRows(now - 400 * 24 * 60 * 60 * 1000, now + 1);
+    return runInsights(rows, now);
+  });
+
   const onRefresh = async () => {
     setRefreshing(true);
-    await refresh();
+    await Promise.all([refresh(), refreshDetected()]);
     setRefreshing(false);
   };
 
@@ -71,6 +80,8 @@ export default function ChartsScreen() {
               onPeriodChange={setPeriod}
               budget={usage && overall ? { budgetPaise: overall.status.availablePaise, spentPaise: overall.status.spentPaise, usage } : null}
             />
+
+            {detected ? <InsightsPanel insights={detected} /> : null}
 
             {top.length > 0 && (
               <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_CATEGORIES } from './categories';
 import { learnCategories, parseQuickAdd } from './quick-add';
+import { BLIND } from './quick-add.blind';
 import { Expected, HELD_OUT, PHRASES } from './quick-add.phrases';
 import { Category } from './types';
 
@@ -286,6 +287,17 @@ describe('parseQuickAdd accuracy (amount, type and category all right)', () => {
     const misses = missesIn(HELD_OUT);
     expect(misses).toEqual(['swiggy genie 120', 'chole bhature 140', 'vada pav 30', 'paneer 180', 'chicken 320', 'aata chawal 900']);
     expect((HELD_OUT.length - misses.length) / HELD_OUT.length).toBeGreaterThanOrEqual(0.8);
+  });
+});
+
+describe('parseQuickAdd on the blind set', () => {
+  // Written before the parser was run on it and not tuned against: 38/40 (95%) when first measured on 22 Nov 2026.
+  // Misses are a dish and vegetables the dictionary doesn't know; history learning covers them once filed.
+  it('stays at or above 90% on phrases it has never seen', () => {
+    const misses = missesIn(BLIND);
+    expect(BLIND).toHaveLength(40);
+    expect(misses).toEqual(['idli vada 45', 'onions tomatoes 120']);
+    expect((BLIND.length - misses.length) / BLIND.length).toBeGreaterThanOrEqual(0.9);
   });
 });
 

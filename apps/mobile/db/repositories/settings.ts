@@ -12,8 +12,6 @@ export interface SettingsShape {
   lockTimeoutSeconds: number;
   privacyModeEnabled: boolean;
   remindersEnabled: boolean;
-  /** Monthly budget in paise; 0 means "no budget". */
-  budgetPaise: number;
   /** Package name of the last UPI app used. */
   preferredUpiApp: string;
   /** The user's own UPI ID (for receiving). */
@@ -30,7 +28,6 @@ export const SETTINGS_DEFAULTS: SettingsShape = {
   lockTimeoutSeconds: 120,
   privacyModeEnabled: false,
   remindersEnabled: false,
-  budgetPaise: 0,
   preferredUpiApp: '',
   myVpa: '',
   myPayName: '',

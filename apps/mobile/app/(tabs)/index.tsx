@@ -118,16 +118,6 @@ export default function HomeScreen() {
               />
             ) : null}
 
-            <BalanceCard
-              balancePaise={insights.balancePaise}
-              incomePaise={insights.incomePaise}
-              expensePaise={insights.expensePaise}
-              trend={insights.trend}
-              period={period}
-              onPeriodChange={setPeriod}
-              budget={usage && overall ? { budgetPaise: overall.status.availablePaise, spentPaise: overall.status.spentPaise, usage } : null}
-            />
-
             <View style={styles.quickRow}>
               {(
                 [
@@ -152,6 +142,16 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+
+            <BalanceCard
+              balancePaise={insights.balancePaise}
+              incomePaise={insights.incomePaise}
+              expensePaise={insights.expensePaise}
+              trend={insights.trend}
+              period={period}
+              onPeriodChange={setPeriod}
+              budget={usage && overall ? { budgetPaise: overall.status.availablePaise, spentPaise: overall.status.spentPaise, usage } : null}
+            />
 
             {data && data.categoryBudgets.length > 0 ? (
               <View style={[styles.section, { backgroundColor: colors.card }]}>

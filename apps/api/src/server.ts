@@ -8,7 +8,17 @@ import { fakeModel } from './fake-model';
 const config = loadConfig();
 // `pglite:memory` or `pglite:<folder>` runs Postgres in-process for local testing; anything else is a Postgres URL.
 const db: Db = config.databaseUrl.startsWith('pglite:') ? await (await import('./pglite-db')).openPglite(config.databaseUrl) : pgDb(config.databaseUrl);
-const applied = await migrate(db);
+let applied: string[];
+if (config.migrationDatabaseUrl === config.databaseUrl) {
+  applied = await migrate(db);
+} else {
+  const direct = pgDb(config.migrationDatabaseUrl);
+  try {
+    applied = await migrate(direct);
+  } finally {
+    await direct.close();
+  }
+}
 if (applied.length > 0) console.info(`Applied migrations: ${applied.join(', ')}`);
 
 // The assistant stays off unless enabled. "fake" is the free local stand-in; "claude" reads ANTHROPIC_API_KEY.

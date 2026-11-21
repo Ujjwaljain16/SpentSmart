@@ -9,7 +9,8 @@
     "start": "tsx src/server.ts",
     "migrate": "tsx src/migrate-cli.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "dev:local": "tsx src/local.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.12.0",

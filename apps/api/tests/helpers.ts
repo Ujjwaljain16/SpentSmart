@@ -6,25 +6,10 @@ import { SignJWT, exportJWK, generateKeyPair, createLocalJWKSet } from 'jose';
 import { AppDeps, buildApp } from '../src/app';
 import { googleVerifier } from '../src/auth/google';
 import { Config } from '../src/config';
-import { Db, Queryable, migrate } from '../src/db';
+import { migrate } from '../src/db';
+import { pgliteDb } from '../src/pglite-db';
 
 export const GOOGLE_CLIENT_ID = 'test-client.apps.googleusercontent.com';
-
-function pgliteDb(pg: PGlite): Db {
-  // PGlite's query() takes one statement; migrations are several, so parameterless SQL goes through exec().
-  const run = async <T>(target: PGlite | Parameters<Parameters<PGlite['transaction']>[0]>[0], sql: string, params?: unknown[]) => {
-    if (params === undefined) {
-      const results = await target.exec(sql);
-      return { rows: (results.at(-1)?.rows ?? []) as T[] };
-    }
-    return { rows: (await target.query<T>(sql, params)).rows };
-  };
-  return {
-    query: (sql, params) => run(pg, sql, params),
-    transaction: (fn) => pg.transaction((tx) => fn({ query: (sql, params) => run(tx, sql, params) } as Queryable)),
-    close: () => pg.close(),
-  };
-}
 
 /** A stand-in for Google: signs ID tokens with its own key and hands the API the matching public key. */
 export async function fakeGoogle() {
@@ -49,12 +34,12 @@ export const testConfig: Config = {
   refreshTokenTtlDays: 60,
 };
 
-export async function createTestApp(opts: { rateLimits?: { global: number; auth: number }; assistant?: AppDeps['assistant'] } = {}) {
+export async function createTestApp(opts: { rateLimits?: { global: number; auth: number }; assistant?: AppDeps['assistant']; config?: typeof testConfig } = {}) {
   const pg = new PGlite();
   const db = pgliteDb(pg);
   await migrate(db);
   const google = await fakeGoogle();
-  const app = await buildApp({ db, config: testConfig, verifyGoogle: googleVerifier(testConfig.googleClientIds, google.keys), rateLimits: opts.rateLimits ?? { global: 10_000, auth: 10_000 }, assistant: opts.assistant });
+  const app = await buildApp({ db, config: opts.config ?? testConfig, verifyGoogle: googleVerifier(testConfig.googleClientIds, google.keys), rateLimits: opts.rateLimits ?? { global: 10_000, auth: 10_000 }, assistant: opts.assistant });
 
   async function signIn(sub: string, deviceName = 'Pixel'): Promise<TokenResponse> {
     const idToken = await google.sign({ sub, email: `${sub}@example.com` });

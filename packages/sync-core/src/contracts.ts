@@ -60,6 +60,12 @@ export const googleSignInRequest = z.object({
   deviceName: z.string().trim().min(1).max(60),
 });
 
+/** Local testing only; the server accepts it only when started with TEST_SIGN_IN. */
+export const testSignInRequest = z.object({
+  name: z.string().trim().min(2).max(40).regex(/^[a-zA-Z0-9 ._-]+$/),
+  deviceName: z.string().trim().min(1).max(60),
+});
+
 export const refreshRequest = z.object({ refreshToken: z.string().min(20).max(200) });
 
 export const tokenResponse = z.object({

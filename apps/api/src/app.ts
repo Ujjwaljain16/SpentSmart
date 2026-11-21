@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import rateLimit from '@fastify/rate-limit';
 import {
   googleSignInRequest,
+  testSignInRequest,
   keyEnvelopeRequest,
   pullQuery,
   pushRequest,
@@ -81,11 +82,9 @@ export async function buildApp({ db, config, verifyGoogle, rateLimits = { global
 
   app.get('/healthz', async () => ({ ok: true }));
 
-  app.post('/v1/auth/google', authLimit, async (req) => {
-    const body = parse(googleSignInRequest, req.body);
-    const identity = await verifyGoogle(body.idToken);
-    // Sign-in runs before we know the user, so it is the one place that looks users up without the RLS role.
-    const session = await db.transaction(async (tx) => {
+  /** Find or create the user for an identity and register a new device for them. */
+  async function signInAs(identity: { sub: string; email: string | null }, deviceName: string): Promise<Session> {
+    return db.transaction(async (tx) => {
       const existing = await tx.query<{ id: string }>('SELECT id FROM users WHERE google_sub = $1', [identity.sub]);
       let userId = existing.rows[0]?.id;
       if (!userId) {
@@ -95,9 +94,26 @@ export async function buildApp({ db, config, verifyGoogle, rateLimits = { global
         await tx.query('UPDATE users SET email = $2 WHERE id = $1', [userId, identity.email]);
       }
       const deviceId = randomUUID();
-      await tx.query('INSERT INTO devices (id, user_id, name) VALUES ($1, $2, $3)', [deviceId, userId, body.deviceName]);
+      await tx.query('INSERT INTO devices (id, user_id, name) VALUES ($1, $2, $3)', [deviceId, userId, deviceName]);
       return { userId, deviceId };
     });
+  }
+
+  app.get('/v1/config', async () => ({ testSignIn: config.testSignIn === true, assistant: assistant !== undefined }));
+
+  if (config.testSignIn) {
+    // Local testing only (see Config.testSignIn). Test users live in their own "test:" namespace.
+    app.post('/v1/auth/test', authLimit, async (req) => {
+      const body = parse(testSignInRequest, req.body);
+      return tokensFor(await signInAs({ sub: `test:${body.name.toLowerCase()}`, email: null }, body.deviceName));
+    });
+  }
+
+  app.post('/v1/auth/google', authLimit, async (req) => {
+    const body = parse(googleSignInRequest, req.body);
+    const identity = await verifyGoogle(body.idToken);
+    // Sign-in runs before we know the user, so it is the one place that looks users up without the RLS role.
+    const session = await signInAs(identity, body.deviceName);
     return tokensFor(session);
   });
 

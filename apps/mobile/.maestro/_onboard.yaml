@@ -5,6 +5,6 @@ appId: com.ujjwaljain.spentsmart
     clearState: true
 - tapOn: "Display name"
 - inputText: "Maestro"
-- hideKeyboard
+- tapOn: "Avatar rocket"
 - tapOn: "Continue"
 - assertVisible: "hey, maestro"

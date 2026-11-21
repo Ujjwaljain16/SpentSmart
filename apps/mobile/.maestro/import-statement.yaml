@@ -1,0 +1,33 @@
+appId: com.ujjwaljain.spentsmart
+name: Import a bank statement CSV, skipping duplicates on a second import
+# Needs statement-nov.csv in the emulator's Downloads (adb push).
+---
+- runFlow: _onboard.yaml
+- tapOn: "Settings"
+- scrollUntilVisible:
+    element: "Import bank statement"
+- tapOn: "Import bank statement"
+- tapOn: "Choose CSV file"
+- runFlow:
+    when:
+      notVisible: "statement-nov.csv"
+    commands:
+      - tapOn: "Show roots"
+      - tapOn: "Downloads"
+- tapOn: "statement-nov.csv"
+- assertVisible: "6 new"
+- assertVisible: ".*₹2,000 moved to Cash.*"
+- assertVisible: ".*2 lines couldn’t be read.*"
+- tapOn: "Import 6 transactions"
+- tapOn: "OK"
+- tapOn: "Import bank statement"
+- tapOn: "Choose CSV file"
+- runFlow:
+    when:
+      notVisible: "statement-nov.csv"
+    commands:
+      - tapOn: "Show roots"
+      - tapOn: "Downloads"
+- tapOn: "statement-nov.csv"
+- assertVisible: "0 new"
+- assertVisible: "Nothing new to import."

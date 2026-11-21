@@ -5,7 +5,6 @@ name: Monthly budget drives safe to spend
 - tapOn: "Set up a budget"
 - tapOn: "Monthly limit in rupees"
 - inputText: "30000"
-- hideKeyboard
 - tapOn: "Save budget"
 - assertVisible: "Safe to spend today"
 - assertVisible: ".*left in your budget until.*"

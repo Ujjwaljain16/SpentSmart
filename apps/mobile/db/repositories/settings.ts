@@ -21,6 +21,10 @@ export interface SettingsShape {
   payday: number;
   /** The assistant is a lab feature, off until the user turns it on. */
   assistantEnabled: boolean;
+  /** Gemini model for the bring-your-own-key assistant. The key itself lives in the Keystore, not here. */
+  geminiModel: string;
+  /** Send payee names and notes to the model too. Off: figures only. */
+  assistantShareDetails: boolean;
 }
 
 export const SETTINGS_DEFAULTS: SettingsShape = {
@@ -37,6 +41,8 @@ export const SETTINGS_DEFAULTS: SettingsShape = {
   myPayName: '',
   payday: 0,
   assistantEnabled: false,
+  geminiModel: 'gemini-3.5-flash-lite',
+  assistantShareDetails: false,
 };
 
 export type SettingKey = keyof SettingsShape;

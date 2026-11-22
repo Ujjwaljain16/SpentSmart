@@ -76,6 +76,7 @@ function RootNavigator() {
             <Stack.Screen name="sync" />
             <Stack.Screen name="sync-conflicts" />
             <Stack.Screen name="assistant" />
+            <Stack.Screen name="assistant-settings" />
           </Stack.Protected>
           <Stack.Protected guard={!onboarded}>
             <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />

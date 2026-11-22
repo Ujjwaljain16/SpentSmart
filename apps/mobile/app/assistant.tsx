@@ -1,8 +1,8 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Button } from '@/components/ui/Button';
 import { useFormatMoney } from '@/components/ui/Money';
@@ -11,10 +11,13 @@ import { BorderRadius, FontSizes, MIN_TOUCH_TARGET, Spacing } from '@/constants/
 import { useCategories } from '@/contexts/categories-context';
 import { useCloud } from '@/contexts/cloud-context';
 import { useRepos } from '@/contexts/database-context';
+import { useSettings } from '@/contexts/settings-context';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { log } from '@/lib/logger';
 import { routes } from '@/lib/routes';
+import { geminiKey } from '@/services/assistant/gemini';
 import { applyProposal, repositoryLedger } from '@/services/assistant/ledger';
+import { GeminiContent, geminiConverse } from '@spentsmart/assistant/gemini';
 import { converse } from '@spentsmart/assistant/loop';
 import { firstUserMessage } from '@spentsmart/assistant/prompt';
 import { Proposal } from '@spentsmart/assistant/tools';
@@ -40,8 +43,17 @@ export default function AssistantScreen() {
   const money = useFormatMoney();
   const { resolve } = useCategories();
   const { client, status } = useCloud();
+  const { settings } = useSettings();
   const ledger = useMemo(() => repositoryLedger(repos), [repos]);
   const history = useRef<Anthropic.Beta.BetaMessageParam[]>([]);
+  const geminiHistory = useRef<GeminiContent[]>([]);
+  // null until checked. Re-read on focus: the key is added on the settings screen.
+  const [apiKey, setApiKey] = useState<string | null | undefined>(undefined);
+  useFocusEffect(
+    useCallback(() => {
+      void geminiKey.get().then((k) => setApiKey(k ?? null));
+    }, []),
+  );
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   const [text, setText] = useState('');
   const [thinking, setThinking] = useState(false);
@@ -50,21 +62,39 @@ export default function AssistantScreen() {
 
   const ask = async (question: string) => {
     const q = question.trim();
-    if (!q || thinking) return;
+    // Wait until we know whether a Gemini key is saved, so the question goes to the right place.
+    if (!q || thinking || apiKey === undefined) return;
     setText('');
     const userBubble: Bubble = { id: `u${Date.now()}`, role: 'user', text: q };
     setBubbles((b) => [...b, userBubble]);
     setThinking(true);
     try {
       const now = new Date();
-      const content = history.current.length === 0 ? firstUserMessage(q, now) : q;
-      const result = await converse({
-        transport: { turn: (messages) => client.assistantTurn(messages) },
-        ledger,
-        now: now.getTime(),
-        messages: [...history.current, { role: 'user', content }],
-      });
-      history.current = result.messages;
+      let result: { reply: string; untraced: StatedAmount[]; proposals: Proposal[] };
+      if (apiKey) {
+        const content = geminiHistory.current.length === 0 ? firstUserMessage(q, now) : q;
+        const gemini = await geminiConverse({
+          apiKey,
+          model: settings.geminiModel,
+          ledger,
+          now: now.getTime(),
+          contents: [...geminiHistory.current, { role: 'user', parts: [{ text: content }] }],
+          shareDetails: settings.assistantShareDetails,
+          fetchImpl: fetch,
+        });
+        geminiHistory.current = gemini.contents;
+        result = gemini;
+      } else {
+        const content = history.current.length === 0 ? firstUserMessage(q, now) : q;
+        const server = await converse({
+          transport: { turn: (messages) => client.assistantTurn(messages) },
+          ledger,
+          now: now.getTime(),
+          messages: [...history.current, { role: 'user', content }],
+        });
+        history.current = server.messages;
+        result = server;
+      }
       setBubbles((b) => [
         ...b,
         {
@@ -102,13 +132,21 @@ export default function AssistantScreen() {
       ? `${p.type === 'income' ? 'Income' : p.type === 'refund' ? 'Refund' : 'Expense'}: ${money(p.amountPaise)} · ${p.payeeName} · ${resolve(p.categoryKey).label} · ${new Date(p.occurredAt).toLocaleDateString('en-IN')}`
       : `Goal: ${p.name} · ${money(p.targetPaise)}${p.deadline ? ` by ${new Date(p.deadline).toLocaleDateString('en-IN')}` : ''}`;
 
-  if (!signedIn) {
+  const settingsButton = (
+    <TouchableOpacity accessibilityRole="button" accessibilityLabel="Assistant settings" style={styles.gear} onPress={() => router.push(routes.assistantSettings)}>
+      <Ionicons name="settings-outline" size={22} color={colors.text} />
+    </TouchableOpacity>
+  );
+
+  if (apiKey === null && !signedIn) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <ScreenHeader title="Ask SpentSmart" />
+        <ScreenHeader title="Ask SpentSmart" trailing={settingsButton} />
         <View style={styles.empty}>
-          <Text style={[styles.body, { color: colors.textSecondary }]}>The assistant runs through your SpentSmart account. Sign in under Sync & backup first.</Text>
-          <Button label="Open Sync & backup" onPress={() => router.replace(routes.sync)} />
+          <Text style={[styles.body, { color: colors.textSecondary }]}>
+            The assistant answers questions about your own money using Google Gemini with your own key. A free key from Google AI Studio is enough.
+          </Text>
+          <Button label="Add a Gemini key" onPress={() => router.push(routes.assistantSettings)} />
         </View>
       </View>
     );
@@ -117,7 +155,7 @@ export default function AssistantScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar style={colors.isDark ? 'light' : 'dark'} />
-      <ScreenHeader title="Ask SpentSmart" />
+      <ScreenHeader title="Ask SpentSmart" trailing={settingsButton} />
       <KeyboardAvoidingView behavior="height" style={styles.flex}>
         <FlatList
           data={bubbles}
@@ -126,7 +164,8 @@ export default function AssistantScreen() {
           ListEmptyComponent={
             <View style={styles.suggestions}>
               <Text style={[styles.body, { color: colors.textSecondary }]}>
-                Answers come from your own data, worked out on this phone. Only the numbers needed for an answer are sent to the model, never your full history.
+                Answers come from your own data, worked out on this phone. Only the figures needed for an answer are sent to the model, never your full history
+                {apiKey && !settings.assistantShareDetails ? ', and never payee names or notes' : ''}.
               </Text>
               {SUGGESTIONS.map((s) => (
                 <TouchableOpacity key={s} accessibilityRole="button" style={[styles.suggestion, { borderColor: colors.border, backgroundColor: colors.surface }]} onPress={() => void ask(s)}>
@@ -200,5 +239,6 @@ const styles = StyleSheet.create({
   thinking: { marginVertical: Spacing.md },
   composer: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, padding: Spacing.md, borderTopWidth: StyleSheet.hairlineWidth },
   input: { flex: 1, minHeight: MIN_TOUCH_TARGET, borderWidth: 1, borderRadius: BorderRadius.full, paddingHorizontal: Spacing.md, fontSize: FontSizes.md },
+  gear: { width: MIN_TOUCH_TARGET, height: MIN_TOUCH_TARGET, alignItems: 'center', justifyContent: 'center' },
   send: { width: MIN_TOUCH_TARGET, height: MIN_TOUCH_TARGET, borderRadius: MIN_TOUCH_TARGET / 2, alignItems: 'center', justifyContent: 'center' },
 });

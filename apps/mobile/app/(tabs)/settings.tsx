@@ -296,9 +296,15 @@ export default function SettingsScreen() {
           <Row
             icon="sparkles-outline"
             title="Assistant (lab)"
-            subtitle="Ask questions about your money. Needs Sync & backup sign-in."
+            subtitle="Ask questions about your money, with your own Gemini key"
             toggle={{ value: settings.assistantEnabled, onChange: (v) => void setSetting('assistantEnabled', v) }}
           />
+          {settings.assistantEnabled ? (
+            <>
+              <Divider />
+              <Row icon="key-outline" title="Assistant settings" subtitle="Gemini key, model, what it may see" onPress={() => router.push(routes.assistantSettings)} />
+            </>
+          ) : null}
         </Section>
 
         <Section title="MONEY">

@@ -17,7 +17,7 @@ the server stores ciphertext it cannot read.</p>
 | **Log without typing** | Quick add understands phrases like `swiggy 340 dinner #office` or `salary 50k yesterday` (99.6% on 255 phrases, 95% on a blind set) and learns your categories. There's also voice, receipt OCR, bank statement import, a Quick Settings tile and a home-screen widget (Add / Speak / Scan & pay). |
 | **Know where you stand** | Safe-to-spend until payday, budgets, goals, accounts and transfers, plus insights: recurring payments, month-end forecast with its reasoning, and anomalies. |
 | **Optional sync and backup** | Google sign-in, XChaCha20-Poly1305 end-to-end encryption, a recovery key only you hold, three-way merge across phones. |
-| **Optional assistant** | Ask "am I within budget?". The model calls tools that run **on your phone** and only ever sees the figures it asked for. Changes are proposals you confirm. |
+| **Optional assistant** | Ask "am I within budget?" with **your own Gemini key** (a free one works). The phone calls Google directly; the model calls tools that run **on your phone** and only sees the figures it asked for, never payee names or notes unless you allow them. Changes are proposals you confirm. |
 
 Everything beyond the core app is **off until you switch it on**. The in-app privacy policy says exactly what each
 feature reads and keeps.
@@ -106,7 +106,7 @@ The full emulator loop (dev client, local API, Maestro, fake bank SMS) is in [do
 | End to end | Maestro flows in `apps/mobile/.maestro` on the emulator |
 | CI | `.github/workflows/ci.yml`: typecheck, lint, tests, an Android export, and a production-dependency audit |
 
-627 tests pass on `v2/assistant`.
+642 tests pass on `v2/assistant`.
 
 ## Builds
 

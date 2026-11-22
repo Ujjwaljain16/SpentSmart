@@ -114,6 +114,19 @@ hour are deleted whenever a new one is written.
 
 ## Assistant (optional)
 
+Two engines share the same tools, traceability check and proposals.
+
+**Your own Gemini key (default).** `packages/assistant/src/gemini.ts` runs the tool loop on the phone and calls
+`generativelanguage.googleapis.com` directly with the key from the Keystore (`x-goog-api-key` header). No
+SpentSmart server is involved. Tool definitions are converted to Gemini function declarations (unsupported
+JSON-Schema keywords dropped); model turns go back verbatim so thought signatures stay valid. Because free-tier
+prompts may be used by Google and reviewed by people, `privacy.ts` replaces payee names and notes in tool results
+with "(hidden)" unless the user allows them; proposals (which echo what the user typed) go back unchanged. Errors map
+to clear messages (bad key, quota, unavailable model, blocked). `pnpm --filter @spentsmart/assistant eval:gemini`
+runs the 50-question eval against a real key, paced for free-tier limits.
+
+**Through a SpentSmart account (Claude).** Used when no Gemini key is saved and the server has the assistant on:
+
 - The server builds the whole request: fixed model, system prompt, tool list, effort and fallbacks. Clients send
   only the conversation, so the endpoint can't be used as a general model proxy.
 - Tools (`get_summary`, `compare_periods`, `search_transactions`, `budget_status`, `goals_status`,

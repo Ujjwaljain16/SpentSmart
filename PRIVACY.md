@@ -29,12 +29,16 @@ Android's automatic cloud backup is turned off for SpentSmart.
 
 ## Assistant (optional)
 
-- Your question goes through our server to Anthropic's Claude model to be answered.
-- The model can't open your database. It asks the app for specific figures, which your phone works out, and only
-  those go back: usually totals, or up to 20 matching transactions when you search.
+- **With your own Google Gemini key:** your phone sends the question straight to Google. SpentSmart's servers
+  aren't involved, and the key stays in this phone's Keystore.
+- On a **free** Gemini key, Google may use what you send to improve its products, and people may review it; on a
+  paid key it doesn't. So by default only figures are sent (totals, categories, dates, amounts), never payee names
+  or notes. You can allow names and notes in Settings → Assistant.
+- **Through a SpentSmart account** instead: your question goes through our server to Anthropic's Claude model. We
+  don't store conversations, and Anthropic's commercial terms don't allow training on them.
+- Either way, the model can't open your database. It asks the app for specific figures, which your phone works out,
+  and only those go back.
 - Changes it suggests are saved only when you tap Save.
-- We don't store your conversations on our server. Anthropic processes requests under its commercial terms, which
-  don't allow training on them.
 
 ## Voice, receipts and statements
 
@@ -60,8 +64,8 @@ SpentSmart doesn't access your SMS, location, bank accounts or clipboard.
 
 - **Expo**, for app updates: technical details like app version and platform.
 - **UPI apps** you pay through receive the payee and amount.
-- **Google**, for sign-in and speech recognition.
-- **Anthropic**, for the Assistant.
+- **Google**, for sign-in, speech recognition, and Gemini if you add your own key.
+- **Anthropic**, for the Assistant through a SpentSmart account.
 
 ## Keeping and deleting
 

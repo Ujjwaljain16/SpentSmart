@@ -20,8 +20,6 @@ export interface UpiIntentNativeModule {
   payWithUpi(uri: string, packageName: string | null): Promise<PayWithUpiResult>;
   /** Open an app's launcher screen. Returns false if it is not installed. */
   launchApp(packageName: string): Promise<boolean>;
-  /** Share a PNG (base64, optionally a data URL) to one specific app. Returns false on failure. */
-  shareImage(packageName: string, base64Data: string): Promise<boolean>;
   /** Draw the QR for a `upi://pay` URI ahead of time; a later shareQr/qrPng with the same URI reuses it. */
   prepareQr(upiUri: string): Promise<boolean>;
   /** Draw (or reuse) the QR natively and share it to one app. Returns false on failure. */

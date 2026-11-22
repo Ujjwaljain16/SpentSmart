@@ -69,7 +69,10 @@ export function createCapturedRepo(db: SqlDriver, deps: RepoDeps) {
      * direction within a few minutes (missing details are filled in from the newcomer), or a transaction that is
      * already in the books (paid through SpentSmart, or added by hand).
      */
-    async add(input: NewCaptured): Promise<'added' | 'duplicate' | 'already_recorded'> {
+    async add(input: NewCaptured, fingerprint: string | null = null): Promise<'added' | 'duplicate' | 'already_recorded'> {
+      // The exact same message again (an app re-posting its notification) is never a new payment.
+      if (fingerprint && (await db.first('SELECT 1 FROM captured_payments WHERE fingerprint = ?', [fingerprint]))) return 'duplicate';
+
       const twin = await db.first<Row>(
         `SELECT * FROM captured_payments
          WHERE (reference IS NOT NULL AND reference = ?)
@@ -96,9 +99,9 @@ export function createCapturedRepo(db: SqlDriver, deps: RepoDeps) {
 
       await db.run(
         `INSERT INTO captured_payments (id, source, app, direction, amount_paise, payee_name, payee_vpa, reference, via,
-           occurred_at, status, transaction_id, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', NULL, ?)`,
-        [newId(), input.source, input.app, input.direction, input.amountPaise, input.payeeName, input.payeeVpa, input.reference, input.via, input.occurredAt, now()],
+           occurred_at, status, transaction_id, fingerprint, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', NULL, ?, ?)`,
+        [newId(), input.source, input.app, input.direction, input.amountPaise, input.payeeName, input.payeeVpa, input.reference, input.via, input.occurredAt, fingerprint, now()],
       );
       notify();
       return 'added';

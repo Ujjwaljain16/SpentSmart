@@ -1,3 +1,4 @@
+import { messageFingerprint } from '@spentsmart/finance/capture/fingerprint';
 import { parsePaymentText } from '@spentsmart/finance/capture/payment-text';
 import { Category } from '@spentsmart/finance/types';
 import { paiseToDecimal } from '@spentsmart/finance/money';
@@ -96,7 +97,8 @@ export async function collectCaptured(repos: Repositories): Promise<number> {
     for (const n of await native.drainCaptured()) {
       const parsed = parsePaymentText(n.text);
       if (!parsed) continue;
-      if ((await repos.captured.add({ ...parsed, source: 'notification', app: n.app, occurredAt: n.at })) === 'added') fresh++;
+      const fingerprint = messageFingerprint(n.app, n.text);
+      if ((await repos.captured.add({ ...parsed, source: 'notification', app: n.app, occurredAt: n.at }, fingerprint)) === 'added') fresh++;
     }
   } catch (error) {
     log.warn('Could not read captured payments', error);

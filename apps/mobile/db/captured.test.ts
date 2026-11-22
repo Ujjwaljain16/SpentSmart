@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { messageFingerprint } from '@spentsmart/finance/capture/fingerprint';
 import { parsePaymentText } from '@spentsmart/finance/capture/payment-text';
 import { createTestContext } from '@/tests/helpers/node-driver';
 import { NewCaptured } from './repositories/captured';
@@ -50,6 +51,24 @@ describe('captured payments inbox', () => {
     const [item] = await repos.captured.listNew();
     await repos.captured.ignore(item!.id);
     expect(await repos.captured.add(captured('Rs 340 debited from A/c XX1234 to VPA zomato@ybl', T + MIN, 'com.android.mms'))).toBe('duplicate');
+    expect(await repos.captured.countNew()).toBe(0);
+  });
+
+  it('a re-posted notification is never a new payment, even long after it was added or ignored', async () => {
+    const { repos } = await createTestContext();
+    const salary = 'Rs.60000.00 credited to HDFC Bank A/c XX1234 on 22-11-26 by NEFT ACME CORP';
+    const atm = 'Rs.2000 withdrawn at ATM MG ROAD from A/c XX1234 on 22-11-26';
+    const sms = 'com.google.android.apps.messaging';
+    expect(await repos.captured.add(captured(salary, T, sms), messageFingerprint(sms, salary))).toBe('added');
+    expect(await repos.captured.add(captured(atm, T, sms), messageFingerprint(sms, atm))).toBe('added');
+    const [first, second] = await repos.captured.listNew();
+    await repos.captured.ignore(first!.id);
+    await repos.captured.markAdded(second!.id, null);
+
+    // Messages re-posts every unread SMS when a new one arrives, here 20 minutes later.
+    const later = T + 20 * MIN;
+    expect(await repos.captured.add(captured(salary, later, sms), messageFingerprint(sms, salary))).toBe('duplicate');
+    expect(await repos.captured.add(captured(atm, later, sms), messageFingerprint(sms, atm))).toBe('duplicate');
     expect(await repos.captured.countNew()).toBe(0);
   });
 

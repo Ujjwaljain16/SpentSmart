@@ -23,10 +23,13 @@ class PaymentNotificationListener : NotificationListenerService() {
     val text = "$title\n$body".trim()
     if (text.length > 1000 || !MONEY.containsMatchIn(text) || !PAYMENT_WORD.containsMatchIn(text) || SECRET.containsMatchIn(text)) return
 
+    // Apps re-post old notifications (Messages does, for every unread SMS, whenever a new one arrives). `when` is the
+    // message's own time and survives a re-post; postTime doesn't.
+    val at = sbn.notification.`when`.takeIf { it > 0 } ?: sbn.postTime
     CaptureStore.append(
       applicationContext,
       NOTIFICATION_QUEUE,
-      JSONObject().put("app", sbn.packageName).put("text", text).put("at", sbn.postTime).put("key", sbn.key),
+      JSONObject().put("app", sbn.packageName).put("text", text).put("at", at).put("key", sbn.key),
     )
   }
 

@@ -305,9 +305,12 @@ export const MIGRATIONS: readonly Migration[] = [
           occurred_at    INTEGER NOT NULL,
           status         TEXT NOT NULL CHECK (status IN ('new', 'added', 'ignored')),
           transaction_id TEXT,
+          -- Hash of the source message, so a re-posted notification isn't captured again. Never the text itself.
+          fingerprint    TEXT,
           created_at     INTEGER NOT NULL
         );
         CREATE INDEX idx_captured_status ON captured_payments (status, occurred_at);
+        CREATE UNIQUE INDEX idx_captured_fingerprint ON captured_payments (fingerprint) WHERE fingerprint IS NOT NULL;
       `);
     },
   },

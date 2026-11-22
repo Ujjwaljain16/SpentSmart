@@ -207,6 +207,120 @@ export const MIGRATIONS: readonly Migration[] = [
       );
     },
   },
+  {
+    version: 3,
+    async up(tx) {
+      // Sync bookkeeping. Nothing here is synced itself.
+      await tx.exec(`
+        CREATE TABLE sync_meta (
+          key   TEXT PRIMARY KEY NOT NULL,
+          value TEXT NOT NULL
+        );
+
+        -- Last version agreed with the server for each record, and its plaintext: the base for three-way merges.
+        CREATE TABLE sync_records (
+          collection TEXT NOT NULL,
+          local_id   TEXT NOT NULL,
+          version    INTEGER NOT NULL,
+          base_json  TEXT NOT NULL,
+          deleted    INTEGER NOT NULL DEFAULT 0,
+          PRIMARY KEY (collection, local_id)
+        );
+
+        -- Records changed on this phone and not yet accepted by the server. change_seq moves on every new change so
+        -- an upload that raced with an edit doesn't clear the newer edit. op_id is reused when a push is retried.
+        CREATE TABLE sync_outbox (
+          collection TEXT NOT NULL,
+          local_id   TEXT NOT NULL,
+          change_seq INTEGER NOT NULL,
+          op_id      TEXT,
+          PRIMARY KEY (collection, local_id)
+        );
+
+        CREATE TABLE sync_conflicts (
+          id           INTEGER PRIMARY KEY AUTOINCREMENT,
+          collection   TEXT NOT NULL,
+          local_id     TEXT NOT NULL,
+          field        TEXT NOT NULL,
+          local_json   TEXT,
+          remote_json  TEXT,
+          created_at   INTEGER NOT NULL,
+          resolved_at  INTEGER
+        );
+        CREATE INDEX idx_conflicts_open ON sync_conflicts (resolved_at) WHERE resolved_at IS NULL;
+      `);
+
+      // Every write to a synced table marks the record for upload, whichever code path made it. The sync engine sets
+      // sync_meta.applying while it writes remote changes, so those don't bounce straight back to the server.
+      const tracked: { table: string; collection: string; id: string }[] = [
+        { table: 'transactions', collection: 'transactions', id: 'id' },
+        { table: 'accounts', collection: 'accounts', id: 'id' },
+        { table: 'categories', collection: 'categories', id: 'key' },
+        { table: 'budgets', collection: 'budgets', id: 'id' },
+        { table: 'goals', collection: 'goals', id: 'id' },
+      ];
+      const mark = (collection: string, idExpr: string) => `
+          INSERT INTO sync_outbox (collection, local_id, change_seq) VALUES ('${collection}', ${idExpr}, 1)
+          ON CONFLICT (collection, local_id) DO UPDATE SET change_seq = change_seq + 1, op_id = NULL;`;
+      const notApplying = "(SELECT value FROM sync_meta WHERE key = 'applying') IS NOT '1'";
+      for (const t of tracked) {
+        for (const [event, row] of [['INSERT', 'NEW'], ['UPDATE', 'NEW'], ['DELETE', 'OLD']] as const) {
+          await tx.exec(`
+            CREATE TRIGGER sync_${t.table}_${event.toLowerCase()} AFTER ${event} ON ${t.table}
+            WHEN ${notApplying}
+            BEGIN ${mark(t.collection, `${row}.${t.id}`)}
+            END;`);
+        }
+      }
+      // Tags live in their own table but sync as part of their transaction.
+      for (const [event, row] of [['INSERT', 'NEW'], ['DELETE', 'OLD']] as const) {
+        await tx.exec(`
+          CREATE TRIGGER sync_tags_${event.toLowerCase()} AFTER ${event} ON transaction_tags
+          WHEN ${notApplying}
+          BEGIN ${mark('transactions', `${row}.transaction_id`)}
+          END;`);
+      }
+      // Everything that already exists is new to the server.
+      for (const t of tracked) {
+        await tx.run(`INSERT INTO sync_outbox (collection, local_id, change_seq) SELECT '${t.collection}', ${t.id}, 1 FROM ${t.table}`);
+      }
+    },
+  },
+  {
+    version: 4,
+    async up(tx) {
+      // Payments read from notifications or passed through the UPI proxy, waiting to be confirmed. Local only: this
+      // table is deliberately not synced; only the transactions made from it are.
+      await tx.exec(`
+        CREATE TABLE captured_payments (
+          id             TEXT PRIMARY KEY NOT NULL,
+          source         TEXT NOT NULL CHECK (source IN ('notification', 'proxy')),
+          app            TEXT,
+          direction      TEXT NOT NULL CHECK (direction IN ('debit', 'credit')),
+          amount_paise   INTEGER NOT NULL CHECK (amount_paise > 0),
+          payee_name     TEXT,
+          payee_vpa      TEXT,
+          reference      TEXT,
+          via            TEXT,
+          occurred_at    INTEGER NOT NULL,
+          status         TEXT NOT NULL CHECK (status IN ('new', 'added', 'ignored')),
+          transaction_id TEXT,
+          -- Hash of the source message, so a re-posted notification isn't captured again. Never the text itself.
+          fingerprint    TEXT,
+          created_at     INTEGER NOT NULL
+        );
+        CREATE INDEX idx_captured_status ON captured_payments (status, occurred_at);
+        CREATE UNIQUE INDEX idx_captured_fingerprint ON captured_payments (fingerprint) WHERE fingerprint IS NOT NULL;
+      `);
+    },
+  },  {
+    version: 5,
+    async up(tx) {
+      // Automatic logging was removed: payment alerts weren't a dependable source (UPI apps stay silent for payments
+      // made inside them, and checkouts don't list other apps). Version 4 stays so phones that ran it still open.
+      await tx.exec('DROP TABLE IF EXISTS captured_payments;');
+    },
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.version;

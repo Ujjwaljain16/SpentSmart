@@ -1,4 +1,4 @@
-import { addMonths, format } from 'date-fns';
+import { addMonths, endOfMonth, format } from 'date-fns';
 import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useState } from 'react';
@@ -42,7 +42,8 @@ function NewGoal() {
   const [horizon, setHorizon] = useState<Horizon>('6');
   const [saving, setSaving] = useState(false);
   const amount = parseRupees(amountText);
-  const deadline = horizon === 'none' ? null : addMonths(new Date(), Number(horizon)).getTime();
+  // "1 year" means 12 monthly amounts: this month through the end of the 12th.
+  const deadline = horizon === 'none' ? null : endOfMonth(addMonths(new Date(), Number(horizon) - 1)).getTime();
   const need = amount !== null ? goalMonthlyNeed({ targetPaise: amount, savedPaise: 0, deadline }, new Date()) : null;
 
   const save = async () => {

@@ -4,11 +4,12 @@ name: Quick add a phrase and see it on Home
 - runFlow: _onboard.yaml
 - tapOn: "Quick add a transaction by typing a phrase"
 - inputText: "swiggy 340 dinner #office"
-- assertVisible: "₹340.00"
+- assertVisible: "₹340"
 - assertVisible: "Swiggy"
 - assertVisible: "Food"
 - assertVisible: "#office"
-- hideKeyboard
 - tapOn: "Save"
-- assertVisible: "Recent"
-- assertVisible: "Swiggy"
+- scrollUntilVisible:
+    element: "Recent"
+- scrollUntilVisible:
+    element: "Swiggy.*"

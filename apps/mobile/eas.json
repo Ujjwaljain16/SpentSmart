@@ -9,17 +9,43 @@
       "developmentClient": true,
       "distribution": "internal",
       "channel": "development",
-      "android": { "buildType": "apk" }
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "99783042621-qf4dik3ts1522e4ts1cd0tmgvegp6b6s.apps.googleusercontent.com"
+      }
     },
     "preview": {
       "distribution": "internal",
       "channel": "preview",
-      "android": { "buildType": "apk" }
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "99783042621-qf4dik3ts1522e4ts1cd0tmgvegp6b6s.apps.googleusercontent.com",
+        "EXPO_PUBLIC_API_URL": "https://spentsmart.onrender.com"
+      }
     },
     "production": {
       "channel": "production",
       "autoIncrement": true,
-      "android": { "buildType": "app-bundle" }
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "99783042621-qf4dik3ts1522e4ts1cd0tmgvegp6b6s.apps.googleusercontent.com",
+        "EXPO_PUBLIC_API_URL": "https://spentsmart.onrender.com"
+      }
+    },
+    "emulator": {
+      "extends": "preview",
+      "channel": "emulator",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "http://10.0.2.2:3000",
+        "EXPO_PUBLIC_TEST_SIGN_IN": "1",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "99783042621-qf4dik3ts1522e4ts1cd0tmgvegp6b6s.apps.googleusercontent.com"
+      }
     }
   },
   "submit": {

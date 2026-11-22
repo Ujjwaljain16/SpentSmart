@@ -66,7 +66,7 @@ export function usePagedTransactions(filter: TransactionFilter): PagedTransactio
       .finally(() => setLoadingMore(false));
   }, [repos, cursor, loadingMore]);
 
-  const { search, categoryKey, type, since, until } = filter;
+  const { search, categoryKey, type, accountId, tag, since, until, minPaise, maxPaise } = filter;
   useFocusEffect(
     useCallback(() => {
       void reload();
@@ -75,7 +75,9 @@ export function usePagedTransactions(filter: TransactionFilter): PagedTransactio
         unsubscribe();
         sequence.current++;
       };
-    }, [reload, search, categoryKey, type, since, until]),
+      // reload() reads the filter from a ref, so the filter values are listed only to reload when one changes.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [reload, search, categoryKey, type, accountId, tag, since, until, minPaise, maxPaise]),
   );
 
   return { items, summary, loading, loadingMore, hasMore: cursor !== null, loadMore, reload };

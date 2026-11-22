@@ -22,6 +22,14 @@ the server stores ciphertext it cannot read.</p>
 Everything beyond the core app is **off until you switch it on**. The in-app privacy policy says exactly what each
 feature reads and keeps.
 
+## Screenshots
+
+Home with safe-to-spend, Activity, Insights with the month-end forecast, Budgets, Quick add, and the assistant's
+own-key screen. Built from this repo (v2.2.0) on Android 16.
+
+<img src="docs/screenshots/light.jpg" alt="SpentSmart in light mode: Home, Activity, Insights, Budgets, Quick add, Assistant" width="100%" />
+<img src="docs/screenshots/dark.jpg" alt="SpentSmart in dark mode: Home, Activity, Insights, Budgets, Quick add, Assistant" width="100%" />
+
 ## Architecture at a glance
 
 ```mermaid

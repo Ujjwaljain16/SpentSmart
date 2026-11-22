@@ -1,5 +1,6 @@
 package expo.modules.upiintent
 
+import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Context
@@ -28,6 +29,7 @@ private const val SHARE_DIR = "qr_share"
 private const val SHARE_MAX_AGE_MS = 60L * 60L * 1000L
 private const val MAX_IMAGE_BYTES = 4 * 1024 * 1024
 private const val QR_TARGET_PX = 600
+private const val REQUEST_SAVE_FILE = 7423
 
 /**
  * Android-only bridge to UPI apps.
@@ -39,9 +41,31 @@ private const val QR_TARGET_PX = 600
  */
 class UpiIntentModule : Module() {
   private var pendingPayment: Promise? = null
+  private var pendingSave: Pair<Promise, String>? = null
 
   override fun definition() = ModuleDefinition {
     Name("UpiIntent")
+
+    // Android's "Save as" screen (usually opening in Downloads). Resolves true once written, false if cancelled.
+    AsyncFunction("saveTextFile") { fileName: String, content: String, promise: Promise ->
+      val activity = appContext.currentActivity
+      if (activity == null || pendingSave != null) {
+        promise.resolve(false)
+        return@AsyncFunction
+      }
+      val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+        addCategory(Intent.CATEGORY_OPENABLE)
+        type = "text/plain"
+        putExtra(Intent.EXTRA_TITLE, fileName)
+      }
+      pendingSave = promise to content
+      try {
+        activity.startActivityForResult(intent, REQUEST_SAVE_FILE)
+      } catch (e: ActivityNotFoundException) {
+        pendingSave = null
+        promise.resolve(false)
+      }
+    }
 
     AsyncFunction("getUpiApps") {
       val context = appContext.reactContext ?: throw IllegalStateException("React context unavailable")
@@ -225,6 +249,23 @@ class UpiIntentModule : Module() {
     }
 
     OnActivityResult { _, payload ->
+      if (payload.requestCode == REQUEST_SAVE_FILE) {
+        val (promise, content) = pendingSave ?: return@OnActivityResult
+        pendingSave = null
+        val uri = payload.data?.data
+        if (payload.resultCode != Activity.RESULT_OK || uri == null) {
+          promise.resolve(false)
+          return@OnActivityResult
+        }
+        try {
+          appContext.reactContext?.contentResolver?.openOutputStream(uri, "wt")?.use { it.write(content.toByteArray()) }
+            ?: throw IllegalStateException("Could not open the file")
+          promise.resolve(true)
+        } catch (e: Exception) {
+          promise.reject("ERR_SAVE", "Could not write the file", e)
+        }
+        return@OnActivityResult
+      }
       if (payload.requestCode != REQUEST_UPI_PAY) return@OnActivityResult
       val promise = pendingPayment ?: return@OnActivityResult
       pendingPayment = null

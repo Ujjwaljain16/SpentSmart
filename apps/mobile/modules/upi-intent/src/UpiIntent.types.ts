@@ -45,6 +45,9 @@ export interface UpiIntentNativeModule {
   setProxy(enabled: boolean, targetPackage: string | null): Promise<boolean>;
   /** Payments passed through since the last call; the queue is emptied. */
   drainProxied(): Promise<ProxiedPayment[]>;
+
+  /** Android's "Save as" screen for a text file. True once written, false if the user cancelled. */
+  saveTextFile(fileName: string, content: string): Promise<boolean>;
 }
 
 export interface CapturedNotification {

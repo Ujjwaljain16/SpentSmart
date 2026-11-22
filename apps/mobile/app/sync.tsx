@@ -186,6 +186,21 @@ export default function SyncScreen() {
                   }, 'That key doesn’t open this backup.')
                 }
               />
+              <Button
+                label="I don’t have the key"
+                variant="secondary"
+                onPress={() =>
+                  // The backup is end-to-end encrypted, so without the key nobody can read it, us included.
+                  Alert.alert(
+                    'Start a new backup?',
+                    'Without the recovery key, the old backup for this Google account can’t be opened by anyone. This deletes it and signs you out; sign in again to start a new backup from this phone. Data on this phone is not touched.',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Delete old backup', style: 'destructive', onPress: () => void run(() => cloud.signOut(true).then(googleSignOut), 'Couldn’t delete the old backup.') },
+                    ],
+                  )
+                }
+              />
             </FormCard>
           ) : null}
 

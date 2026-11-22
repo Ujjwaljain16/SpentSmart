@@ -2,10 +2,11 @@ import { format } from 'date-fns';
 import * as ImagePicker from 'expo-image-picker';
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
 import { extractTextFromImage, isSupported as ocrSupported } from 'expo-text-extractor';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { readReceipt } from '@spentsmart/finance/import/receipt';
 import { paiseToDecimal } from '@spentsmart/finance/money';
 import { cancelExternalTrip, expectExternalTrip } from '@/lib/external-trip';
+import { log } from '@/lib/logger';
 
 /**
  * Turn a receipt reading into a quick-add phrase ("Truffles 777 15/11"), so it goes through the same parser and
@@ -50,6 +51,7 @@ export async function scanReceipt(from: 'camera' | 'gallery'): Promise<{ phrase:
 export function useVoiceCapture(onText: (text: string) => void) {
   const [listening, setListening] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const onDevice = useRef(false);
 
   useSpeechRecognitionEvent('start', () => setListening(true));
   useSpeechRecognitionEvent('end', () => setListening(false));
@@ -58,8 +60,23 @@ export function useVoiceCapture(onText: (text: string) => void) {
     if (transcript) onText(transcript);
   });
   useSpeechRecognitionEvent('error', (e) => {
+    // Phones that support on-device recognition may still lack the offline language pack; use the phone's
+    // regular recogniser instead of failing.
+    if (onDevice.current && e.error !== 'no-speech' && e.error !== 'not-allowed' && e.error !== 'aborted') {
+      onDevice.current = false;
+      log.warn('On-device speech failed, retrying with the regular recogniser', e.error);
+      ExpoSpeechRecognitionModule.start({ lang: 'en-IN', interimResults: true, continuous: false });
+      return;
+    }
     setListening(false);
-    setError(e.error === 'no-speech' ? 'Didn’t catch that. Try again.' : e.error === 'not-allowed' ? 'Allow the microphone to use voice.' : 'Voice input isn’t available right now.');
+    log.warn('Speech recognition failed', `${e.error}: ${e.message}`);
+    setError(
+      e.error === 'no-speech'
+        ? 'Didn’t catch that. Try again.'
+        : e.error === 'not-allowed'
+          ? 'Allow the microphone to use voice.'
+          : `Voice input isn’t available right now (${e.error}).`,
+    );
   });
 
   const start = useCallback(async () => {
@@ -73,11 +90,12 @@ export function useVoiceCapture(onText: (text: string) => void) {
       setError('This phone has no speech recogniser.');
       return;
     }
+    onDevice.current = ExpoSpeechRecognitionModule.supportsOnDeviceRecognition();
     ExpoSpeechRecognitionModule.start({
       lang: 'en-IN',
       interimResults: true,
       continuous: false,
-      requiresOnDeviceRecognition: ExpoSpeechRecognitionModule.supportsOnDeviceRecognition(),
+      requiresOnDeviceRecognition: onDevice.current,
     });
   }, []);
 

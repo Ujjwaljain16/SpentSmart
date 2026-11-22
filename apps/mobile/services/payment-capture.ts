@@ -1,4 +1,5 @@
 import { messageFingerprint } from '@spentsmart/finance/capture/fingerprint';
+import { PermissionsAndroid } from 'react-native';
 import { parsePaymentText } from '@spentsmart/finance/capture/payment-text';
 import { Category } from '@spentsmart/finance/types';
 import { paiseToDecimal } from '@spentsmart/finance/money';
@@ -27,6 +28,20 @@ export async function captureStatus(): Promise<{ enabled: boolean; accessGranted
 
 export async function setCaptureEnabled(enabled: boolean): Promise<void> {
   await native?.setCaptureEnabled(enabled);
+}
+
+/**
+ * In builds that include SMS capture, ask for the incoming-SMS permission. It covers new messages only, never the
+ * inbox. Builds without it skip this; their capture relies on notifications alone.
+ */
+export async function allowSmsCapture(): Promise<void> {
+  try {
+    const status = await native?.smsCaptureStatus();
+    if (!status?.available || status.granted) return;
+    await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECEIVE_SMS);
+  } catch (error) {
+    log.warn('SMS capture permission check failed', error);
+  }
 }
 
 export async function openNotificationAccess(): Promise<void> {

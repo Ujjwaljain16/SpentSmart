@@ -21,7 +21,7 @@ class PaymentNotificationListener : NotificationListenerService() {
     val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
     val body = (extras.getCharSequence(Notification.EXTRA_BIG_TEXT) ?: extras.getCharSequence(Notification.EXTRA_TEXT))?.toString().orEmpty()
     val text = "$title\n$body".trim()
-    if (text.length > 1000 || !MONEY.containsMatchIn(text) || !PAYMENT_WORD.containsMatchIn(text) || SECRET.containsMatchIn(text)) return
+    if (!looksLikePayment(text)) return
 
     // Apps re-post old notifications (Messages does, for every unread SMS, whenever a new one arrives). `when` is the
     // message's own time and survives a re-post; postTime doesn't.
@@ -34,10 +34,6 @@ class PaymentNotificationListener : NotificationListenerService() {
   }
 
   companion object {
-    private val MONEY = Regex("""(₹|\brs\.?|\binr)\s*[\d,]+|debited by\s*[\d,]+""", RegexOption.IGNORE_CASE)
-    private val PAYMENT_WORD = Regex("""\b(debited|credited|spent|paid|sent|received|withdrawn|deducted|refund)""", RegexOption.IGNORE_CASE)
-    private val SECRET = Regex("""\b(otp|one[\s-]?time|verification code|passcode|do not share|don'?t share|never share|cvv|upi pin)\b""", RegexOption.IGNORE_CASE)
-
     val WATCHED_PACKAGES = setOf(
       // UPI apps
       "com.google.android.apps.nbu.paisa.user", "com.phonepe.app", "net.one97.paytm", "in.org.npci.upiapp",

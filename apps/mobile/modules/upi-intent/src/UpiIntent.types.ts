@@ -33,6 +33,8 @@ export interface UpiIntentNativeModule {
 
   /** Payment capture: our own switch, and whether Android has granted notification access. */
   captureStatus(): Promise<{ enabled: boolean; accessGranted: boolean }>;
+  /** Whether this build can read incoming SMS (built with SPENTSMART_SMS_CAPTURE=1), and whether it's allowed. */
+  smsCaptureStatus(): Promise<{ available: boolean; granted: boolean }>;
   /** Turning capture off also discards anything captured but not yet read. */
   setCaptureEnabled(enabled: boolean): Promise<boolean>;
   openNotificationAccessSettings(): Promise<boolean>;

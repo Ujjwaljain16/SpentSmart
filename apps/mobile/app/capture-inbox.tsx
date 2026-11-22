@@ -19,7 +19,7 @@ import { useThemeColors } from '@/hooks/use-theme-colors';
 import { log } from '@/lib/logger';
 import { addCaptured, guessCategory } from '@/services/payment-capture';
 
-const SMS_APPS = new Set(['com.google.android.apps.messaging', 'com.samsung.android.messaging', 'com.android.mms', 'com.oneplus.mms', 'com.coloros.mms', 'com.truecaller']);
+const SMS_APPS = new Set(['sms', 'com.google.android.apps.messaging', 'com.samsung.android.messaging', 'com.android.mms', 'com.oneplus.mms', 'com.coloros.mms', 'com.truecaller']);
 
 function sourceLabel(c: CapturedPayment): string {
   if (c.source === 'proxy') return 'Paid through SpentSmart';

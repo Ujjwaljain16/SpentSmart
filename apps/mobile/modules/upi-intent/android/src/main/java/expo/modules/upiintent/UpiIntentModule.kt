@@ -221,6 +221,17 @@ class UpiIntentModule : Module() {
       )
     }
 
+    // Whether this build includes SMS capture (made with SPENTSMART_SMS_CAPTURE=1), and whether it's allowed.
+    AsyncFunction("smsCaptureStatus") {
+      val context = appContext.reactContext ?: return@AsyncFunction mapOf("available" to false, "granted" to false)
+      @Suppress("DEPRECATION")
+      val requested = context.packageManager.getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS).requestedPermissions
+      mapOf(
+        "available" to (requested?.contains(android.Manifest.permission.RECEIVE_SMS) == true),
+        "granted" to (context.checkSelfPermission(android.Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED),
+      )
+    }
+
     AsyncFunction("setCaptureEnabled") { enabled: Boolean ->
       val context = appContext.reactContext ?: return@AsyncFunction false
       context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_CAPTURE_ENABLED, enabled).apply()

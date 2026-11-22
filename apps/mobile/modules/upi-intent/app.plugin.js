@@ -57,6 +57,29 @@ const withUpiIntent = (config) => {
     },
   ]);
 
+  // Bank SMS capture straight from incoming SMS. Off by default: RECEIVE_SMS is one of the permissions Play Protect
+  // blocks for apps installed from a download in some regions, so only builds made with SPENTSMART_SMS_CAPTURE=1 get it.
+  if (process.env.SPENTSMART_SMS_CAPTURE === '1') {
+    config = withAndroidManifest(config, (mod) => {
+      const { manifest } = mod.modResults;
+      manifest['uses-permission'] = manifest['uses-permission'] ?? [];
+      if (!manifest['uses-permission'].some((p) => p.$['android:name'] === 'android.permission.RECEIVE_SMS')) {
+        manifest['uses-permission'].push({ $: { 'android:name': 'android.permission.RECEIVE_SMS' } });
+      }
+      const application = manifest.application[0];
+      application.receiver = application.receiver ?? [];
+      application.receiver.push({
+        $: {
+          'android:name': 'expo.modules.upiintent.SmsCaptureReceiver',
+          'android:exported': 'true',
+          'android:permission': 'android.permission.BROADCAST_SMS',
+        },
+        'intent-filter': [{ action: [{ $: { 'android:name': 'android.provider.Telephony.SMS_RECEIVED' } }] }],
+      });
+      return mod;
+    });
+  }
+
   return config;
 };
 

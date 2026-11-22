@@ -20,7 +20,7 @@ import { crashLog } from '@/lib/app-crash-log';
 import { getRecentLogs } from '@/lib/logger';
 import { routes } from '@/lib/routes';
 import { ExportScope, exportCsv, exportPdf } from '@/services/export';
-import { captureAvailable, captureStatus, openNotificationAccess, proxyEnabled, setCaptureEnabled, setProxy } from '@/services/payment-capture';
+import { allowSmsCapture, captureAvailable, captureStatus, openNotificationAccess, proxyEnabled, setCaptureEnabled, setProxy } from '@/services/payment-capture';
 import { setRemindersEnabled } from '@/services/reminders';
 
 const LOCK_TIMEOUTS: readonly { seconds: number; label: string }[] = [
@@ -116,6 +116,7 @@ export default function SettingsScreen() {
           onPress: () =>
             void (async () => {
               await setCaptureEnabled(true);
+              await allowSmsCapture();
               const status = await captureStatus();
               setCapture(status);
               if (!status.accessGranted) await openNotificationAccess();

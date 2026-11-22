@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, TextInput, TextInputProps, TouchableOpacity, View } from 'react-native';
 import { BorderRadius, FontSizes, MIN_TOUCH_TARGET, Spacing } from '@/constants/theme';
 import { useThemeColors } from '@/hooks/use-theme-colors';
+import { groupAmountInput, ungroupAmountInput } from '@/lib/amount-input';
 
 export function FormCard({ children }: { children: React.ReactNode }) {
   const colors = useThemeColors();
@@ -34,12 +35,12 @@ export function AmountField({ value, onChangeText, invalid, label, autoFocus }: 
         <TextInput
           accessibilityLabel={label}
           style={[styles.amountInput, { color: colors.text }]}
-          value={value}
-          onChangeText={onChangeText}
+          value={groupAmountInput(value)}
+          onChangeText={(t) => onChangeText(ungroupAmountInput(t))}
           placeholder="0"
           placeholderTextColor={colors.textSecondary}
           keyboardType="decimal-pad"
-          maxLength={12}
+          maxLength={16}
           autoFocus={autoFocus}
         />
       </View>

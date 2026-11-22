@@ -214,8 +214,17 @@ class UpiIntentModule : Module() {
 
     // Payment capture: our switch, plus whether Android has granted notification access.
     AsyncFunction("captureStatus") {
-      val context = appContext.reactContext ?: return@AsyncFunction mapOf("enabled" to false, "accessGranted" to false)
+      val context = appContext.reactContext
+        ?: return@AsyncFunction mapOf("available" to false, "enabled" to false, "accessGranted" to false)
+      // The listener is only declared in capture builds (SPENTSMART_CAPTURE=1).
+      val available = try {
+        context.packageManager.getServiceInfo(ComponentName(context, PaymentNotificationListener::class.java), 0)
+        true
+      } catch (e: PackageManager.NameNotFoundException) {
+        false
+      }
       mapOf(
+        "available" to available,
         "enabled" to context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_CAPTURE_ENABLED, false),
         "accessGranted" to NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName),
       )

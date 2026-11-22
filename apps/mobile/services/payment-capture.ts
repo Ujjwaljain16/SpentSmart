@@ -17,12 +17,12 @@ const native = loadUpiIntent();
 /** Capture and the UPI proxy need the native module (Android builds only). */
 export const captureAvailable = native !== null;
 
-export async function captureStatus(): Promise<{ enabled: boolean; accessGranted: boolean }> {
-  if (!native) return { enabled: false, accessGranted: false };
+export async function captureStatus(): Promise<{ available: boolean; enabled: boolean; accessGranted: boolean }> {
+  if (!native) return { available: false, enabled: false, accessGranted: false };
   try {
     return await native.captureStatus();
   } catch {
-    return { enabled: false, accessGranted: false };
+    return { available: false, enabled: false, accessGranted: false };
   }
 }
 

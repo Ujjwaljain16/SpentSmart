@@ -32,7 +32,8 @@ export interface UpiIntentNativeModule {
   qrShareTargets(packageNames: string[]): Promise<string[]>;
 
   /** Payment capture: our own switch, and whether Android has granted notification access. */
-  captureStatus(): Promise<{ enabled: boolean; accessGranted: boolean }>;
+  /** `available` is false in builds made without SPENTSMART_CAPTURE=1, which leave the listener out. */
+  captureStatus(): Promise<{ available: boolean; enabled: boolean; accessGranted: boolean }>;
   /** Whether this build can read incoming SMS (built with SPENTSMART_SMS_CAPTURE=1), and whether it's allowed. */
   smsCaptureStatus(): Promise<{ available: boolean; granted: boolean }>;
   /** Turning capture off also discards anything captured but not yet read. */

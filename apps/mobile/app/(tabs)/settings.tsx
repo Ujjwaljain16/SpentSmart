@@ -88,7 +88,7 @@ export default function SettingsScreen() {
     Alert.alert('App lock', reasons[result.reason]);
   };
 
-  const [capture, setCapture] = useState({ enabled: false, accessGranted: false });
+  const [capture, setCapture] = useState({ available: false, enabled: false, accessGranted: false });
   const [proxyOn, setProxyOn] = useState(false);
   const refreshCapture = useCallback(async () => {
     setCapture(await captureStatus());
@@ -354,25 +354,30 @@ export default function SettingsScreen() {
 
         {captureAvailable ? (
           <Section title="AUTOMATIC LOGGING">
-            <Row
-              icon="flash-outline"
-              title="Capture payments"
-              subtitle={
-                !capture.enabled
-                  ? 'Off · read payment alerts from UPI apps and bank SMS'
-                  : capture.accessGranted
-                    ? 'On · new payments wait for you to add them'
-                    : 'Needs notification access · tap to allow'
-              }
-              toggle={{ value: capture.enabled, onChange: (v) => void toggleCapture(v) }}
-            />
-            {capture.enabled && !capture.accessGranted ? (
+            {/* Only capture builds have the listener (SPENTSMART_CAPTURE=1); the others can still log through the proxy. */}
+            {capture.available ? (
               <>
+                <Row
+                  icon="flash-outline"
+                  title="Capture payments"
+                  subtitle={
+                    !capture.enabled
+                      ? 'Off · read payment alerts from UPI apps and bank SMS'
+                      : capture.accessGranted
+                        ? 'On · new payments wait for you to add them'
+                        : 'Needs notification access · tap to allow'
+                  }
+                  toggle={{ value: capture.enabled, onChange: (v) => void toggleCapture(v) }}
+                />
+                {capture.enabled && !capture.accessGranted ? (
+                  <>
+                    <Divider />
+                    <Row icon="key-outline" title="Allow notification access" subtitle="Android asks once; you can turn it off there any time" onPress={() => void openNotificationAccess()} />
+                  </>
+                ) : null}
                 <Divider />
-                <Row icon="key-outline" title="Allow notification access" subtitle="Android asks once; you can turn it off there any time" onPress={() => void openNotificationAccess()} />
               </>
             ) : null}
-            <Divider />
             <Row icon="file-tray-full-outline" title="Captured payments" subtitle="Review, add or ignore" onPress={() => router.push(routes.captureInbox)} />
             <Divider />
             <Row

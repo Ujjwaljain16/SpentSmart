@@ -23,7 +23,7 @@ import { parseUpiResponse } from '@spentsmart/finance/upi/response';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { clearPaymentDraft, peekPaymentDraft } from '@/lib/payment-draft-store';
 import { log } from '@/lib/logger';
-import { groupAmountInput, ungroupAmountInput } from '@/lib/amount-input';
+import { applyAmountEdit, groupAmountInput } from '@/lib/amount-input';
 import { routes } from '@/lib/routes';
 import { UpiAppChoice, beginPayment, beginQrGalleryPayment, beginQrShare, listUpiApps, nativeQrPng, openAppLauncher, prepareQr, qrShareTargets } from '@/services/payments';
 
@@ -346,7 +346,7 @@ export default function PaymentScreen() {
             accessibilityLabel="Amount in rupees"
             style={[styles.amountInput, { color: colors.text }]}
             value={groupAmountInput(amountText)}
-            onChangeText={(t) => setAmountText(ungroupAmountInput(t))}
+            onChangeText={(t) => setAmountText(applyAmountEdit(amountText, t))}
             placeholder="0"
             placeholderTextColor={colors.textSecondary}
             keyboardType="decimal-pad"

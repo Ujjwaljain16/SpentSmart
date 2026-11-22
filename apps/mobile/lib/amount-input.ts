@@ -16,3 +16,17 @@ export function groupAmountInput(raw: string): string {
 export function ungroupAmountInput(shown: string): string {
   return shown.replace(/,/g, '');
 }
+
+/**
+ * The new plain text after an edit to the grouped field. Backspacing over a comma only removes the comma, which
+ * regrouping would put straight back, so the key would seem dead; delete the digit before the comma instead.
+ */
+export function applyAmountEdit(previousRaw: string, edited: string): string {
+  const raw = ungroupAmountInput(edited);
+  const shown = groupAmountInput(previousRaw);
+  if (raw !== previousRaw || edited.length >= shown.length) return raw;
+  let i = 0;
+  while (i < edited.length && edited[i] === shown[i]) i++;
+  // shown[i] is the comma that was deleted; drop the digit in front of it as well.
+  return ungroupAmountInput(shown.slice(0, Math.max(0, i - 1)) + shown.slice(i + 1));
+}

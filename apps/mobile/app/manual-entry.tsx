@@ -16,7 +16,7 @@ import { isValidVpa, normalizeVpa, sanitizeText } from '@spentsmart/finance/upi/
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { cancelExternalTrip, expectExternalTrip } from '@/lib/external-trip';
 import { log } from '@/lib/logger';
-import { groupAmountInput, ungroupAmountInput } from '@/lib/amount-input';
+import { applyAmountEdit, groupAmountInput } from '@/lib/amount-input';
 import { routes } from '@/lib/routes';
 import { setPaymentDraft } from '@/lib/payment-draft-store';
 
@@ -147,7 +147,7 @@ export default function ManualEntryScreen() {
               accessibilityLabel="Amount in rupees"
               style={[styles.amountInput, { color: colors.text }]}
               value={groupAmountInput(amountText)}
-              onChangeText={(t) => setAmountText(ungroupAmountInput(t))}
+              onChangeText={(t) => setAmountText(applyAmountEdit(amountText, t))}
               placeholder="0"
               placeholderTextColor={colors.textSecondary}
               keyboardType="decimal-pad"

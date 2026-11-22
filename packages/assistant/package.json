@@ -9,7 +9,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "eval:live": "tsx scripts/run-live-eval.ts"
+    "eval:live": "tsx scripts/run-live-eval.ts",
+    "eval:gemini": "tsx scripts/run-gemini-eval.ts"
   },
   "dependencies": {
     "@spentsmart/finance": "workspace:*",

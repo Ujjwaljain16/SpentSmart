@@ -2,9 +2,10 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Button } from '@/components/ui/Button';
+import { Markdown } from '@/components/ui/Markdown';
 import { useFormatMoney } from '@/components/ui/Money';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { BorderRadius, FontSizes, MIN_TOUCH_TARGET, Spacing } from '@/constants/theme';
@@ -47,6 +48,11 @@ export default function AssistantScreen() {
   const ledger = useMemo(() => repositoryLedger(repos), [repos]);
   const history = useRef<Anthropic.Beta.BetaMessageParam[]>([]);
   const geminiHistory = useRef<GeminiContent[]>([]);
+  // Earlier tool results were sent under the old settings (names hidden, another model's thought signatures), so a
+  // changed setting starts the model's memory afresh instead of letting it answer from stale results.
+  useEffect(() => {
+    geminiHistory.current = [];
+  }, [settings.geminiModel, settings.assistantShareDetails]);
   // null until checked. Re-read on focus: the key is added on the settings screen.
   const [apiKey, setApiKey] = useState<string | null | undefined>(undefined);
   useFocusEffect(
@@ -176,7 +182,11 @@ export default function AssistantScreen() {
           }
           renderItem={({ item }) => (
             <View style={[styles.bubble, item.role === 'user' ? [styles.mine, { backgroundColor: colors.tint }] : [styles.theirs, { backgroundColor: colors.card, borderColor: colors.border }]]}>
-              <Text style={{ color: item.role === 'user' ? colors.onTint : colors.text, fontSize: FontSizes.md, lineHeight: 22 }}>{item.text}</Text>
+              {item.role === 'user' ? (
+                <Text style={{ color: colors.onTint, fontSize: FontSizes.md, lineHeight: 22 }}>{item.text}</Text>
+              ) : (
+                <Markdown text={item.text} color={colors.text} />
+              )}
               {item.untraced && item.untraced.length > 0 ? (
                 <View style={styles.warn}>
                   <Ionicons name="alert-circle-outline" size={16} color={colors.warning} />

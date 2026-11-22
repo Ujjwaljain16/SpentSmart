@@ -13,6 +13,7 @@ import android.provider.Settings
 import android.util.Base64
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.FileProvider
+import androidx.core.view.WindowCompat
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
@@ -45,6 +46,16 @@ class UpiIntentModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("UpiIntent")
+
+    // Match the system navigation bar to the app's theme. Without this Android keeps a light strip behind the
+    // back/home buttons even when the app is dark.
+    AsyncFunction("setSystemBarsDark") { dark: Boolean ->
+      val activity = appContext.currentActivity ?: return@AsyncFunction false
+      activity.runOnUiThread {
+        WindowCompat.getInsetsController(activity.window, activity.window.decorView).isAppearanceLightNavigationBars = !dark
+      }
+      true
+    }
 
     // Android's "Save as" screen (usually opening in Downloads). Resolves true once written, false if cancelled.
     AsyncFunction("saveTextFile") { fileName: String, content: String, promise: Promise ->

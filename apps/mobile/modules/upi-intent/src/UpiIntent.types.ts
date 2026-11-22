@@ -46,6 +46,9 @@ export interface UpiIntentNativeModule {
   /** Payments passed through since the last call; the queue is emptied. */
   drainProxied(): Promise<ProxiedPayment[]>;
 
+  /** Make the system navigation bar's buttons and background match a dark or light app theme. */
+  setSystemBarsDark(dark: boolean): Promise<boolean>;
+
   /** Android's "Save as" screen for a text file. True once written, false if the user cancelled. */
   saveTextFile(fileName: string, content: string): Promise<boolean>;
 }

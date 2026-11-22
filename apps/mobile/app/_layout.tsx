@@ -18,6 +18,7 @@ import { DatabaseProvider, useRepos } from '@/contexts/database-context';
 import { SecurityProvider, useSecurity } from '@/contexts/security-context';
 import { SettingsProvider, useSettings } from '@/contexts/settings-context';
 import { ThemeProvider, useColorScheme } from '@/contexts/theme-context';
+import { loadUpiIntent } from '@/modules/upi-intent';
 import { collectCaptured } from '@/services/payment-capture';
 import { syncReminders } from '@/services/reminders';
 
@@ -31,6 +32,8 @@ const navTheme = (scheme: 'light' | 'dark') => {
   return { ...base, colors: { ...base.colors, background: c.background, card: c.surface, text: c.text, border: c.border, primary: c.tint } };
 };
 
+const systemBars = loadUpiIntent();
+
 function RootNavigator() {
   const scheme = useColorScheme();
   const { isUnlocked } = useSecurity();
@@ -40,6 +43,10 @@ function RootNavigator() {
   useEffect(() => {
     void syncReminders(settings.remindersEnabled);
   }, [settings.remindersEnabled]);
+
+  useEffect(() => {
+    void systemBars?.setSystemBarsDark(scheme === 'dark').catch(() => undefined);
+  }, [scheme]);
 
   // Payments captured while the app was closed are picked up whenever it comes to the front.
   const repos = useRepos();

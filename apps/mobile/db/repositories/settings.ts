@@ -25,6 +25,9 @@ export interface SettingsShape {
   geminiModel: string;
   /** Send payee names and notes to the model too. Off: figures only. */
   assistantShareDetails: boolean;
+  getStartedHidden: boolean;
+  /** The Get started step for the tile and widget can't be detected, so it's ticked when the how-to is read. */
+  shortcutsTipSeen: boolean;
 }
 
 export const SETTINGS_DEFAULTS: SettingsShape = {
@@ -43,6 +46,8 @@ export const SETTINGS_DEFAULTS: SettingsShape = {
   assistantEnabled: false,
   geminiModel: 'gemini-3.5-flash-lite',
   assistantShareDetails: false,
+  getStartedHidden: false,
+  shortcutsTipSeen: false,
 };
 
 export type SettingKey = keyof SettingsShape;

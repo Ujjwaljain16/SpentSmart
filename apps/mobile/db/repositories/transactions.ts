@@ -572,8 +572,10 @@ export function createTransactionsRepo(db: AnyExecutor, deps: RepoDeps) {
       return rows.map((r) => r.tag);
     },
 
-    async count(): Promise<number> {
-      const row = await db.first<{ c: number }>('SELECT COUNT(*) AS c FROM transactions WHERE deleted_at IS NULL');
+    async count(source?: TransactionSource): Promise<number> {
+      const row = source
+        ? await db.first<{ c: number }>('SELECT COUNT(*) AS c FROM transactions WHERE deleted_at IS NULL AND source = ?', [source])
+        : await db.first<{ c: number }>('SELECT COUNT(*) AS c FROM transactions WHERE deleted_at IS NULL');
       return row?.c ?? 0;
     },
 

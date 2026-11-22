@@ -377,6 +377,15 @@ export default function SettingsScreen() {
         </Section>
 
         <Section title="ABOUT">
+          <Row icon="compass-outline" title="How SpentSmart works" subtitle="The quick tour from the first launch" onPress={() => router.push(routes.tour)} />
+          <Divider />
+          <Row
+            icon="list-outline"
+            title="Get started checklist"
+            subtitle="First steps, shown on Home"
+            toggle={{ value: !settings.getStartedHidden, onChange: (v) => void setSetting('getStartedHidden', !v) }}
+          />
+          <Divider />
           <Row icon="information-circle-outline" title="Version" right={<Text style={{ color: colors.textSecondary, fontSize: FontSizes.md }}>{appVersion}</Text>} />
           <Divider />
           <Row icon="document-outline" title="Privacy policy" subtitle="What SpentSmart keeps, and where" onPress={() => router.push(routes.privacyPolicy)} />

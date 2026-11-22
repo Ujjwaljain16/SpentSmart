@@ -19,6 +19,7 @@ export const routes = {
   editProfile: '/edit-profile' as Href,
   onboarding: '/onboarding/profile-setup' as Href,
   onboardingSetup: '/onboarding/setup' as Href,
+  tour: '/tour' as Href,
   /** The payment screen reads its draft from the draft store; params are the validated fallback. */
   payment: '/payment' as Href,
   paymentFor: (draft: PaymentDraft): Href => ({

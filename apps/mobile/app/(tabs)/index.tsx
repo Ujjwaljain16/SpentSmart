@@ -2,40 +2,46 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useState } from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BalanceCard } from '@/components/home/BalanceCard';
 import { FloatingScanButton } from '@/components/home/FloatingScanButton';
+import { GetStartedCard } from '@/components/home/GetStartedCard';
 import { InsightsGrid } from '@/components/home/InsightsGrid';
 import { SafeToSpendCard } from '@/components/home/SafeToSpendCard';
 import { TransactionCard } from '@/components/transactions/transaction-card';
 import { Money } from '@/components/ui/Money';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { useCategories } from '@/contexts/categories-context';
+import { useCloud } from '@/contexts/cloud-context';
 import { BorderRadius, FontSizes, Spacing } from '@/constants/theme';
 import { useSettings } from '@/contexts/settings-context';
 import { budgetUsage, Period } from '@spentsmart/finance/periods';
 import { safeToSpend } from '@spentsmart/finance/safe-to-spend';
 import { useLiveQuery } from '@/hooks/use-live-query';
 import { useThemeColors } from '@/hooks/use-theme-colors';
+import { GetStartedStep, getStartedComplete, getStartedItems } from '@/lib/get-started';
 import { routes } from '@/lib/routes';
 
 export default function HomeScreen() {
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
-  const { settings } = useSettings();
+  const { settings, setSetting } = useSettings();
+  const { status: cloudStatus } = useCloud();
   const [period, setPeriod] = useState<Period>('week');
   const [refreshing, setRefreshing] = useState(false);
 
   const { data, loading, refresh } = useLiveQuery(
     async (repos) => {
       const now = new Date();
-      const [insights, budgets, open, accounts, recent] = await Promise.all([
+      const [insights, budgets, open, accounts, recent, transactionCount, upiPayments] = await Promise.all([
         repos.analytics.insights(period, now),
         repos.budgets.statuses(now),
         repos.attempts.listOpen(),
         repos.accounts.list(),
         repos.transactions.list({}, 5),
+        repos.transactions.count(),
+        repos.transactions.count('scan'),
       ]);
       const overallBudget = budgets.find((b) => b.categoryKey === null) ?? null;
       // Balances only mean something once the user has entered at least one real starting balance; before that the
@@ -54,7 +60,7 @@ export default function HomeScreen() {
         .filter((b) => b.categoryKey !== null)
         .sort((a, b) => b.status.percent - a.status.percent)
         .slice(0, 3);
-      return { insights, overallBudget, categoryBudgets, openAttempts: open.length, balancePaise, safe, recent: recent.items };
+      return { insights, overallBudget, categoryBudgets, openAttempts: open.length, balancePaise, safe, recent: recent.items, transactionCount, upiPayments };
     },
     [period, settings.payday],
   );
@@ -68,6 +74,28 @@ export default function HomeScreen() {
   const insights = data?.insights;
   const overall = data?.overallBudget ?? null;
   const usage = overall ? budgetUsage(overall.status.spentPaise, overall.status.availablePaise) : null;
+  const getStarted = data
+    ? getStartedItems({
+        transactions: data.transactionCount,
+        upiPayments: data.upiPayments,
+        hasOverallBudget: data.overallBudget !== null,
+        shortcutsTipSeen: settings.shortcutsTipSeen,
+        backupOn: cloudStatus?.state === 'ready',
+      })
+    : null;
+  const showGetStarted = !!getStarted && !settings.getStartedHidden && !getStartedComplete(getStarted);
+  const openStep = (step: GetStartedStep) => {
+    if (step === 'shortcuts') {
+      Alert.alert(
+        'Log from anywhere',
+        'Quick Settings tile: pull down the notification shade twice, tap the pencil (Edit), and drag “Add expense” into your tiles.\n\nWidget: long-press your home screen, tap Widgets, find SpentSmart and drag “SpentSmart quick add” out.',
+        [{ text: 'Got it', onPress: () => void setSetting('shortcutsTipSeen', true) }],
+      );
+      return;
+    }
+    const to = { 'first-expense': routes.quickAdd, 'upi-payment': routes.scanner, budget: routes.editBudget(null), backup: routes.sync }[step];
+    router.push(to);
+  };
   const greetingName = settings.profileName.trim().toLowerCase() || 'there';
   const { resolve } = useCategories();
 
@@ -93,6 +121,8 @@ export default function HomeScreen() {
                 <Ionicons name={settings.avatarId as keyof typeof Ionicons.glyphMap} size={32} color={colors.text} />
               </View>
             </View>
+
+            {showGetStarted ? <GetStartedCard items={getStarted} onPress={openStep} onHide={() => void setSetting('getStartedHidden', true)} /> : null}
 
             {data && data.openAttempts > 0 ? (
               <TouchableOpacity

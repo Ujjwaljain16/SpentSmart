@@ -3,6 +3,11 @@ appId: com.ujjwaljain.spentsmart
 ---
 - launchApp:
     clearState: true
+- runFlow:
+    when:
+      visible: "Welcome to SpentSmart"
+    commands:
+      - tapOn: "Skip"
 - tapOn: "Display name"
 - inputText: "Maestro"
 - tapOn: "Avatar rocket"

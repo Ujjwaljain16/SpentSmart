@@ -1,0 +1,13 @@
+appId: com.ujjwaljain.spentsmart
+name: Monthly budget drives safe to spend
+---
+- runFlow: _onboard.yaml
+- tapOn: "Set up a budget"
+- tapOn: "Monthly limit in rupees"
+- inputText: "30000"
+- tapOn: "Save budget"
+- assertVisible: "Safe to spend today"
+- assertVisible: ".*left in your budget until.*"
+- tapOn: "Budgets"
+- assertVisible: "This month"
+- assertVisible: "On track"

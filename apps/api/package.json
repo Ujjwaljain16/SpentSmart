@@ -1,0 +1,34 @@
+{
+  "name": "@spentsmart/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Sync API: Google sign-in, devices and end-to-end encrypted record storage",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "migrate": "tsx src/migrate-cli.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "dev:local": "tsx src/local.ts",
+    "dev:neon": "tsx src/neon.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.12.0",
+    "@fastify/rate-limit": "^10.3.0",
+    "@spentsmart/assistant": "workspace:*",
+    "@spentsmart/sync-core": "workspace:*",
+    "fastify": "^5.12.8",
+    "jose": "^6.2.18",
+    "pg": "^8.23.1",
+    "tsx": "^4.23.15",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.3.16",
+    "@types/node": "^22.20.5",
+    "@types/pg": "^8.23.1",
+    "typescript": "~5.9.3",
+    "vitest": "^5.1.1"
+  }
+}

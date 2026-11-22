@@ -13,10 +13,12 @@ export const routes = {
   manualEntry: '/manual-entry' as Href,
   receive: '/receive' as Href,
   recoverPending: '/recover-pending' as Href,
+  privacyPolicy: '/privacy-policy' as Href,
   categoryManager: '/category-manager' as Href,
   privacyDashboard: '/privacy-dashboard' as Href,
   editProfile: '/edit-profile' as Href,
   onboarding: '/onboarding/profile-setup' as Href,
+  onboardingSetup: '/onboarding/setup' as Href,
   /** The payment screen reads its draft from the draft store; params are the validated fallback. */
   payment: '/payment' as Href,
   paymentFor: (draft: PaymentDraft): Href => ({
@@ -31,4 +33,23 @@ export const routes = {
   }),
   analyticsDetail: (categoryKey: string): Href => ({ pathname: '/analytics-detail', params: { category: categoryKey } }),
   editTransaction: (id: string): Href => ({ pathname: '/edit-transaction', params: { id } }),
+  budgets: '/(tabs)/budgets' as Href,
+  activity: '/(tabs)/history' as Href,
+  quickAdd: '/quick-add' as Href,
+  transfer: '/transfer' as Href,
+  accounts: '/accounts' as Href,
+  newAccount: '/account-edit' as Href,
+  editAccount: (id: string): Href => ({ pathname: '/account-edit', params: { id } }),
+  /** `null` edits the overall budget; a key edits that category's; no argument starts a new one. */
+  editBudget: (categoryKey?: string | null): Href => ({
+    pathname: '/budget-edit',
+    params: categoryKey === undefined ? {} : categoryKey === null ? { overall: '1' } : { category: categoryKey },
+  }),
+  newGoal: '/goal-edit' as Href,
+  importStatement: '/import-statement' as Href,
+  sync: '/sync' as Href,
+  syncConflicts: '/sync-conflicts' as Href,
+  assistant: '/assistant' as Href,
+  assistantSettings: '/assistant-settings' as Href,
+  editGoal: (id: string): Href => ({ pathname: '/goal-edit', params: { id } }),
 };

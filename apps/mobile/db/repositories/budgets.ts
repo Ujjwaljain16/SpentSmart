@@ -3,6 +3,9 @@ import { BudgetStatus, budgetStatus, rolloverFrom } from '@spentsmart/finance/le
 import { isValidPaise } from '@spentsmart/finance/money';
 import { Range, periodRanges } from '@spentsmart/finance/periods';
 import { Budget } from '@spentsmart/finance/types';
+import { budgetProjection } from '@spentsmart/finance/insights/budget-forecast';
+import { detectRecurring } from '@spentsmart/finance/insights/recurring';
+import { loadInsightRows } from './analytics';
 import { SqlDriver, SqlExecutor } from '../driver';
 import { RepoDeps } from './deps';
 import { ValidationError } from './transactions';
@@ -88,11 +91,17 @@ export function createBudgetsRepo(db: SqlDriver, deps: RepoDeps) {
     async statuses(at: Date = new Date(now())): Promise<BudgetWithStatus[]> {
       const { current, previous } = periodRanges('month', at);
       const budgets = await listActive();
+      if (budgets.length === 0) return [];
+      // Four months is enough to recognise monthly bills and compare day-to-day spending, and stays quick at scale.
+      const nowMs = at.getTime();
+      const rows = await loadInsightRows(db, nowMs - 120 * 86_400_000, current.end);
+      const recurring = detectRecurring(rows, nowMs);
       const out: BudgetWithStatus[] = [];
       for (const b of budgets) {
         const spent = await spendingIn(db, current, b.categoryKey);
         const carried = b.rollover ? rolloverFrom(b.limitPaise, await spendingIn(db, previous, b.categoryKey)) : 0;
-        out.push({ ...b, status: budgetStatus({ limitPaise: b.limitPaise, spentPaise: spent, carriedPaise: carried, period: current, now: at.getTime() }) });
+        const projectedPaise = budgetProjection(rows, recurring, b.categoryKey, nowMs);
+        out.push({ ...b, status: budgetStatus({ limitPaise: b.limitPaise, spentPaise: spent, carriedPaise: carried, period: current, now: nowMs, projectedPaise }) });
       }
       return out;
     },

@@ -19,6 +19,22 @@ flowchart LR
 
 ## 1. Sources
 
+### Build switches
+
+Google Play Protect's enhanced fraud protection (active in India) **blocks installing** apps that declare a
+notification listener or the SMS permissions when they come from a browser, file manager or chat app. This was
+confirmed on a vivo Y200 Pro (Android 16). So capture is opt-in at build time as well:
+
+| Build | Declares | Installs from a download? |
+|---|---|---|
+| standard | proxy, tile, widget (no listener, no SMS) | yes |
+| `SPENTSMART_CAPTURE=1` | + notification listener | no; install over USB (`adb install`), which isn't blocked |
+| `SPENTSMART_SMS_CAPTURE=1` | + incoming-SMS receiver and `RECEIVE_SMS` | no; install over USB |
+
+The Kotlin classes are in every build. The Expo config plugin (`modules/upi-intent/app.plugin.js`) only declares
+them in the manifest when the switch is set. At runtime, `captureStatus().available` tells the app whether the
+listener exists, and Settings hides the Capture switch when it doesn't.
+
 ### Notification listener
 
 `PaymentNotificationListener` (a `NotificationListenerService`) is bound by Android only after the user grants

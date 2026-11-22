@@ -21,16 +21,20 @@ eas build -p android --profile preview
   local builds are all version code 1, so each installs over the last as an update.
 - The free plan has a monthly Android build quota. Batch fixes into one build per test round.
 
-## Optional SMS capture build
+## Capture builds
 
-Bank SMS capture straight from incoming messages is compiled into every build, but only **declared** in builds made
-with the switch, because `RECEIVE_SMS` can make Play Protect block installs from a download in some regions:
+Payment capture (notification listener) and SMS capture are compiled into every build but only **declared** when
+their switch is set, because Play Protect blocks installing apps that declare them from a download (confirmed on a
+phone in India). Capture builds are installed over USB with `adb install`, which isn't blocked.
 
 ```bash
-SPENTSMART_SMS_CAPTURE=1 eas build -p android --profile preview
+SPENTSMART_CAPTURE=1 eas build -p android --profile preview                              # + notification capture
+SPENTSMART_CAPTURE=1 SPENTSMART_SMS_CAPTURE=1 eas build -p android --profile preview     # + incoming-SMS capture
 ```
 
-(For a local build, set it before `expo prebuild`.) See [CAPTURE.md](CAPTURE.md).
+For a local build, set them before `expo prebuild`. Check the result with
+`aapt2 dump xmltree --file AndroidManifest.xml app-release.apk | grep -E "NotificationListener|RECEIVE_SMS"`.
+See [CAPTURE.md](CAPTURE.md).
 
 ## Building a signed release APK locally
 

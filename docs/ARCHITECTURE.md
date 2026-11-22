@@ -112,7 +112,7 @@ transactions only when the user adds them (or when a UPI app confirms a proxied 
 | Piece | Purpose |
 |---|---|
 | `UpiIntentModule` | UPI app discovery, `payWithUpi` (for result), `shareQr`/`prepareQr`/`qrPng` (ZXing), capture and proxy switches, queue drains, "Save as" for text files, navigation-bar appearance |
-| `PaymentNotificationListener` | Opt-in capture from allow-listed UPI/bank/SMS apps |
+| `PaymentNotificationListener` | Opt-in capture from allow-listed UPI/bank/SMS apps; only declared in builds made with `SPENTSMART_CAPTURE=1` |
 | `SmsCaptureReceiver` | Incoming-SMS capture; only declared in builds made with `SPENTSMART_SMS_CAPTURE=1` |
 | `UpiProxyActivity` | Disabled-by-default `upi://pay` handler that forwards to the UPI app and records the result |
 | `QuickAddTileService`, `QuickAddWidget` | Quick Settings tile and home-screen widget, both opening deep links |

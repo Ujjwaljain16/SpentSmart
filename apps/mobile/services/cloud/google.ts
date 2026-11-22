@@ -15,6 +15,8 @@ export async function googleIdToken(): Promise<string | null> {
   }
   try {
     await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+    // Without this, Google silently reuses the last account this app used and never shows the picker.
+    await GoogleSignin.signOut().catch(() => undefined);
     const response = await GoogleSignin.signIn();
     if (!isSuccessResponse(response)) return null;
     if (!response.data.idToken) throw new Error('Google didn’t return a sign-in token. Try again.');

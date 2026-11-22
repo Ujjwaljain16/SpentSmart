@@ -51,6 +51,7 @@ const SECTIONS: readonly { title: string; body: readonly string[] }[] = [
       '• Capture payments: with your permission, SpentSmart looks at notifications from UPI apps, bank apps and your SMS app only. Other apps’ notifications (chats, email, social) are ignored without being read.',
       '• From those apps it keeps only completed payments, and from them only the amount, payee, time, reference and source app. Messages with a one-time password or other code are dropped before anything is saved.',
       '• Captured payments stay on your phone, are never synced, and become transactions only when you add them. Turning it off discards anything not yet reviewed. You can revoke notification access in Android’s settings any time.',
+      '• Some builds can also read new incoming SMS for the same purpose, with the same rules. They ask for the SMS permission when you turn capture on, and never read your message inbox.',
       '• Log payments from other apps (beta): when another app asks you to pay with UPI and you choose SpentSmart, it passes the request unchanged to your UPI app, where you pay with your PIN, and records the payee, amount and result. SpentSmart never handles money or your UPI PIN.',
     ],
   },
@@ -70,9 +71,10 @@ const SECTIONS: readonly { title: string; body: readonly string[] }[] = [
       '• Contacts (read): only the contact you pick as a payee.',
       '• Photos: saving your QR code; choosing a receipt uses Android’s photo picker.',
       '• Notification access: only if you turn on Capture payments.',
+      '• Receive SMS (some builds): only if you turn on Capture payments; new messages only.',
       '• Notifications: only if you turn on reminders.',
       '• Internet: Sync & backup, the Assistant and app updates.',
-      'SpentSmart doesn’t have the SMS permission and can’t read your message inbox. It doesn’t access your location, bank accounts or clipboard.',
+      'SpentSmart can’t read your SMS inbox. It doesn’t access your location, bank accounts or clipboard.',
     ],
   },
   {
@@ -91,6 +93,10 @@ const SECTIONS: readonly { title: string; body: readonly string[] }[] = [
       '• On our server: until you delete the cloud backup.',
       '• Server logs hold technical request details, never your financial data, and are kept only as long as our hosting provider retains them.',
     ],
+  },
+  {
+    title: 'Diagnostics',
+    body: ['Warnings, errors and the last 20 crashes are kept on the phone with amounts, UPI IDs and emails removed. You can view them in Settings → Diagnostics. Nothing is uploaded.'],
   },
   {
     title: 'Children, changes and contact',

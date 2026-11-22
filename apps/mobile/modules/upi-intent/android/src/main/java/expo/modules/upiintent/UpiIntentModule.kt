@@ -1,14 +1,16 @@
 package expo.modules.upiintent
 
 import android.content.ActivityNotFoundException
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.Uri
-import android.os.Bundle
+import android.provider.Settings
 import android.util.Base64
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.FileProvider
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
@@ -175,6 +177,53 @@ class UpiIntentModule : Module() {
       }
     }
 
+    // Payment capture: our switch, plus whether Android has granted notification access.
+    AsyncFunction("captureStatus") {
+      val context = appContext.reactContext ?: return@AsyncFunction mapOf("enabled" to false, "accessGranted" to false)
+      mapOf(
+        "enabled" to context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_CAPTURE_ENABLED, false),
+        "accessGranted" to NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName),
+      )
+    }
+
+    AsyncFunction("setCaptureEnabled") { enabled: Boolean ->
+      val context = appContext.reactContext ?: return@AsyncFunction false
+      context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_CAPTURE_ENABLED, enabled).apply()
+      // Turning it off also forgets anything captured but not yet read.
+      if (!enabled) CaptureStore.drain(context, NOTIFICATION_QUEUE)
+      true
+    }
+
+    AsyncFunction("openNotificationAccessSettings") {
+      val context = appContext.reactContext ?: return@AsyncFunction false
+      context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+      true
+    }
+
+    AsyncFunction("drainCaptured") {
+      val context = appContext.reactContext ?: return@AsyncFunction emptyList<Map<String, Any?>>()
+      CaptureStore.drain(context, NOTIFICATION_QUEUE)
+    }
+
+    // The UPI proxy is a disabled component until the user switches it on; then other apps can offer SpentSmart.
+    AsyncFunction("proxyEnabled") {
+      val context = appContext.reactContext ?: return@AsyncFunction false
+      context.packageManager.getComponentEnabledSetting(proxyComponent(context)) == PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+    }
+
+    AsyncFunction("setProxy") { enabled: Boolean, targetPackage: String? ->
+      val context = appContext.reactContext ?: return@AsyncFunction false
+      context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY_PROXY_TARGET, targetPackage).apply()
+      val state = if (enabled) PackageManager.COMPONENT_ENABLED_STATE_ENABLED else PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+      context.packageManager.setComponentEnabledSetting(proxyComponent(context), state, PackageManager.DONT_KILL_APP)
+      true
+    }
+
+    AsyncFunction("drainProxied") {
+      val context = appContext.reactContext ?: return@AsyncFunction emptyList<Map<String, Any?>>()
+      CaptureStore.drain(context, PROXY_QUEUE)
+    }
+
     OnActivityResult { _, payload ->
       if (payload.requestCode != REQUEST_UPI_PAY) return@OnActivityResult
       val promise = pendingPayment ?: return@OnActivityResult
@@ -182,11 +231,13 @@ class UpiIntentModule : Module() {
       promise.resolve(
         mapOf(
           "resultCode" to payload.resultCode,
-          "response" to extractResponse(payload.data)
+          "response" to upiResponseFrom(payload.data)
         )
       )
     }
   }
+
+  private fun proxyComponent(context: Context) = ComponentName(context, UpiProxyActivity::class.java)
 
   @Volatile private var preparedUri: String? = null
   @Volatile private var preparedFile: File? = null
@@ -242,19 +293,4 @@ class UpiIntentModule : Module() {
     }
   }
 
-  /**
-   * UPI apps answer either with a single "response" extra (`txnId=..&responseCode=..&Status=..&txnRef=..`)
-   * or with the individual fields as separate extras. Normalise both to the first form.
-   */
-  private fun extractResponse(data: Intent?): String? {
-    val extras: Bundle = data?.extras ?: return null
-    extras.getString("response")?.takeIf { it.isNotBlank() }?.let { return it }
-
-    val keys = listOf("txnId", "responseCode", "Status", "txnRef", "ApprovalRefNo")
-    val parts = keys.mapNotNull { key ->
-      val value = (extras.get(key) as? String)?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-      "$key=${Uri.encode(value)}"
-    }
-    return if (parts.isEmpty()) null else parts.joinToString("&")
-  }
 }

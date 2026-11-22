@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/spentsmart_widget_bg"
+    android:gravity="center"
+    android:orientation="horizontal"
+    android:padding="8dp">
+
+    <TextView
+        android:id="@+id/spentsmart_widget_add"
+        style="@style/SpentSmartWidgetButton"
+        android:text="+ Add" />
+
+    <TextView
+        android:id="@+id/spentsmart_widget_voice"
+        style="@style/SpentSmartWidgetButton"
+        android:text="Speak" />
+
+    <TextView
+        android:id="@+id/spentsmart_widget_scan"
+        style="@style/SpentSmartWidgetButton"
+        android:text="Scan &amp; pay" />
+</LinearLayout>

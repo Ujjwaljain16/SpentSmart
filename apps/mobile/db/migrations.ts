@@ -286,6 +286,31 @@ export const MIGRATIONS: readonly Migration[] = [
       }
     },
   },
+  {
+    version: 4,
+    async up(tx) {
+      // Payments read from notifications or passed through the UPI proxy, waiting to be confirmed. Local only: this
+      // table is deliberately not synced; only the transactions made from it are.
+      await tx.exec(`
+        CREATE TABLE captured_payments (
+          id             TEXT PRIMARY KEY NOT NULL,
+          source         TEXT NOT NULL CHECK (source IN ('notification', 'proxy')),
+          app            TEXT,
+          direction      TEXT NOT NULL CHECK (direction IN ('debit', 'credit')),
+          amount_paise   INTEGER NOT NULL CHECK (amount_paise > 0),
+          payee_name     TEXT,
+          payee_vpa      TEXT,
+          reference      TEXT,
+          via            TEXT,
+          occurred_at    INTEGER NOT NULL,
+          status         TEXT NOT NULL CHECK (status IN ('new', 'added', 'ignored')),
+          transaction_id TEXT,
+          created_at     INTEGER NOT NULL
+        );
+        CREATE INDEX idx_captured_status ON captured_payments (status, occurred_at);
+      `);
+    },
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.version;

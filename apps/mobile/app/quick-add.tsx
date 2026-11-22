@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { format, isToday, isYesterday } from 'date-fns';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, KeyboardAvoidingView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Button } from '@/components/ui/Button';
 import { useFormatMoney } from '@/components/ui/Money';
@@ -45,6 +45,12 @@ export default function QuickAddScreen() {
     setText(spoken);
     setSource('voice');
   });
+  // The home-screen widget's "Speak" button opens this screen already listening.
+  const { voice: startListening } = useLocalSearchParams<{ voice?: string }>();
+  const voiceStart = voice.start;
+  useEffect(() => {
+    if (startListening === '1') void voiceStart();
+  }, [startListening, voiceStart]);
 
   const scan = (from: 'camera' | 'gallery') => async () => {
     setScanning(true);

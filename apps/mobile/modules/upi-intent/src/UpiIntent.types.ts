@@ -30,4 +30,34 @@ export interface UpiIntentNativeModule {
   qrPng(upiUri: string): Promise<string | null>;
   /** The subset of these packages that accept a shared image. */
   qrShareTargets(packageNames: string[]): Promise<string[]>;
+
+  /** Payment capture: our own switch, and whether Android has granted notification access. */
+  captureStatus(): Promise<{ enabled: boolean; accessGranted: boolean }>;
+  /** Turning capture off also discards anything captured but not yet read. */
+  setCaptureEnabled(enabled: boolean): Promise<boolean>;
+  openNotificationAccessSettings(): Promise<boolean>;
+  /** Payment notifications captured since the last call; the queue is emptied. */
+  drainCaptured(): Promise<CapturedNotification[]>;
+
+  /** Whether SpentSmart is offered as a UPI app, to log payments other apps start. */
+  proxyEnabled(): Promise<boolean>;
+  /** `targetPackage` is the UPI app requests are passed to; null shows a chooser. */
+  setProxy(enabled: boolean, targetPackage: string | null): Promise<boolean>;
+  /** Payments passed through since the last call; the queue is emptied. */
+  drainProxied(): Promise<ProxiedPayment[]>;
+}
+
+export interface CapturedNotification {
+  app: string;
+  text: string;
+  at: number;
+  key?: string;
+}
+
+export interface ProxiedPayment {
+  uri: string | null;
+  resultCode: number;
+  response: string | null;
+  caller: string | null;
+  at: number;
 }

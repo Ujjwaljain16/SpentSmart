@@ -3,6 +3,7 @@ import { createAccountsRepo } from './accounts';
 import { createAnalyticsRepo } from './analytics';
 import { createAttemptsRepo } from './attempts';
 import { createBudgetsRepo } from './budgets';
+import { createCapturedRepo } from './captured';
 import { createCategoriesRepo } from './categories';
 import { RepoDeps } from './deps';
 import { createGoalsRepo } from './goals';
@@ -18,6 +19,7 @@ export function createRepositories(db: SqlDriver, deps: RepoDeps) {
     transactions: createTransactionsRepo(db, deps),
     categories: createCategoriesRepo(db, deps),
     attempts: createAttemptsRepo(db, deps),
+    captured: createCapturedRepo(db, deps),
     settings: createSettingsRepo(db, deps),
     analytics: createAnalyticsRepo(db),
     accounts: createAccountsRepo(db, deps),
@@ -50,6 +52,7 @@ export function createRepositories(db: SqlDriver, deps: RepoDeps) {
         await tx.run('DELETE FROM transaction_revisions');
         await tx.run('DELETE FROM transactions');
         await tx.run('DELETE FROM payment_attempts');
+        await tx.run('DELETE FROM captured_payments');
         await tx.run('DELETE FROM budgets');
         await tx.run('DELETE FROM goals');
         await tx.run('DELETE FROM settings');

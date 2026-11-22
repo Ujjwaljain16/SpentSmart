@@ -3,8 +3,8 @@ import Constants from 'expo-constants';
 import { openURL } from 'expo-linking';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Alert, AppState, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ISSUES_URL, PRIVACY_POLICY_URL } from '@/constants/app';
 import { BorderRadius, FontSizes, MIN_TOUCH_TARGET, Spacing } from '@/constants/theme';
@@ -19,6 +19,7 @@ import { crashLog } from '@/lib/app-crash-log';
 import { getRecentLogs } from '@/lib/logger';
 import { routes } from '@/lib/routes';
 import { ExportScope, exportCsv, exportPdf } from '@/services/export';
+import { captureAvailable, captureStatus, openNotificationAccess, proxyEnabled, setCaptureEnabled, setProxy } from '@/services/payment-capture';
 import { setRemindersEnabled } from '@/services/reminders';
 
 const LOCK_TIMEOUTS: readonly { seconds: number; label: string }[] = [
@@ -84,6 +85,65 @@ export default function SettingsScreen() {
       auth_failed: 'Authentication was cancelled, so the setting was not changed.',
     } as const;
     Alert.alert('App lock', reasons[result.reason]);
+  };
+
+  const [capture, setCapture] = useState({ enabled: false, accessGranted: false });
+  const [proxyOn, setProxyOn] = useState(false);
+  const refreshCapture = useCallback(async () => {
+    setCapture(await captureStatus());
+    setProxyOn(await proxyEnabled());
+  }, []);
+  // Notification access is granted in system settings, so re-check whenever the user comes back.
+  useEffect(() => {
+    void refreshCapture();
+    const sub = AppState.addEventListener('change', (state) => state === 'active' && void refreshCapture());
+    return () => sub.remove();
+  }, [refreshCapture]);
+
+  const toggleCapture = async (enabled: boolean) => {
+    if (!enabled) {
+      await setCaptureEnabled(false);
+      return refreshCapture();
+    }
+    Alert.alert(
+      'Capture payments',
+      'SpentSmart will look at notifications from UPI apps, bank apps and your SMS app only, and keep just the amount, payee and time of completed payments. Messages with a code (OTPs) are dropped without being saved. Nothing leaves your phone, and every payment waits for you to add it.\n\nAndroid will ask you to allow notification access.',
+      [
+        { text: 'Not now', style: 'cancel' },
+        {
+          text: 'Continue',
+          onPress: () =>
+            void (async () => {
+              await setCaptureEnabled(true);
+              const status = await captureStatus();
+              setCapture(status);
+              if (!status.accessGranted) await openNotificationAccess();
+            })(),
+        },
+      ],
+    );
+  };
+
+  const toggleProxy = async (enabled: boolean) => {
+    if (!enabled) {
+      await setProxy(false, null);
+      return refreshCapture();
+    }
+    Alert.alert(
+      'Log payments from other apps',
+      'When Zomato, Zepto or a website says “Pay with UPI”, you can pick SpentSmart. It passes the payment to your UPI app unchanged, where you pay with your PIN as usual, and logs it when the UPI app confirms.\n\nSpentSmart never handles money. This is an experiment: some checkouts only list certain apps.',
+      [
+        { text: 'Not now', style: 'cancel' },
+        {
+          text: 'Turn on',
+          onPress: () =>
+            void (async () => {
+              await setProxy(true, settings.preferredUpiApp || null);
+              await refreshCapture();
+            })(),
+        },
+      ],
+    );
   };
 
   const toggleReminders = async (enabled: boolean) => {
@@ -289,6 +349,38 @@ export default function SettingsScreen() {
             toggle={{ value: settings.remindersEnabled, onChange: (v) => void toggleReminders(v) }}
           />
         </Section>
+
+        {captureAvailable ? (
+          <Section title="AUTOMATIC LOGGING">
+            <Row
+              icon="flash-outline"
+              title="Capture payments"
+              subtitle={
+                !capture.enabled
+                  ? 'Off · read payment alerts from UPI apps and bank SMS'
+                  : capture.accessGranted
+                    ? 'On · new payments wait for you to add them'
+                    : 'Needs notification access · tap to allow'
+              }
+              toggle={{ value: capture.enabled, onChange: (v) => void toggleCapture(v) }}
+            />
+            {capture.enabled && !capture.accessGranted ? (
+              <>
+                <Divider />
+                <Row icon="key-outline" title="Allow notification access" subtitle="Android asks once; you can turn it off there any time" onPress={() => void openNotificationAccess()} />
+              </>
+            ) : null}
+            <Divider />
+            <Row icon="file-tray-full-outline" title="Captured payments" subtitle="Review, add or ignore" onPress={() => router.push(routes.captureInbox)} />
+            <Divider />
+            <Row
+              icon="git-network-outline"
+              title="Log payments from other apps (beta)"
+              subtitle={proxyOn ? 'On · SpentSmart appears in “Pay with UPI” lists' : 'Off · for Zomato, Zepto and other checkouts'}
+              toggle={{ value: proxyOn, onChange: (v) => void toggleProxy(v) }}
+            />
+          </Section>
+        ) : null}
 
         <Section title="SYNC & LABS">
           <Row icon="cloud-outline" title="Sync & backup" subtitle={cloudSubtitle} onPress={() => router.push(routes.sync)} />

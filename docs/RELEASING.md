@@ -21,24 +21,10 @@ eas build -p android --profile preview
   local builds are all version code 1, so each installs over the last as an update.
 - The free plan has a monthly Android build quota. Batch fixes into one build per test round.
 
-## Capture builds
-
-Payment capture (notification listener) and SMS capture are compiled into every build but only **declared** when
-their switch is set, because Play Protect blocks installing apps that declare them from a download (confirmed on a
-phone in India). Capture builds are installed over USB with `adb install`, which isn't blocked.
-
-```bash
-SPENTSMART_CAPTURE=1 eas build -p android --profile preview                              # + notification capture
-SPENTSMART_CAPTURE=1 SPENTSMART_SMS_CAPTURE=1 eas build -p android --profile preview     # + incoming-SMS capture
-```
-
-For a local build, set them before `expo prebuild`. Check the result with
-`aapt2 dump xmltree --file AndroidManifest.xml app-release.apk | grep -E "NotificationListener|RECEIVE_SMS"`.
-See [CAPTURE.md](CAPTURE.md).
-
 ## Building a signed release APK locally
 
-Same signature as EAS builds, so it installs over them as an update and Google sign-in keeps working (Google
+Installs from a download as long as the app declares none of the permissions Play Protect blocks for sideloaded
+apps in India (SMS, notification listener, accessibility). Same signature as EAS builds, so it installs over them as an update and Google sign-in keeps working (Google
 checks the signing certificate's SHA-1).
 
 1. **Download the EAS keystore once:** `npx eas-cli credentials -p android` → `preview` → *Keystore* →
@@ -78,7 +64,7 @@ checks the signing certificate's SHA-1).
 
    ```bash
    apksigner verify --print-certs app-release.apk      # SHA-1 must be ee:eb:f5:80:…:e2:e5
-   aapt2 dump permissions app-release.apk               # no SMS or overlay permissions in standard builds
+   aapt2 dump permissions app-release.apk               # no SMS, notification-listener or overlay permissions
    ```
 
 ## After a server change

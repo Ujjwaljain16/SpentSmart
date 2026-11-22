@@ -9,7 +9,7 @@ pnpm workspaces + Turborepo. `pnpm check` runs `typecheck`, `lint` and `test` in
 
 | Package | Runs on | Responsibility |
 |---|---|---|
-| `packages/finance` | phone + server | Money as integer paise, UPI URI parse/build/response, periods, reports, safe-to-spend, quick-add parser, insights detectors, statement/receipt/export parsing, the capture text parser. No I/O. |
+| `packages/finance` | phone + server | Money as integer paise, UPI URI parse/build/response, periods, reports, safe-to-spend, quick-add parser, insights detectors, statement/receipt/export parsing. No I/O. |
 | `packages/sync-core` | phone + server | Envelope encryption (XChaCha20-Poly1305, HKDF), sync wire contracts (zod), three-way record merge. |
 | `packages/assistant` | phone + server | Tool definitions and their implementations over the ledger, the tool loop, the amount-traceability check, evals. |
 | `apps/mobile` | phone | Screens, SQLite data layer, native module, side-effecting services. |
@@ -22,7 +22,7 @@ app/                 screens (expo-router). Read via hooks, write via repositori
 components/          UI pieces; no storage access
 contexts/            Database, Settings, Theme, Security, Categories, Cloud providers
 hooks/               useLiveQuery, paged lists, theme colours
-services/            payments, payment-capture, cloud (api client, sync, google), export, capture (voice/OCR), reminders
+services/            payments, cloud (api client, sync, google), export, capture (voice/OCR), reminders
 db/                  driver, migrations, repositories, SQLCipher key
 modules/upi-intent/  Kotlin Expo module (see below)
 lib/                 redacting logger, crash log, routes, amount input, external-trip guard
@@ -35,7 +35,7 @@ lib/                 redacting logger, crash log, routes, amount input, external
    SQLCipher) and in tests (Node's built-in SQLite).
 3. **No `console.*`** (lint-enforced). `lib/logger` redacts UPI IDs, ₹/Rs/INR amounts and emails, and keeps a small
    in-memory ring buffer. `lib/crash-log` keeps the last 20 crashes, redacted the same way, shown in Settings → Diagnostics.
-4. **Anything from outside is untrusted:** deep links, scanned QRs, notification text, proxied UPI requests.
+4. **Anything from outside is untrusted:** deep links and scanned QRs.
    Each passes a strict parser before it can become even a draft.
 
 ## Data
@@ -49,7 +49,8 @@ lib/                 redacting logger, crash log, routes, amount input, external
   | 1 | `transactions`, `categories`, `payment_attempts`, `settings` |
   | 2 | Ledger v2: `accounts`, transfers, `transaction_tags`, `transaction_revisions` (edit history), `budgets`, `goals` |
   | 3 | Sync bookkeeping: `sync_meta`, `sync_records` (merge bases), `sync_outbox`, `sync_conflicts`, and triggers on every synced table |
-  | 4 | `captured_payments` (automatic logging inbox; local only, never synced) |
+  | 4 | `captured_payments` for automatic logging, a feature since removed |
+  | 5 | Drops `captured_payments` (version 4 stays so phones that ran it still open) |
 
 - **Encryption at rest:** SQLCipher with a 256-bit random key created on first launch and kept in the Android
   Keystore (`expo-secure-store`). A database that can't be opened is never overwritten; the user gets a recovery
@@ -101,22 +102,12 @@ See [UPI-INTEGRATION.md](UPI-INTEGRATION.md). The routes, in order of preference
 Attempts are persisted before launch (`payment_attempts`), so a killed app still asks on return, and recording is
 idempotent per attempt.
 
-## Automatic logging (optional)
-
-See [CAPTURE.md](CAPTURE.md): a notification listener and a UPI proxy feed a private queue. The app drains it into
-an inbox, de-duplicates (reference, amount + time window, message fingerprint, existing transactions), and creates
-transactions only when the user adds them (or when a UPI app confirms a proxied payment).
-
 ## Native module (`modules/upi-intent`)
 
 | Piece | Purpose |
 |---|---|
-| `UpiIntentModule` | UPI app discovery, `payWithUpi` (for result), `shareQr`/`prepareQr`/`qrPng` (ZXing), capture and proxy switches, queue drains, "Save as" for text files, navigation-bar appearance |
-| `PaymentNotificationListener` | Opt-in capture from allow-listed UPI/bank/SMS apps; only declared in builds made with `SPENTSMART_CAPTURE=1` |
-| `SmsCaptureReceiver` | Incoming-SMS capture; only declared in builds made with `SPENTSMART_SMS_CAPTURE=1` |
-| `UpiProxyActivity` | Disabled-by-default `upi://pay` handler that forwards to the UPI app and records the result |
+| `UpiIntentModule` | UPI app discovery, `payWithUpi` (for result), `shareQr`/`prepareQr`/`qrPng` (ZXing), "Save as" for text files, navigation-bar appearance |
 | `QuickAddTileService`, `QuickAddWidget` | Quick Settings tile and home-screen widget, both opening deep links |
-| `CaptureStore` | Append-only JSON-lines queue in the app's private files, capped at 300 entries |
 
 The module's `FileProvider` exposes only `cache/qr_share/`, which holds short-lived QR images; files older than an
 hour are deleted whenever a new one is written.
@@ -148,6 +139,12 @@ hour are deleted whenever a new one is written.
 ## Known limits
 
 - The UPI app's answer is a hint, not proof; there's no payment-aggregator server to confirm against.
-- On Android 15+, the system may show notification listeners "Sensitive notification content hidden" for SMS, so
-  bank-SMS capture depends on the phone (details in [CAPTURE.md](CAPTURE.md)).
 - OTA update code signing isn't configured.
+
+## Removed: automatic logging
+
+A notification listener, an SMS receiver and a `upi://pay` proxy were built, tested end to end on the emulator,
+and removed after a phone test (22 Nov 2026). Google Pay posts no notification for payments made inside it, many
+accounts get no bank SMS, Android 15+ can hide SMS text from listeners, Play Protect blocks installing apps that
+declare a listener from a download, and checkouts only list their own set of UPI apps. The code is in git history
+(`f7139d7` onwards) if the idea is revisited.

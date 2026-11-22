@@ -20,7 +20,7 @@ Next ideas (not started): split & settle with friends over UPI links, trip/event
 | 4 · Insights | Done | — |
 | 5 · Sync | Live: Render + Neon (Singapore), Google sign-in. Tested against the live server on the emulator: first sync, server stores ciphertext only, wipe → restore with the recovery key, sign out a device, delete backup | Two-phone test on real devices |
 | 6 · Assistant, voice, receipts, import | Built. Voice and receipt scanning confirmed on a phone; assistant tested with the fake model | Assistant is off on the live server until an Anthropic key is set on Render (costs money) |
-| 6.5 · Automatic logging | Built and tested end to end on the emulator: opt-in capture from UPI/bank/SMS notifications, review inbox with de-duplication, UPI proxy (beta), Quick Settings tile, home widget; incoming-SMS capture behind the `SPENTSMART_SMS_CAPTURE` build switch. See `docs/CAPTURE.md` | On-phone test: real Google Pay/PhonePe/bank alerts (Android 15+ may hide SMS text), which checkouts list the proxy |
+| 6.5 · Automatic logging | Removed (22 Nov 2026) after a phone test: Google Pay is silent for payments made in it, many accounts get no bank SMS, Android 15+ can hide SMS text, Play Protect blocks listener apps from downloads, checkouts don't list other UPI apps. Quick Settings tile and home widget kept | — |
 | 7 · Hardening, beta | Started: on-phone crash log, bulk import, permissions trimmed, backup drill, privacy draft (`docs/v2/PRIVACY-DRAFT.md`) | Play listing and consent-screen publishing (not planned for now), low-end performance pass, beta |
 
 How it's tested: `pnpm turbo run typecheck lint test`, plus Maestro flows in `apps/mobile/.maestro` on the emulator

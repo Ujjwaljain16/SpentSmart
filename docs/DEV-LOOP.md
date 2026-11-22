@@ -41,7 +41,7 @@ shows "Sign in for testing" under Settings → Sync & backup.
 - `expo start` and `expo prebuild` rewrite `apps/mobile/tsconfig.json`. Revert with
   `git checkout apps/mobile/tsconfig.json` before committing or running an EAS build (EAS refuses a dirty tree).
 - Don't run Metro with `CI=1`: it turns off reloads.
-- Reinstalling the APK kills the app and briefly unbinds the notification listener; reopen from Metro.
+- Reinstalling the APK kills the app; reopen it from Metro.
 - On Windows, stopping a background shell doesn't stop the node process under it. Free a port with
   `Get-NetTCPConnection -LocalPort 8081 -State Listen` and `Stop-Process`.
 
@@ -68,11 +68,6 @@ maestro test apps/mobile/.maestro/quick-add.yaml
 - `sync-restore.yaml` and `assistant.yaml` need the local API running.
 - `import-statement.yaml` (and `insights.yaml`, which runs it) needs `statement-nov.csv` in Downloads:
   `adb push statement-nov.csv /sdcard/Download/`.
-
-## Testing automatic logging
-
-Fake bank SMS, notification access, the Android 15+ caveat and simulated proxy results:
-[CAPTURE.md §7](CAPTURE.md#7-testing-on-the-emulator).
 
 ## Release-like builds
 

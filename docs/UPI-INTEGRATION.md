@@ -49,6 +49,9 @@ Paying a **personal** UPI ID by intent with `startActivityForResult`:
 * Sharing the QR image to Google Pay only opened Google Pay's home screen.
 * Saving the QR to the gallery and importing it in PhonePe/BHIM **worked**.
 
+* **No app lists SpentSmart as a UPI app at checkout.** Zomato, Zepto and similar show their own fixed set of
+  UPI apps, so an app that registers for `upi://pay` (tried as a "proxy" to log checkout payments) is never offered.
+
 ## Field test (22 Nov 2026, Vivo phone)
 
 * **Shop QR (Zepto)** by intent: Google Pay and PhonePe opened on the payment and completed it. Direct intent stays
@@ -85,8 +88,6 @@ Consequences in the app:
   signatures that end in `=`).
 * **No network.** The payment QR is drawn on the device. The old implementation sent the payee UPI ID and amount
   to a third-party QR web service; that is gone.
-* **Logging payments other apps start.** The opt-in UPI proxy (a disabled-by-default `upi://pay` handler) forwards a
-  checkout's request unchanged to Google Pay and records the result. See [CAPTURE.md](CAPTURE.md).
 
 ## Device test matrix (to run before a release)
 

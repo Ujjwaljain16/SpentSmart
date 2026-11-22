@@ -14,8 +14,7 @@ the server stores ciphertext it cannot read.</p>
 | | |
 |---|---|
 | **Pay and log in one step** | Scan any UPI QR. Shops are paid through a direct UPI intent with the result read back. Friends' personal UPI IDs are paid by handing Google Pay a QR drawn on the phone (UPI apps refuse intent payments to personal IDs). Every payment is recorded once, idempotently. |
-| **Log without typing** | Quick add understands phrases like `swiggy 340 dinner #office` or `salary 50k yesterday` (99.6% on 255 phrases, 95% on a blind set) and learns your categories. There's also voice, receipt OCR, and bank statement import. |
-| **Automatic logging (opt-in)** | Reads payment alerts from UPI apps, bank apps and SMS **on the phone**, drops anything containing an OTP, and queues payments in an inbox for one-tap Add. A beta UPI proxy logs Zomato/Zepto checkouts. There's a Quick Settings tile and a home-screen widget. |
+| **Log without typing** | Quick add understands phrases like `swiggy 340 dinner #office` or `salary 50k yesterday` (99.6% on 255 phrases, 95% on a blind set) and learns your categories. There's also voice, receipt OCR, bank statement import, a Quick Settings tile and a home-screen widget (Add / Speak / Scan & pay). |
 | **Know where you stand** | Safe-to-spend until payday, budgets, goals, accounts and transfers, plus insights: recurring payments, month-end forecast with its reasoning, and anomalies. |
 | **Optional sync and backup** | Google sign-in, XChaCha20-Poly1305 end-to-end encryption, a recovery key only you hold, three-way merge across phones. |
 | **Optional assistant** | Ask "am I within budget?". The model calls tools that run **on your phone** and only ever sees the figures it asked for. Changes are proposals you confirm. |
@@ -31,8 +30,7 @@ flowchart LR
     UI["Screens<br/>expo-router"] --> Repos["Repositories<br/>(only code that touches SQL)"]
     Repos --> DB[("SQLite + SQLCipher<br/>AES-256, key in Keystore")]
     DB -- triggers --> Outbox["sync_outbox"]
-    Native["Kotlin module<br/>UPI intents · QR · capture · proxy"] --> Queue["private queue<br/>(app files)"]
-    Queue --> Inbox["Captured payments inbox"] --> Repos
+    Native["Kotlin module<br/>UPI intents · native QR · tile · widget"] --> UI
     Fin["@spentsmart/finance<br/>pure logic"] -.-> UI
   end
   Outbox -- "encrypt (sync-core)" --> API["Fastify API<br/>Render, Singapore"]
@@ -48,14 +46,14 @@ apps/
   mobile/            Android app: Expo SDK 54, React Native 0.81, expo-router 6, Hermes
     app/             screens (thin: read with hooks, write through repositories)
     db/              driver, migrations (v1–v4), repositories, SQLCipher key handling
-    services/        side effects: payments, capture, cloud sync, export, voice/OCR
-    modules/upi-intent/  Kotlin Expo module: UPI intents, ZXing QR, notification capture, UPI proxy, tile, widget
+    services/        side effects: payments, cloud sync, export, voice/OCR
+    modules/upi-intent/  Kotlin Expo module: UPI intents, ZXing QR, Quick Settings tile, home widget, Save-as
     plugins/         Expo config plugins (cleartext for the local API, ML Kit model)
     .maestro/        end-to-end flows for the emulator
   api/               Fastify + Postgres sync server and assistant proxy (see apps/api/README.md)
 packages/
   finance/           money (integer paise), UPI parse/build/response, periods, reports, quick add, insights,
-                     statement/receipt import, payment-text capture parser
+                     statement/receipt import
   sync-core/         XChaCha20-Poly1305 + HKDF key wrapping, sync contracts, three-way record merge
   assistant/         tool definitions, the tool loop, amount traceability check, 50-question eval set
 ```
@@ -65,10 +63,9 @@ Deeper reading:
 | Doc | What's in it |
 |---|---|
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Layers, data model, encryption, sync engine, security model |
-| [docs/CAPTURE.md](docs/CAPTURE.md) | Automatic logging: listener → queue → parser → dedupe → inbox, the UPI proxy, Android 15+ limits |
 | [docs/UPI-INTEGRATION.md](docs/UPI-INTEGRATION.md) | What UPI apps accept from another app, field-test results, the payment routes |
 | [docs/adr/0001-end-to-end-encrypted-sync.md](docs/adr/0001-end-to-end-encrypted-sync.md) | Why and how sync is end-to-end encrypted |
-| [docs/DEV-LOOP.md](docs/DEV-LOOP.md) | Emulator, dev client, Metro, local API, Maestro, testing capture with fake SMS |
+| [docs/DEV-LOOP.md](docs/DEV-LOOP.md) | Emulator, dev client, Metro, local API, Maestro |
 | [docs/RELEASING.md](docs/RELEASING.md) | EAS profiles, and building a signed release APK locally |
 | [apps/api/README.md](apps/api/README.md) | Server: endpoints, environment, Render + Neon deploy |
 | [PRIVACY.md](PRIVACY.md) | The privacy policy (same text as Settings → Privacy policy) |
@@ -79,8 +76,7 @@ Deeper reading:
 - **On the phone:** SQLCipher (AES-256) with a random key in the Android Keystore. Android Auto Backup is off.
 - **No analytics, no ads, no trackers.** Diagnostics stay on the phone (last 20 crashes, with amounts, UPI IDs and emails redacted).
 - **Sync:** the server sees your Google account ID, email, device names and record counts and sizes. It never sees amounts, payees, notes, categories or dates.
-- **Capture:** only allow-listed apps are read, OTP-bearing messages are dropped before anything is written, and only a hash of each message is kept.
-- **Permissions are trimmed:** photo picker only, contact *writing* blocked, draw-over-apps blocked. No SMS permission in standard builds.
+- **Permissions are trimmed:** photo picker only, contact *writing* blocked, draw-over-apps blocked. No SMS or notification-access permission.
 
 ## Quick start
 
@@ -104,13 +100,13 @@ The full emulator loop (dev client, local API, Maestro, fake bank SMS) is in [do
 
 | Layer | How |
 |---|---|
-| Pure logic | Vitest in `packages/*`: money, UPI, periods, insights, quick add, capture parser, crypto, merge, assistant tools |
+| Pure logic | Vitest in `packages/*`: money, UPI, periods, insights, quick add, crypto, merge, assistant tools |
 | App data layer | Vitest against Node's SQLite with the real migrations and repositories (`apps/mobile/db/*.test.ts`) |
 | Server | Vitest against PGlite: auth, keys, push/pull, cross-user isolation, account deletion |
-| End to end | Maestro flows in `apps/mobile/.maestro` on the emulator; capture tested with `adb emu sms send` |
+| End to end | Maestro flows in `apps/mobile/.maestro` on the emulator |
 | CI | `.github/workflows/ci.yml`: typecheck, lint, tests, an Android export, and a production-dependency audit |
 
-657 tests pass on `v2/assistant`.
+627 tests pass on `v2/assistant`.
 
 ## Builds
 

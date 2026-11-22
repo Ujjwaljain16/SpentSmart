@@ -1,6 +1,7 @@
-# Phone test checklist (preview build)
+# Phone test checklist
 
-Install the preview build from the EAS build page (Install button or QR code). It talks to the live server.
+For the build of 22 Nov 2026 (`SpentSmart-2026-11-22.apk`, built locally from `e4c98df`, signed with the EAS key,
+talks to the live server). It installs over the previous preview build as an update; your data stays.
 
 ## Already confirmed on a phone
 - Voice add (falls back to the online recogniser when the phone has no offline English pack).
@@ -8,33 +9,42 @@ Install the preview build from the EAS build page (Install button or QR code). I
 - Shop QR paid directly; friend QR through Google Pay's one-tap share.
 - Google sign-in shows the account picker.
 
-## Payments
-1. **Friend's QR.** It opens on Google Pay. Slide → GPay opens on the payment; enter the PIN. Pay ₹1, come back, record it.
-2. **Try another UPI app** → PhonePe or Paytm → "QR saved to gallery" → in that app, Scan → gallery → newest image.
-3. **Amounts** show commas while typing (1,50,000) on the payment, budget, goal and transfer screens.
+## 1. The big question: does your phone hide payment text from capture?
+Settings → **Automatic logging** → **Capture payments** → Continue → allow SpentSmart in Android's notification
+access screen. Then:
 
-## Automatic logging (Settings → Automatic logging)
-4. **Capture payments** → Continue → allow SpentSmart in Android's notification access screen.
-5. Pay ₹1 with GPay. Open SpentSmart: Home shows "1 new payment to add". The GPay notification and the bank SMS
-   for the same payment must show as **one** item.
-6. In the inbox: change the category, Add one, Ignore one, Add all. Added ones appear on Home and Activity.
-7. An OTP SMS must never appear in the inbox.
-8. **Log payments from other apps (beta)** → Turn on. In Zomato, Zepto or a website checkout, choose UPI: is
-   SpentSmart listed? If yes, pick it → GPay opens on the payment → pay → back in the checkout, the order succeeds,
-   and the payment is in SpentSmart without the inbox. Note which checkouts list it.
+1. Pay ₹1 to a friend with Google Pay. Open SpentSmart: does Home show **"1 new payment to add"**?
+2. When your bank's SMS for that payment arrives, it must **not** add a second item (they merge).
+3. Note which of these produce an item: Google Pay notification, PhonePe notification, bank SMS.
+   If bank SMS never show up, your phone hides SMS text from apps (Android 15+); the fix is the SMS-capture build.
+4. An OTP SMS must never appear.
 
-## Shortcuts
-9. Pull down Quick Settings → edit tiles → add **Add expense** → tap it: quick add opens.
-10. Home screen → widgets → **SpentSmart quick add** → place it. Tap Add, Speak (mic starts listening) and Scan & pay.
+## 2. Inbox
+5. Change a category, **Add** one, **Ignore** one, **Add all**. Added ones appear on Home and Activity; ignored ones
+   don't come back when new SMS arrive.
 
-## Sync
-11. Create the recovery key → **Download as a file** → pick Downloads or Drive → open the file and check the key.
-12. Add a transaction, close the app for about 20 minutes, reopen: "Last synced" has moved.
+## 3. Payments
+6. Friend's QR → it opens on Google Pay → slide → GPay opens on the payment → PIN → back in SpentSmart, record it.
+7. **Try another UPI app** → PhonePe → "QR saved to gallery" → scan from gallery in PhonePe.
+8. Amounts show commas while typing (1,50,000), and backspace works through the commas.
+
+## 4. Log payments from other apps (beta)
+9. Turn it on. In Zomato, Zepto or a website checkout, choose UPI: is **SpentSmart** listed? If yes, pick it →
+   Google Pay opens on the payment → pay → the checkout shows success, and SpentSmart has logged the payment with no
+   inbox step. Note which checkouts list it.
+
+## 5. Shortcuts
+10. Quick Settings → edit → add **Add expense** → tap it: quick add opens.
+11. Home screen → widgets → **SpentSmart quick add** → Add, Speak (mic starts) and Scan & pay.
+
+## 6. Sync
+12. Recovery key → **Download as a file** → Android's Save screen opens in Downloads → Save → open the file.
+13. Add a transaction, close the app for about 20 minutes, reopen: "Last synced" has moved.
 
 ## Quick sanity (2 minutes)
-- Home, Activity, Budgets and Insights open without errors, in light and dark mode.
+- Every tab in light and dark mode, with gesture or 3-button navigation: nothing see-through or cut off.
 - Lock the app and reopen it with your fingerprint.
-- Settings → Privacy policy opens and reads correctly.
+- Settings → Privacy policy reads correctly.
 - Settings → Diagnostics shows no crashes.
 
 Note what breaks (screen + what you did) and send screenshots.

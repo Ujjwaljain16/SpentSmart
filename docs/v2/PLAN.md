@@ -9,6 +9,8 @@ blueprint, the reason is written down.
 
 ## Status (22 Nov 2026)
 
+Next ideas (not started): split & settle with friends over UPI links, trip/event mode, a shareable monthly "Wrapped" card, BNPL/EMI/card-due tracking, Hinglish quick add, a network log screen, a decoy PIN, on-device AI.
+
 | Phase | State | Left / blocked |
 |---|---|---|
 | 0 · Close out v1 | Done | — (merchant UPI payment confirmed on a phone) |
@@ -18,7 +20,7 @@ blueprint, the reason is written down.
 | 4 · Insights | Done | — |
 | 5 · Sync | Live: Render + Neon (Singapore), Google sign-in. Tested against the live server on the emulator: first sync, server stores ciphertext only, wipe → restore with the recovery key, sign out a device, delete backup | Two-phone test on real devices |
 | 6 · Assistant, voice, receipts, import | Built. Voice and receipt scanning confirmed on a phone; assistant tested with the fake model | Assistant is off on the live server until an Anthropic key is set on Render (costs money) |
-| 6.5 · Automatic logging | Built: opt-in payment capture from UPI/bank/SMS notifications, review inbox, UPI proxy (beta), Quick Settings tile, home widget. Parser and inbox unit-tested; native code compiles | On-phone test: real GPay/PhonePe/bank alerts, which checkouts list the proxy |
+| 6.5 · Automatic logging | Built and tested end to end on the emulator: opt-in capture from UPI/bank/SMS notifications, review inbox with de-duplication, UPI proxy (beta), Quick Settings tile, home widget; incoming-SMS capture behind the `SPENTSMART_SMS_CAPTURE` build switch. See `docs/CAPTURE.md` | On-phone test: real Google Pay/PhonePe/bank alerts (Android 15+ may hide SMS text), which checkouts list the proxy |
 | 7 · Hardening, beta | Started: on-phone crash log, bulk import, permissions trimmed, backup drill, privacy draft (`docs/v2/PRIVACY-DRAFT.md`) | Play listing and consent-screen publishing (not planned for now), low-end performance pass, beta |
 
 How it's tested: `pnpm turbo run typecheck lint test`, plus Maestro flows in `apps/mobile/.maestro` on the emulator

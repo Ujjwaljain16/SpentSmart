@@ -11,14 +11,15 @@ blueprint, the reason is written down.
 
 | Phase | State | Left / blocked |
 |---|---|---|
-| 0 · Close out v1 | Done | Merchant UPI intent untested on a phone |
+| 0 · Close out v1 | Done | — (merchant UPI payment confirmed on a phone) |
 | 1 · Monorepo | Done | — |
 | 2 · Ledger v2 | Done | — |
 | 3 · UX + quick add | Done | Parser 99.6% on 255 phrases, 95% on a 40-phrase blind set. TalkBack: automated check of unnamed or small tap targets; a manual pass with TalkBack is still owed |
 | 4 · Insights | Done | — |
-| 5 · Sync | Built and tested on the emulator against the local API (backup → wipe → restore) | **Blocked on accounts:** Google OAuth client (sign-in), Neon + Render (deploy). Two-phone test on real devices |
-| 6 · Assistant, voice, receipts, import | Built; assistant tested on the emulator with the fake model | **Blocked on an API key:** live eval against Claude (costs money). Voice and receipt scanning on a real phone |
-| 7 · Hardening, beta | Not started | Crash reporting, low-end performance, backup/restore drill, privacy policy (draft in `docs/v2/PRIVACY-DRAFT.md`), Play listing, beta |
+| 5 · Sync | Live: Render + Neon (Singapore), Google sign-in. Tested against the live server on the emulator: first sync, server stores ciphertext only, wipe → restore with the recovery key, sign out a device, delete backup | Two-phone test on real devices |
+| 6 · Assistant, voice, receipts, import | Built. Voice and receipt scanning confirmed on a phone; assistant tested with the fake model | Assistant is off on the live server until an Anthropic key is set on Render (costs money) |
+| 6.5 · Automatic logging | Built: opt-in payment capture from UPI/bank/SMS notifications, review inbox, UPI proxy (beta), Quick Settings tile, home widget. Parser and inbox unit-tested; native code compiles | On-phone test: real GPay/PhonePe/bank alerts, which checkouts list the proxy |
+| 7 · Hardening, beta | Started: on-phone crash log, bulk import, permissions trimmed, backup drill, privacy draft (`docs/v2/PRIVACY-DRAFT.md`) | Play listing and consent-screen publishing (not planned for now), low-end performance pass, beta |
 
 How it's tested: `pnpm turbo run typecheck lint test`, plus Maestro flows in `apps/mobile/.maestro` on the emulator
 (see `docs/DEV-LOOP.md`).

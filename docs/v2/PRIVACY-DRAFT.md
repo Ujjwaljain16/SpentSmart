@@ -62,10 +62,24 @@ A bank statement file you choose is read on your phone and deleted from the app'
 from it is uploaded unless Sync & backup is on, in which case the imported transactions sync encrypted like any
 others.
 
+## 5a. Automatic logging (optional, off by default)
+
+- **Capture payments.** If you turn this on and allow notification access, SpentSmart looks at notifications from
+  UPI apps, bank apps and your SMS app only. Notifications from any other app (chats, email, social) are ignored
+  without being read. From the allowed apps it keeps only messages about a completed payment, and from those only
+  the amount, payee, time, reference and which app it came from. Messages containing a one-time password or other
+  code are dropped before anything is saved. Captured payments stay on your phone, are never synced, and become
+  transactions only when you add them. Turning the setting off discards anything captured but not yet reviewed;
+  you can also revoke notification access in Android's settings at any time.
+- **Log payments from other apps (beta).** If you turn this on, SpentSmart is offered when another app asks you to
+  pay with UPI. It passes the payment request unchanged to your UPI app, where you pay with your PIN as usual, and
+  records the payee, amount and the UPI app's result. SpentSmart never handles money or your UPI PIN.
+
 ## 6. Permissions
 
 | Permission | Why | When |
 |---|---|---|
+| Notification access | Capture payments (§5a) | Only if you turn it on and allow it in Android's settings |
 | Camera | UPI QR codes; receipt photos | Only on the scanner, or when you choose "Take photo" for a receipt |
 | Microphone | Voice entry | Only while you're dictating |
 | Contacts (read) | Fill in a payee name | Only the contact you pick |
@@ -74,7 +88,9 @@ others.
 | Biometrics / screen lock | Optional app lock | Handled by Android |
 | Internet | Sync & backup, Assistant, app updates | Only for those features |
 
-SpentSmart doesn't access your SMS, location, bank accounts or clipboard.
+SpentSmart doesn't have the SMS permission and can't read your message inbox; with Capture payments on, it sees
+only the notifications your SMS app shows for new bank messages, as described in §5a. It doesn't access your
+location, bank accounts or clipboard.
 
 ## 7. Other third parties
 

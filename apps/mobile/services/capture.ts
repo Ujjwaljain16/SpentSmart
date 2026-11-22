@@ -48,6 +48,9 @@ export async function scanReceipt(from: 'camera' | 'gallery'): Promise<{ phrase:
  * Dictation with Android's speech recogniser. Prefers on-device recognition where the phone supports it, so speech
  * doesn't leave the phone; otherwise Android's own service handles it.
  */
+/** Set once on-device recognition has failed for the language, so later taps don't wait for it to fail again. */
+let onDeviceUnavailable = false;
+
 export function useVoiceCapture(onText: (text: string) => void) {
   const [listening, setListening] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,6 +67,7 @@ export function useVoiceCapture(onText: (text: string) => void) {
     // regular recogniser instead of failing.
     if (onDevice.current && e.error !== 'no-speech' && e.error !== 'not-allowed' && e.error !== 'aborted') {
       onDevice.current = false;
+      onDeviceUnavailable = true;
       log.warn('On-device speech failed, retrying with the regular recogniser', e.error);
       ExpoSpeechRecognitionModule.start({ lang: 'en-IN', interimResults: true, continuous: false });
       return;
@@ -90,7 +94,7 @@ export function useVoiceCapture(onText: (text: string) => void) {
       setError('This phone has no speech recogniser.');
       return;
     }
-    onDevice.current = ExpoSpeechRecognitionModule.supportsOnDeviceRecognition();
+    onDevice.current = !onDeviceUnavailable && ExpoSpeechRecognitionModule.supportsOnDeviceRecognition();
     ExpoSpeechRecognitionModule.start({
       lang: 'en-IN',
       interimResults: true,

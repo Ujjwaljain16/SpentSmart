@@ -2,6 +2,24 @@
 
 All notable changes to SpentSmart. Versions follow the app version in `apps/mobile/app.json`.
 
+## 2.2.1 — 2026-11-23
+
+### Added
+- **New icon:** a budget ring around ₹ in the app's teal, as a proper Android adaptive icon with a themed
+  (monochrome) layer. Splash and favicon match.
+- **Intro tour** on first launch: what the app does, in five slides. Replay it from Settings → How SpentSmart works.
+- **Get started checklist** on Home: first expense, UPI payment, budget, tile or widget, backup. Steps tick
+  themselves and the list goes away when done; hide or bring it back from Settings.
+- **"I don't have the key"** on the restore screen: deletes a backup that can't be opened without its recovery key
+  and starts a new one.
+
+### Fixed
+- Assistant: retries when Gemini is overloaded (HTTP 500/503) before showing a clear error.
+- Assistant: answers come faster; each model runs at the least thinking it allows.
+- Assistant: answers render bold, lists and headings instead of showing `**` and `*`.
+- Assistant settings: the "Share payee names and notes" switch flips when tapped, and changing it (or the model)
+  starts the conversation afresh so old hidden results aren't reused.
+
 ## 2.2.0 — 2026-11-23
 
 v2: SpentSmart grows from a UPI payment logger into a full, local-first money app with optional end-to-end

@@ -10,6 +10,12 @@ installs over the previous build as an update.
 - Google sign-in shows the account picker.
 - Installing over USB with `adb install` works when needed.
 
+## New in 2.2.1
+- Launcher shows the new teal ₹ icon (also with themed icons on).
+- Fresh install: the five-slide tour, then name and setup; Home shows the Get started checklist and it ticks itself.
+- Assistant with your Gemini key: answers show bold and lists, no stray `*`; the share switch flips.
+- Sync on an account whose key you lost: Restore → I don't have the key.
+
 ## Payments
 1. Friend's QR → it opens on Google Pay → slide → GPay opens on the payment → PIN → back in SpentSmart, record it.
 2. **Try another UPI app** → PhonePe → "QR saved to gallery" → scan from gallery in PhonePe.

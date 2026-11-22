@@ -114,7 +114,7 @@ The full emulator loop (dev client, local API, Maestro, fake bank SMS) is in [do
 | End to end | Maestro flows in `apps/mobile/.maestro` on the emulator |
 | CI | `.github/workflows/ci.yml`: typecheck, lint, tests, an Android export, and a production-dependency audit |
 
-642 tests pass on `v2/assistant`.
+652 tests pass on `main`.
 
 ## Builds
 

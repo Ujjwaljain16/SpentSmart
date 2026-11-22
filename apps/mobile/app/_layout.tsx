@@ -71,7 +71,8 @@ function RootNavigator() {
             <Stack.Screen name="edit-profile" />
             <Stack.Screen name="privacy-dashboard" />
             <Stack.Screen name="privacy-policy" />
-            <Stack.Screen name="quick-add" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+            {/* One quick add at a time: the widget's Add and Speak buttons open it with different params. */}
+            <Stack.Screen name="quick-add" getId={() => 'quick-add'} options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
             <Stack.Screen name="transfer" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
             <Stack.Screen name="accounts" />
             <Stack.Screen name="account-edit" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />

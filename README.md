@@ -1,179 +1,126 @@
 <p align="center">
-  <img src="assets/images/icon.png" alt="SpentSmart Logo" width="120" height="120" />
+  <img src="apps/mobile/assets/images/icon.png" alt="SpentSmart logo" width="112" height="112" />
 </p>
 
 <h1 align="center">SpentSmart</h1>
-<p align="center"><strong>Privacy-First UPI Expense Tracker for India</strong></p>
-
-<p align="center">
-  <a href="#"><img src="https://img.shields.io/badge/React%20Native-0.81-61DAFB?logo=react" alt="React Native" /></a>
-  <a href="#"><img src="https://img.shields.io/badge/Expo-54-000020?logo=expo" alt="Expo" /></a>
-  <a href="#"><img src="https://img.shields.io/badge/TypeScript-5.3-3178C6?logo=typescript" alt="TypeScript" /></a>
-  <a href="#"><img src="https://img.shields.io/badge/Privacy-First-00C853" alt="Privacy First" /></a>
-</p>
+<p align="center"><strong>A local-first, privacy-first expense tracker for UPI India.</strong><br/>
+Your money data lives in an encrypted database on your phone. The optional cloud backup is end-to-end encrypted:
+the server stores ciphertext it cannot read.</p>
 
 ---
 
-## 📖 What is SpentSmart?
+## What it does
 
-**SpentSmart** is a mobile expense tracking app designed specifically for the Indian UPI ecosystem. Scan any UPI QR code, track your spending, and get insights all while keeping your data **100% local** on your device.
+| | |
+|---|---|
+| **Pay and log in one step** | Scan any UPI QR. Shops are paid through a direct UPI intent with the result read back. Friends' personal UPI IDs are paid by handing Google Pay a QR drawn on the phone (UPI apps refuse intent payments to personal IDs). Every payment is recorded once, idempotently. |
+| **Log without typing** | Quick add understands phrases like `swiggy 340 dinner #office` or `salary 50k yesterday` (99.6% on 255 phrases, 95% on a blind set) and learns your categories. There's also voice, receipt OCR, bank statement import, a Quick Settings tile and a home-screen widget (Add / Speak / Scan & pay). |
+| **Know where you stand** | Safe-to-spend until payday, budgets, goals, accounts and transfers, plus insights: recurring payments, month-end forecast with its reasoning, and anomalies. |
+| **Optional sync and backup** | Google sign-in, XChaCha20-Poly1305 end-to-end encryption, a recovery key only you hold, three-way merge across phones. |
+| **Optional assistant** | Ask "am I within budget?" with **your own Gemini key** (a free one works). The phone calls Google directly; the model calls tools that run **on your phone** and only sees the figures it asked for, never payee names or notes unless you allow them. Changes are proposals you confirm. |
 
-No cloud. No SMS access. No bank linking. Just pure, private expense tracking.
+Everything beyond the core app is **off until you switch it on**. The in-app privacy policy says exactly what each
+feature reads and keeps.
 
----
+## Screenshots
 
-## 🤔 Why SpentSmart?
+Home with safe-to-spend, Activity, Insights with the month-end forecast, Budgets, Quick add, and the assistant's
+own-key screen. Built from this repo (v2.2.0) on Android 16.
 
-Most expense apps in India require invasive permissions:
-- ❌ Reading your SMS for transaction alerts
-- ❌ Linking your bank accounts via Account Aggregators
-- ❌ Uploading your financial data to cloud servers
+<img src="docs/screenshots/light.jpg" alt="SpentSmart in light mode: Home, Activity, Insights, Budgets, Quick add, Assistant" width="100%" />
+<img src="docs/screenshots/dark.jpg" alt="SpentSmart in dark mode: Home, Activity, Insights, Budgets, Quick add, Assistant" width="100%" />
 
-**SpentSmart takes a different approach:**
+## Architecture at a glance
 
-| Feature | SpentSmart | Other Apps |
-|---------|------------|------------|
-| Data Storage | 📱 100% Local | ☁️ Cloud |
-| SMS Access | ❌ Not Required | ✅ Required |
-| Bank Linking | ❌ Never | ✅ Often Required |
-| Works Offline | ✅ Yes | ❌ Usually No |
-| Open Source | ✅ Yes | ❌ Rarely |
+```mermaid
+flowchart LR
+  subgraph Phone["Android phone (Expo / React Native)"]
+    UI["Screens<br/>expo-router"] --> Repos["Repositories<br/>(only code that touches SQL)"]
+    Repos --> DB[("SQLite + SQLCipher<br/>AES-256, key in Keystore")]
+    DB -- triggers --> Outbox["sync_outbox"]
+    Native["Kotlin module<br/>UPI intents · native QR · tile · widget"] --> UI
+    Fin["@spentsmart/finance<br/>pure logic"] -.-> UI
+  end
+  Outbox -- "encrypt (sync-core)" --> API["Fastify API<br/>Render, Singapore"]
+  API --> PG[("Postgres (Neon)<br/>ciphertext only + RLS")]
+  UI -- "assistant turn" --> API --> Claude["Anthropic API"]
+```
 
----
+A monorepo with one rule that matters most: **business logic is pure TypeScript in `packages/`, shared by the app
+and the server and tested without a device.**
 
-## ✨ Features
+```
+apps/
+  mobile/            Android app: Expo SDK 54, React Native 0.81, expo-router 6, Hermes
+    app/             screens (thin: read with hooks, write through repositories)
+    db/              driver, migrations (v1–v4), repositories, SQLCipher key handling
+    services/        side effects: payments, cloud sync, export, voice/OCR
+    modules/upi-intent/  Kotlin Expo module: UPI intents, ZXing QR, Quick Settings tile, home widget, Save-as
+    plugins/         Expo config plugins (cleartext for the local API, ML Kit model)
+    .maestro/        end-to-end flows for the emulator
+  api/               Fastify + Postgres sync server and assistant proxy (see apps/api/README.md)
+packages/
+  finance/           money (integer paise), UPI parse/build/response, periods, reports, quick add, insights,
+                     statement/receipt import
+  sync-core/         XChaCha20-Poly1305 + HKDF key wrapping, sync contracts, three-way record merge
+  assistant/         tool definitions, the tool loop, amount traceability check, 50-question eval set
+```
 
-### 🔒 Security & Privacy
-- **Biometric Lock** — FaceID/Fingerprint to unlock the app
-- **Privacy Mode** — Blur amounts with one tap
-- **Privacy Dashboard** — See exactly what data is stored
-- **Zero Cloud** — All data stays on your phone
+Deeper reading:
 
-### 📸 Smart Expense Tracking
-- **QR Scanner** — Scan any UPI QR code to log payments instantly
-- **Manual Entry** — Quick entry with contact picker integration
-- **Categories** — Auto-categorize or customize your own
-- **Edit & Delete** — Full control over your transaction history
+| Doc | What's in it |
+|---|---|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Layers, data model, encryption, sync engine, security model |
+| [docs/UPI-INTEGRATION.md](docs/UPI-INTEGRATION.md) | What UPI apps accept from another app, field-test results, the payment routes |
+| [docs/adr/0001-end-to-end-encrypted-sync.md](docs/adr/0001-end-to-end-encrypted-sync.md) | Why and how sync is end-to-end encrypted |
+| [docs/DEV-LOOP.md](docs/DEV-LOOP.md) | Emulator, dev client, Metro, local API, Maestro |
+| [docs/RELEASING.md](docs/RELEASING.md) | EAS profiles, and building a signed release APK locally |
+| [apps/api/README.md](apps/api/README.md) | Server: endpoints, environment, Render + Neon deploy |
+| [PRIVACY.md](PRIVACY.md) | The privacy policy (same text as Settings → Privacy policy) |
+| [docs/v2/PLAN.md](docs/v2/PLAN.md) | v2 roadmap and phase status |
 
-### 📊 Insights & Analytics
-- **Daily/Weekly/Monthly** trends
-- **Category breakdown** with visual charts
-- **Budget tracking** with progress bars
-- **Spending patterns** to spot habits
+## Privacy, concretely
 
-### ⚡ User Experience
-- **Dark/Light Mode** — Automatic theme switching
-- **OTA Updates** — Get new features without app store updates
-- **Crash Protection** — Global error boundary for stability
-- **Optimized Lists** — Smooth scrolling even with 1000+ transactions
+- **On the phone:** SQLCipher (AES-256) with a random key in the Android Keystore. Android Auto Backup is off.
+- **No analytics, no ads, no trackers.** Diagnostics stay on the phone (last 20 crashes, with amounts, UPI IDs and emails redacted).
+- **Sync:** the server sees your Google account ID, email, device names and record counts and sizes. It never sees amounts, payees, notes, categories or dates.
+- **Permissions are trimmed:** photo picker only, contact *writing* blocked, draw-over-apps blocked. No SMS or notification-access permission.
 
----
+## Quick start
 
-## Demo
-
-| Home | History | Confirmation Modal |
-|:---:|:---:|:---:|
-| <img src="assets/demo/demo-4.jpeg" width="200" /> | <img src="assets/demo/demo-2.jpeg" width="200" /> | <img src="assets/demo/demo-3.jpeg" width="200" /> |
-
-| Analytics | Payment + Expense Logger | Settings |
-|:---:|:---:|:---:|
-| <img src="assets/demo/demo-1.jpeg" width="200" /> | <img src="assets/demo/demo-5.jpeg" width="200" /> | <img src="assets/demo/demo-6.jpeg" width="200" /> |
-
-| Manual Entry | Category Management | Instant QR Recieve and Logging|
-|:---:|:---:|:---:|
-| <img src="assets/demo/demo7.jpeg" width="200" /> | <img src="assets/demo/demo8.jpeg" width="200" /> | <img src="assets/demo/demo9.jpeg" width="200" /> |
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-- Node.js >= 18
-- npm or pnpm
-
-### Installation
+Needs Node 22, pnpm 10, JDK 17 and the Android SDK. The app uses native modules and SQLCipher, so it **doesn't run
+in Expo Go**; use a development build.
 
 ```bash
-# Clone the repository
-git clone https://github.com/Ujjwaljain16/SpentSmart.git
-cd SpentSmart
+pnpm install
+pnpm check                                   # typecheck + lint + tests in every package (what CI runs)
 
-# Install dependencies
-npm install
+# the app, on an emulator or phone
+cd apps/mobile && npx expo run:android       # builds and installs a development build, starts Metro
 
-# Start development server
-npx expo start
+# the sync server with an in-process Postgres (PGlite), test sign-in and a fake assistant model
+pnpm --filter @spentsmart/api dev:local      # http://127.0.0.1:3000
 ```
 
-### Building for Production
+The full emulator loop (dev client, local API, Maestro, fake bank SMS) is in [docs/DEV-LOOP.md](docs/DEV-LOOP.md).
 
-```bash
-# Configure EAS (one-time)
-eas build:configure
+## Testing
 
-# Build Android APK
-eas build --platform android --profile preview
+| Layer | How |
+|---|---|
+| Pure logic | Vitest in `packages/*`: money, UPI, periods, insights, quick add, crypto, merge, assistant tools |
+| App data layer | Vitest against Node's SQLite with the real migrations and repositories (`apps/mobile/db/*.test.ts`) |
+| Server | Vitest against PGlite: auth, keys, push/pull, cross-user isolation, account deletion |
+| End to end | Maestro flows in `apps/mobile/.maestro` on the emulator |
+| CI | `.github/workflows/ci.yml`: typecheck, lint, tests, an Android export, and a production-dependency audit |
 
-# Push OTA update (no build needed)
-eas update --branch preview --message "Your update message"
-```
+642 tests pass on `v2/assistant`.
 
----
+## Builds
 
-## 🏗️ Architecture
+`eas build -p android --profile preview` makes an installable APK that points at the live server. When the
+EAS quota runs out, the same signed APK can be built locally; see [docs/RELEASING.md](docs/RELEASING.md).
 
-```
-upi-tracker-react-native/
-├── app/                    # Screens (Expo Router file-based routing)
-│   ├── (tabs)/             # Tab navigation screens
-│   ├── onboarding/         # First-time user flow
-│   └── *.tsx               # Individual screens
-├── components/             # Reusable UI components
-│   ├── home/               # Home screen components
-│   ├── payment/            # Payment flow components
-│   └── ui/                 # Generic UI elements
-├── services/               # Business logic layer
-│   ├── storage.ts          # Transaction CRUD operations
-│   ├── analytics.ts        # Insights calculations
-│   └── upi-app-launcher.ts # UPI intent handling
-├── contexts/               # React Context providers
-│   └── security-context.tsx
-├── hooks/                  # Custom React hooks
-├── constants/              # Theme, categories, UPI config
-└── types/                  # TypeScript interfaces
-```
+## License
 
-### Key Principles
-- **Separation of Concerns**: Services handle data, contexts handle state, components handle UI
-- **Privacy by Design**: No network calls for user data
-- **Offline First**: Works without internet
-- **Type Safety**: Full TypeScript coverage
-
----
-
-## 🛡️ Permissions
-
-SpentSmart requires minimal permissions:
-
-| Permission | Purpose | When Asked |
-|------------|---------|------------|
-| Camera | Scan UPI QR codes | When you open Scanner |
-| Biometrics | Secure app access | When you enable App Lock |
-| Contacts | Pick payees for manual entry | When you tap "Pick Contact" |
-
-**What we DON'T access:** SMS, Location, Storage, Internet (for user data)
-
----
-
-## 📄 Privacy Policy
-
-See [PRIVACY.md](PRIVACY.md) for our complete privacy policy.
-
-**TL;DR**: Your data never leaves your device. We can't see it, we don't want it, we don't collect it.
-
----
-
-<p align="center">
-  <strong>Made with ❤️ for privacy-conscious Indians</strong><br/>
-  <sub>Your money. Your data. Your control.</sub>
-</p>
+MIT, see [LICENSE](LICENSE).

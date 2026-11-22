@@ -1,13 +1,12 @@
 # JavaScript/Node
 node_modules/
 .npm
-/dist
-/web-build
+dist/
+web-build/
 yarn.lock
-pnpm-lock.yaml
 *.bak
 *.lock
-!package-lock.json
+!pnpm-lock.yaml
 
 # Expo
 .expo/
@@ -15,8 +14,8 @@ expo-env.d.ts
 prebuild_error.log
 
 # Native
-/android
-/ios
+apps/mobile/android/
+apps/mobile/ios/
 *.jks
 *.p8
 *.p12
@@ -36,8 +35,9 @@ prebuild_error.log
 .env.local
 .env.*.local
 
-# TypeScript
+# TypeScript / tests
 *.tsbuildinfo
+coverage/
 
 # IDE/Editors
 .vscode/
@@ -59,3 +59,12 @@ Desktop.ini
 
 # App-specific
 app-example/
+# Native module build output
+apps/mobile/modules/*/android/build/
+
+# Turborepo
+.turbo/
+
+# Local API test database
+apps/api/.local-data/
+.neon

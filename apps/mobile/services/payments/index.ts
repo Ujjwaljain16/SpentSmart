@@ -1,0 +1,233 @@
+import { Linking } from 'react-native';
+import { GPAY_PACKAGE, KNOWN_UPI_APPS, knownAppByPackage } from '@/constants/upi-apps';
+import { Repositories } from '@/db/repositories';
+import { PaymentAttempt } from '@/db/repositories/attempts';
+import { PaymentDraft } from '@spentsmart/finance/payment-draft';
+import { Paise } from '@spentsmart/finance/money';
+import { buildPayUri, buildPayUriWithoutAmount, generateTxnRef } from '@spentsmart/finance/upi/build';
+import { suggestionFor, UpiResponse } from '@spentsmart/finance/upi/response';
+import { cancelExternalTrip, expectExternalTrip } from '@/lib/external-trip';
+import { log } from '@/lib/logger';
+import { InstalledUpiApp, loadUpiIntent } from '@/modules/upi-intent';
+import { saveQrToGallery } from '../qr-gallery';
+import { LaunchOutcome, launchPayment, sortApps } from './launcher';
+
+const native = loadUpiIntent();
+
+export const hasNativeUpi = native !== null;
+
+export interface UpiAppChoice {
+  packageName: string;
+  name: string;
+}
+
+/**
+ * UPI apps installed on this device. Uses the native query when available; otherwise probes the well-known
+ * apps' custom schemes (less reliable, and only a hint).
+ */
+export async function listUpiApps(): Promise<UpiAppChoice[]> {
+  if (native) {
+    try {
+      const apps: InstalledUpiApp[] = await native.getUpiApps();
+      return sortApps(apps, KNOWN_UPI_APPS.map((a) => a.packageName)).map((a) => ({
+        packageName: a.packageName,
+        name: knownAppByPackage(a.packageName)?.name ?? a.name,
+      }));
+    } catch (error) {
+      log.warn('Native UPI app discovery failed', error);
+    }
+  }
+  const found: UpiAppChoice[] = [];
+  for (const app of KNOWN_UPI_APPS) {
+    try {
+      if (await Linking.canOpenURL(app.scheme)) found.push({ packageName: app.packageName, name: app.name });
+    } catch {
+      /* skip */
+    }
+  }
+  return found;
+}
+
+export interface BeginPaymentInput {
+  draft: PaymentDraft;
+  amountPaise: Paise | undefined;
+  note: string | undefined;
+  categoryKey: string;
+  appPackage: string | null;
+  /** Retry mode for UPI apps that decline P2P intents carrying an amount. */
+  withoutAmount?: boolean;
+}
+
+export interface BeginPaymentResult {
+  attempt: PaymentAttempt;
+  launch: LaunchOutcome;
+  /** The UPI app's answer, when it gave one. */
+  response: UpiResponse | null;
+}
+
+/**
+ * Start a payment:
+ *   1. persist the attempt (so it survives the app being killed while the UPI app is in front),
+ *   2. launch the UPI app for a result,
+ *   3. store what came back and the suggestion derived from it.
+ * Nothing is recorded as an expense here; recording needs the user's confirmation (see `AttemptReview`).
+ */
+export async function beginPayment(repos: Repositories, input: BeginPaymentInput): Promise<BeginPaymentResult> {
+  const { draft, amountPaise, note, categoryKey, appPackage, withoutAmount } = input;
+
+  const txnRef = draft.source?.params.tr ?? generateTxnRef(Date.now());
+  const attempt = await repos.attempts.create({
+    vpa: draft.vpa,
+    payeeName: draft.payeeName,
+    amountPaise: amountPaise ?? null,
+    note: note ?? null,
+    categoryKey,
+    appPackage,
+    txnRef,
+  });
+
+  const uriInput = { vpa: draft.vpa, payeeName: draft.payeeName, amountPaise, note, txnRef, source: draft.source };
+  const uri = withoutAmount ? buildPayUriWithoutAmount(uriInput) : buildPayUri(uriInput);
+
+  expectExternalTrip();
+  const launch = await launchPayment(
+    { native, openUrl: (url) => Linking.openURL(url) },
+    uri,
+    appPackage,
+  );
+
+  if (launch.kind === 'result') {
+    await repos.attempts.markReturned(attempt.id, {
+      suggestion: suggestionFor(launch.response.outcome),
+      response: launch.response.raw ?? null,
+    });
+    return { attempt: (await repos.attempts.get(attempt.id)) ?? attempt, launch, response: launch.response };
+  }
+
+  if (launch.kind === 'no_app' || launch.kind === 'error') {
+    cancelExternalTrip();
+    // Nothing was launched: do not leave a phantom "awaiting confirmation" payment behind.
+    await repos.attempts.discard(attempt.id);
+    return { attempt: { ...attempt, status: 'discarded' }, launch, response: null };
+  }
+
+  return { attempt, launch, response: null };
+}
+
+export interface BeginQrGalleryInput {
+  draft: PaymentDraft;
+  amountPaise: Paise | undefined;
+  note: string | undefined;
+  categoryKey: string;
+  appPackage: string | null;
+  /** Draw the QR for the payment and return its PNG (base64), or null if it could not be drawn. */
+  renderQr: () => Promise<string | null>;
+}
+
+export type QrGalleryOutcome =
+  | { kind: 'ready'; attempt: PaymentAttempt }
+  | { kind: 'permission_denied' }
+  | { kind: 'failed' };
+
+/**
+ * Pay via "scan from gallery": save the payee's QR to the gallery, then the user imports it in their UPI app.
+ * This is the route UPI apps accept for personal UPI IDs (they block payments *started by another app* for
+ * those), because to the UPI app it is an ordinary QR scan. The attempt is persisted first and discarded again
+ * if the QR could not be saved, so nothing phantom is left behind.
+ */
+export async function beginQrGalleryPayment(repos: Repositories, input: BeginQrGalleryInput): Promise<QrGalleryOutcome> {
+  const attempt = await repos.attempts.create({
+    vpa: input.draft.vpa,
+    payeeName: input.draft.payeeName,
+    amountPaise: input.amountPaise ?? null,
+    note: input.note ?? null,
+    categoryKey: input.categoryKey,
+    appPackage: input.appPackage,
+    txnRef: null,
+  });
+  const png = await input.renderQr();
+  const saved = png ? await saveQrToGallery(png) : 'error';
+  if (saved === 'saved') return { kind: 'ready', attempt };
+  await repos.attempts.discard(attempt.id);
+  return saved === 'denied' ? { kind: 'permission_denied' } : { kind: 'failed' };
+}
+
+/** Draw the payment QR natively in the background so the pay tap only has to hand it over. */
+export function prepareQr(upiUri: string): void {
+  native?.prepareQr(upiUri).catch(() => undefined);
+}
+
+/** The QR as base64 PNG drawn natively, or null when the native module is missing or fails. */
+export async function nativeQrPng(upiUri: string): Promise<string | null> {
+  if (!native) return null;
+  try {
+    return await native.qrPng(upiUri);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Apps that read a shared image as a QR to pay. Accepting images isn't enough: PhonePe, for one, takes a shared
+ * image as a picture to send to a contact. Add an app here only after paying through it on a real phone.
+ */
+const QR_SHARE_APPS: readonly string[] = [GPAY_PACKAGE];
+
+/** Which of these UPI apps can take the QR in one tap (installed, known to read it, and accepting the share). */
+export async function qrShareTargets(packageNames: string[]): Promise<Set<string>> {
+  const candidates = packageNames.filter((p) => QR_SHARE_APPS.includes(p));
+  if (!native || candidates.length === 0) return new Set();
+  try {
+    return new Set(await native.qrShareTargets(candidates));
+  } catch {
+    return new Set();
+  }
+}
+
+export interface BeginQrShareInput extends Omit<BeginQrGalleryInput, 'renderQr' | 'appPackage'> {
+  appPackage: string;
+  upiUri: string;
+}
+
+/**
+ * Send the payee's QR image straight to a UPI app (ACTION_SEND), which reads it like a scanned code: one tap,
+ * no gallery step. The QR must be a plain personal-payment QR (pa, pn, am, cu, tn). Adding a transaction
+ * reference (`tr`) makes UPI apps treat it as a shop payment and refuse it for personal UPI IDs.
+ * The attempt row and the share run together so the database write doesn't delay opening the app.
+ */
+export async function beginQrShare(repos: Repositories, input: BeginQrShareInput): Promise<QrGalleryOutcome> {
+  const share = native
+    ? native.shareQr(input.appPackage, input.upiUri).catch((error: unknown) => {
+        log.warn('QR share to UPI app failed', error);
+        return false;
+      })
+    : Promise.resolve(false);
+  const [attempt, shared] = await Promise.all([
+    repos.attempts.create({
+      vpa: input.draft.vpa,
+      payeeName: input.draft.payeeName,
+      amountPaise: input.amountPaise ?? null,
+      note: input.note ?? null,
+      categoryKey: input.categoryKey,
+      appPackage: input.appPackage,
+      txnRef: null,
+    }),
+    share,
+  ]);
+  if (shared) return { kind: 'ready', attempt };
+  await repos.attempts.discard(attempt.id);
+  return { kind: 'failed' };
+}
+
+export async function openAppLauncher(packageName: string): Promise<boolean> {
+  if (!native) return false;
+  expectExternalTrip();
+  try {
+    const opened = await native.launchApp(packageName);
+    if (!opened) cancelExternalTrip();
+    return opened;
+  } catch {
+    cancelExternalTrip();
+    return false;
+  }
+}

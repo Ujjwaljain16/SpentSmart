@@ -1,224 +1,163 @@
-# SpentSmart - Technical Architecture Documentation 🛡️
+# Architecture
 
-## 📋 Table of Contents
+SpentSmart is an Android app (Expo SDK 54, React Native 0.81, Hermes) backed by an optional sync server. The
+phone is the source of truth. The server is a mailbox for encrypted records, plus a narrow proxy for the assistant.
 
-1. [Project Overview](#project-overview)
-2. [Technology Stack](#technology-stack)
-3. [Application Architecture](#application-architecture)
-4. [Data Models & Types](#data-models--types)
-5. [Core Services & Business Logic](#core-services--business-logic)
-6. [Native Modules](#native-modules)
-7. [Security & Privacy](#security--privacy)
-8. [Sequence Diagrams](#sequence-diagrams)
-9. [Deployment & Build](#deployment--build)
+## Monorepo
 
-## 🎯 Project Overview
+pnpm workspaces + Turborepo. `pnpm check` runs `typecheck`, `lint` and `test` in every package, which is what CI runs.
 
-**SpentSmart** is a privacy-first, offline financial tracker designed for the Indian UPI ecosystem. Unlike traditional trackers that scrape SMS or bank data, SpentSmart uses a "Scan & Verify" model where users scan UPI QR codes, confirming payments via a native intent flow, and verify them later via a "Smart Pending" system.
+| Package | Runs on | Responsibility |
+|---|---|---|
+| `packages/finance` | phone + server | Money as integer paise, UPI URI parse/build/response, periods, reports, safe-to-spend, quick-add parser, insights detectors, statement/receipt/export parsing. No I/O. |
+| `packages/sync-core` | phone + server | Envelope encryption (XChaCha20-Poly1305, HKDF), sync wire contracts (zod), three-way record merge. |
+| `packages/assistant` | phone + server | Tool definitions and their implementations over the ledger, the tool loop, the amount-traceability check, evals. |
+| `apps/mobile` | phone | Screens, SQLite data layer, native module, side-effecting services. |
+| `apps/api` | server | Fastify, Postgres with row-level security, Google sign-in, sync endpoints, assistant proxy. |
 
-### Core Philosophy
-- **Zero Knowledge**: We don't know who you are. No servers, no accounts.
-- **Local First**: All data lives in `AsyncStorage` on the device.
-- **Native Performance**: Custom native modules for seamless UPI integration.
-
-## 🛠️ Technology Stack
-
-### Core Framework
-- **React Native 0.81.5** (New Architecture Enabled)
-- **Expo SDK 54**
-- **TypeScript 5.9**
-
-### Key Dependencies
-- **Navigation**: `expo-router` (File-based routing)
-- **Storage**: `@react-native-async-storage/async-storage`
-- **Security**: `expo-local-authentication` (Biometrics), `expo-crypto` (UUIDs)
-- **Hardware**: `expo-camera` (QR Scanning), `expo-contacts` (Payee selection)
-- **Graphics**: `react-native-svg` (Custom optimized charts)
-- **Animation**: `react-native-reanimated`
-
-### Removed Dependencies
-- `victory-native` / `react-native-skia` (Removed for bundle size optimization)
-- `react-native-chart-kit` (Replaced by custom lightweight SVG components)
-
-## 🏗️ Application Architecture
-
-### High-Level Architecture
-
-```mermaid
-graph TD
-    User -->|Biometrics| SecurityLayer
-    SecurityLayer -->|Authenticated| AppLayer
-
-    %% UI Layer
-    subgraph UILayer["UI Layer"]
-        HomeScreen
-        ScannerScreen
-        PaymentModules
-        AnalyticsDashboard
-    end
-
-    %% Service Layer
-    subgraph ServiceLayer["Service Layer"]
-        Storage
-        Auth
-        UPI
-        Stats
-    end
-
-    %% Data Layer
-    subgraph DataLayer["Data Layer"]
-        AsyncStore["AsyncStorage (JSON)"]
-        SecureStore["SecureStore (Keys)"]
-    end
-
-    %% Connections
-    AppLayer --> HomeScreen
-    AppLayer --> ScannerScreen
-    AppLayer --> PaymentModules
-    AppLayer --> AnalyticsDashboard
-
-    HomeScreen --> Storage
-    ScannerScreen --> Auth
-    PaymentModules --> UPI
-    AnalyticsDashboard --> Stats
-
-    Storage --> AsyncStore
-    Auth --> SecureStore
+## The app
 
 ```
-
-## 📊 Data Models & Types
-
-### Transaction Entity
-```typescript
-interface Transaction {
-  id: string;              // UUID
-  amount: number;          // Stored as float
-  type: 'debit' | 'credit';
-  category: CategoryKey;   // e.g., 'food', 'travel'
-  payeeName: string;       // Verified from UPI / Contact
-  payeeVpa?: string;       // Encrypted VPA
-  timestamp: number;
-  status: 'pending' | 'completed' | 'failed'; // Payment lifecycle
-  note?: string;
-  isManual: boolean;       // True if manually entered
-}
+app/                 screens (expo-router). Read via hooks, write via repositories, never SQL
+components/          UI pieces; no storage access
+contexts/            Database, Settings, Theme, Security, Categories, Cloud providers
+hooks/               useLiveQuery, paged lists, theme colours
+services/            payments, cloud (api client, sync, google), export, capture (voice/OCR), reminders
+db/                  driver, migrations, repositories, SQLCipher key
+modules/upi-intent/  Kotlin Expo module (see below)
+lib/                 redacting logger, crash log, routes, amount input, external-trip guard
 ```
 
-### Security State
-```typescript
-interface SecurityState {
-  isLocked: boolean;       // Global app lock state
-  privacyMode: boolean;    // Content masking (Blur amounts)
-  biometricsEnabled: boolean;
-}
-```
+**Rules that hold the design together**
 
-## 🔧 Core Services & Business Logic
+1. **Logic is pure and lives in `packages/`.** Screens format and orchestrate; they don't compute money.
+2. **Only `db/` touches SQL.** Repositories take a `SqlDriver`, so identical code runs on the phone (expo-sqlite +
+   SQLCipher) and in tests (Node's built-in SQLite).
+3. **No `console.*`** (lint-enforced). `lib/logger` redacts UPI IDs, ₹/Rs/INR amounts and emails, and keeps a small
+   in-memory ring buffer. `lib/crash-log` keeps the last 20 crashes, redacted the same way, shown in Settings → Diagnostics.
+4. **Anything from outside is untrusted:** deep links and scanned QRs.
+   Each passes a strict parser before it can become even a draft.
 
-### 1. Security Context (`contexts/security-context.tsx`)
-**Role**: The "Gatekeeper" of the app.
-- Manages biometric authentication via `expo-local-authentication`.
-- Controls `privacyMode`: When active, all currency components blur their content.
-- Auto-locks app when put in background (AppState monitoring).
+## Data
 
-### 2. Automation Hybrid Stack (The Core)
-**Role**: Ensuring 100% Transaction Coverage.
+- **Money is integer paise** end to end. `parseRupees` rejects negatives, exponents, more than 2 decimals and
+  values above the limit; the database `CHECK`s the same.
+- **Schema** (`db/migrations.ts`, versioned by `PRAGMA user_version`, each migration atomic with its version bump):
 
-#### Layer 1: Native Intent Module (Active)
-- **Module**: `modules/upi-intent` (Native Kotlin)
-- **Function**: Bridges the gap between JS and Android Intents.
-- **Capabilities**: Launches specific UPI apps directly, bypassing the system chooser for a faster UX.
+  | Version | Adds |
+  |---|---|
+  | 1 | `transactions`, `categories`, `payment_attempts`, `settings` |
+  | 2 | Ledger v2: `accounts`, transfers, `transaction_tags`, `transaction_revisions` (edit history), `budgets`, `goals` |
+  | 3 | Sync bookkeeping: `sync_meta`, `sync_records` (merge bases), `sync_outbox`, `sync_conflicts`, and triggers on every synced table |
+  | 4 | `captured_payments` for automatic logging, a feature since removed |
+  | 5 | Drops `captured_payments` (version 4 stays so phones that ran it still open) |
 
-#### Layer 2: Intent Monitor (The Watcher)
-- **Module**: `services/intent-monitor.ts`
-- **Function**: Generates tracked UPI links (`tr` param) -> Listens for app returns.
-- **Result**: Attempts to auto-confirm if the payment app sends back a success callback.
+- **Encryption at rest:** SQLCipher with a 256-bit random key created on first launch and kept in the Android
+  Keystore (`expo-secure-store`). A database that can't be opened is never overwritten; the user gets a recovery
+  screen with an explicit erase.
+- **One connection, serialised.** All calls go through `createSerializedDriver`; transactions are
+  `BEGIN IMMEDIATE … COMMIT`. (expo-sqlite's "exclusive" transactions open a second connection that wouldn't have the key.)
+- **Bulk writes** (statement import, restore) insert 50 rows per statement inside one transaction: all or nothing.
+- **Reads scale:** history is keyset-paginated, analytics are `GROUP BY` queries, and Insights reuses its result
+  until the data version or the day changes.
+- **Live UI:** repositories call `notify()` after writes; `useLiveQuery` re-runs on focused screens. No polling.
 
-#### Layer 3: Smart Pending Verification (The Safety Net)
-- **Module**: `services/pending-manager.ts`
-- **Function**: detailed heuristic analysis.
-- **Logic**:
-    1.  Records intent to pay *before* app launch.
-    2.  Detects app return via `AppState`.
-    3.  Presents a non-intrusive "Did this go through?" modal.
-    4.  Allows one-tap confirmation or modification.
+## Sync (optional)
 
-### 4. Custom Charting (`components/home/InsightsGrid.tsx`)
-**Role**: High-performance visualization.
-- Built using raw `react-native-svg` paths.
-- **Optimization**: Calculates SVG paths on the JS thread using `react-native-worklets` functionality (via Reanimated) to prevent UI thread blocking.
-- **Features**: Interactive touch handling without heavy libraries.
-
-## 📱 Sequence Diagrams
-
-### 1. The "Scan & Pay" Flow with Verification
+Full design: [ADR 0001](adr/0001-end-to-end-encrypted-sync.md). In short:
 
 ```mermaid
 sequenceDiagram
-    participant User
-    participant App
-    participant PendingMgr
-    participant NativeModule
-    participant UPI_App
-    participant Storage
-
-    User->>App: Scans QR Code
-    App->>App: Parse `pa`, `pn`, `am`
-    App->>PendingMgr: Register Pending Intent
-    User->>NativeModule: Confirm & Pay
-    NativeModule->>UPI_App: Launch Android Intent
-    Note over User, UPI_App: User completes payment externally
-    UPI_App->>User: Returns to App (AppState: Active)
-    App->>PendingMgr: Check for Pending Intents
-    PendingMgr->>User: Show "Did this go through?" Modal
-    User->>Storage: Confirm -> Save Transaction
+  participant App as Phone
+  participant API as API
+  participant PG as Postgres
+  App->>App: write → trigger marks sync_outbox
+  App->>App: encrypt record (XChaCha20-Poly1305, per-record nonce)
+  App->>API: POST /v1/sync/push {opId, baseVersion, ciphertext}
+  API->>PG: compare-and-set on version (RLS: SET LOCAL app.user_id)
+  API-->>App: accepted / conflict
+  App->>API: GET /v1/sync/pull?cursor=
+  API-->>App: changes after cursor
+  App->>App: decrypt, three-way merge per field (base = sync_records), conflicts → sync_conflicts
 ```
 
-### 2. Privacy Mode Toggle
+- **Keys:** a random data key encrypts records. It's wrapped with a key derived (HKDF) from the user's
+  recovery key and stored on the server, so a new phone can restore with Google sign-in + recovery key.
+- **Idempotency:** every push op has an `opId`, and a retried push is applied once (`applied_ops`).
+- **Loop prevention:** while applying remote changes, `sync_meta.applying = '1'` stops the triggers from re-queueing them.
+- **Background:** `expo-background-task` runs a sync pass periodically.
+- **Server isolation:** every table has row-level security, and requests run as the `spentsmart_app` role with
+  `SET LOCAL app.user_id`, so a query bug can't cross users.
 
-```mermaid
-sequenceDiagram
-    participant User
-    participant Context
-    participant Storage
-    participant UI
+## Payments
 
-    User->>Context: Toggle Privacy Mode
-    Context->>Storage: Persist Preference
-    Context->>UI: Emit State Change
-    UI->>UI: Re-render with `filter: blur(8px)`
-```
+See [UPI-INTEGRATION.md](UPI-INTEGRATION.md). The routes, in order of preference:
 
-## 🔒 Security & Privacy
+| Payee | Route | Result back? |
+|---|---|---|
+| Shop (merchant QR) | `startActivityForResult` with the scanned URI, byte-for-byte | Yes (hint, confirmed by the user) |
+| Person, Google Pay installed | QR drawn natively (ZXing, error correction L) and shared to Google Pay | No; the user confirms on return |
+| Person, other UPI apps | Same QR saved to the gallery; "scan from gallery" in that app | No; the user confirms on return |
 
-### Privacy Mode
-Built directly into the core `ThemedText` component. If `isPrivacyMode` is true and type is `currency`, the text component applies a masking layer.
+Attempts are persisted before launch (`payment_attempts`), so a killed app still asks on return, and recording is
+idempotent per attempt.
 
-### Biometric Lock
-Uses `LocalAuthentication.authenticateAsync()`.
-- **Fallbacks**: Device PIN/Pattern if biometrics fail.
-- **Trigger**: App launch and returning from background (if enabled).
+## Native module (`modules/upi-intent`)
 
-### Android Permissions
-- `android.permission.CAMERA`: For QR scanning.
-- `android.permission.USE_BIOMETRIC`: For app lock.
-- `android.permission.READ_CONTACTS`: For manual entry (Contact Picker).
-- **REMOVED**: `READ_SMS`, `ACCESS_FINE_LOCATION` (We strictly do NOT use these).
+| Piece | Purpose |
+|---|---|
+| `UpiIntentModule` | UPI app discovery, `payWithUpi` (for result), `shareQr`/`prepareQr`/`qrPng` (ZXing), "Save as" for text files, navigation-bar appearance |
+| `QuickAddTileService`, `QuickAddWidget` | Quick Settings tile and home-screen widget, both opening deep links |
 
-## 📦 Deployment & Build
+The module's `FileProvider` exposes only `cache/qr_share/`, which holds short-lived QR images; files older than an
+hour are deleted whenever a new one is written.
 
-### EAS Configuration (`eas.json`)
-- **Development**: Debug builds for simulator/device testing.
-- **Preview**: Optimized APK (Production logic, local install).
-- **Production**: AAB bundles for Play Store submission.
+## Assistant (optional)
 
-### Environment
-- **Project ID**: `spentsmart` (slug matching `app.json`)
-- **Package Name**: `com.ujjwaljain.spentsmart`
+Two engines share the same tools, traceability check and proposals.
 
----
+**Your own Gemini key (default).** `packages/assistant/src/gemini.ts` runs the tool loop on the phone and calls
+`generativelanguage.googleapis.com` directly with the key from the Keystore (`x-goog-api-key` header). No
+SpentSmart server is involved. Tool definitions are converted to Gemini function declarations (unsupported
+JSON-Schema keywords dropped); model turns go back verbatim so thought signatures stay valid. Because free-tier
+prompts may be used by Google and reviewed by people, `privacy.ts` replaces payee names and notes in tool results
+with "(hidden)" unless the user allows them; proposals (which echo what the user typed) go back unchanged. Errors map
+to clear messages (bad key, quota, unavailable model, blocked). `pnpm --filter @spentsmart/assistant eval:gemini`
+runs the 50-question eval against a real key, paced for free-tier limits.
 
-**Author**: Ujjwal Jain
-**Last Updated**: Feb 2026
-**Version**: 2.0.1 (Production Release)
+**Through a SpentSmart account (Claude).** Used when no Gemini key is saved and the server has the assistant on:
+
+- The server builds the whole request: fixed model, system prompt, tool list, effort and fallbacks. Clients send
+  only the conversation, so the endpoint can't be used as a general model proxy.
+- Tools (`get_summary`, `compare_periods`, `search_transactions`, `budget_status`, `goals_status`,
+  `upcoming_recurring`, `can_i_afford`, `create_transaction`, `create_goal`) **run on the phone** against the
+  local ledger; only their results go back to the model.
+- A traceability check verifies every amount in an answer came from a tool result. Mutating tools return proposals
+  the user must confirm.
+- Per-user rate limit: 30 turns a minute. The route only exists when the server has `ASSISTANT_MODE` set.
+
+## Security model
+
+- **App lock** (biometric or device credential). Enabling or disabling it needs authentication, the app starts
+  locked, the timeout is configurable, and screenshots and the recents thumbnail are blocked while it's on. If the
+  device loses its screen lock, the app lock turns off instead of locking the user out.
+- **Privacy mode** masks every amount through one `Money` component.
+- **Deep links** can open screens with validated drafts but can never create a transaction.
+- **Permissions:** `WRITE_CONTACTS` and `SYSTEM_ALERT_WINDOW` are explicitly removed; media access is photo-picker only.
+- **Exports** (CSV/PDF) are written to cache, shared, then deleted. HTML is escaped and CSV formula injection is neutralised.
+- **Server:** Google ID tokens verified against the web client ID; access tokens last 15 minutes; refresh tokens
+  rotate, and reusing an old one revokes the whole chain. Rate limits: 300 requests a minute overall, 20 a minute
+  on sign-in routes. The server refuses to start in production with test sign-in enabled.
+
+## Known limits
+
+- The UPI app's answer is a hint, not proof; there's no payment-aggregator server to confirm against.
+- OTA update code signing isn't configured.
+
+## Removed: automatic logging
+
+A notification listener, an SMS receiver and a `upi://pay` proxy were built, tested end to end on the emulator,
+and removed after a phone test (22 Nov 2026). Google Pay posts no notification for payments made inside it, many
+accounts get no bank SMS, Android 15+ can hide SMS text from listeners, Play Protect blocks installing apps that
+declare a listener from a download, and checkouts only list their own set of UPI apps. The code is in git history
+(`f7139d7` onwards) if the idea is revisited.

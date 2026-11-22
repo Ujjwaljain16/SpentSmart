@@ -1,0 +1,51 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <queries>
+        <!-- Generic UPI detection -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="upi" />
+        </intent>
+
+        <!-- Explicit package visibility for common Indian UPI apps -->
+        <!-- This is the most reliable way to fix "App not installed" errors on Android 11+ -->
+        <package android:name="com.phonepe.app" />
+        <package android:name="com.google.android.apps.nbu.paisa.user" />
+        <package android:name="net.one97.paytm" />
+        <package android:name="com.naviapp" />
+        <package android:name="in.org.npci.upiapp" /> <!-- BHIM -->
+        <package android:name="com.dreamplug.androidapp" /> <!-- CRED -->
+        <package android:name="money.jupiter" />
+        <package android:name="indwin.c3.shareapp" /> <!-- Slice -->
+        <package android:name="com.csam.icici.bank.imobile" />
+        <package android:name="com.snapwork.hdfc" />
+        <package android:name="com.upi.axispay" />
+        <package android:name="com.sbi.upi" />
+        <package android:name="com.olive.kotak.upi" />
+        <package android:name="in.amazon.mShop.android.shopping" />
+    </queries>
+
+    <application>
+        <service
+            android:name="expo.modules.upiintent.QuickAddTileService"
+            android:exported="true"
+            android:icon="@drawable/spentsmart_ic_add"
+            android:label="@string/spentsmart_tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <receiver
+            android:name="expo.modules.upiintent.QuickAddWidget"
+            android:exported="true"
+            android:label="@string/spentsmart_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/spentsmart_widget_info" />
+        </receiver>
+    </application>
+</manifest>

@@ -2,6 +2,13 @@
 
 All notable changes to SpentSmart. Versions follow the app version in `apps/mobile/app.json`.
 
+## 2.2.2 — 2026-11-23
+
+### Fixed
+- The app could lose its database connection after Android recreated the screen (for example after changing the
+  font size or language): every save and screen then failed until the app was restarted. The database is now
+  opened once and shared.
+
 ## 2.2.1 — 2026-11-23
 
 ### Added

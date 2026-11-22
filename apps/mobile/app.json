@@ -28,7 +28,8 @@
       ],
       "package": "com.ujjwaljain.spentsmart",
       "blockedPermissions": [
-        "android.permission.WRITE_CONTACTS"
+        "android.permission.WRITE_CONTACTS",
+        "android.permission.SYSTEM_ALERT_WINDOW"
       ]
     },
     "plugins": [

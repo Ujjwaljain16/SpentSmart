@@ -16,13 +16,26 @@ export class DatabaseOpenError extends Error {
   }
 }
 
+let opened: Promise<Repositories> | null = null;
+
 /**
- * Open the encrypted database, migrate it, and return the repositories.
+ * Open the encrypted database, migrate it, and return the repositories. Every caller in this JS runtime gets the
+ * same connection: Android can recreate the activity (font size, language, split screen) and React then mounts the
+ * app again. A second open would hand back expo-sqlite's cached native connection under a new JS handle, and when
+ * the old handle is garbage-collected it closes that shared connection, so every later query fails.
  *
  * This function never deletes or rewrites existing data on failure. If the file cannot be opened
  * (wrong key, corruption, newer schema) it throws, and the UI offers an explicit, user-confirmed reset.
  */
-export async function openRepositories(): Promise<Repositories> {
+export function openRepositories(): Promise<Repositories> {
+  opened ??= openOnce().catch((error: unknown) => {
+    opened = null;
+    throw error;
+  });
+  return opened;
+}
+
+async function openOnce(): Promise<Repositories> {
   let db: SQLite.SQLiteDatabase | null = null;
   try {
     const key = await getOrCreateDatabaseKey();
@@ -66,6 +79,7 @@ export async function openRepositories(): Promise<Repositories> {
 
 /** Destructive: delete the database file and its key. Only ever called after explicit user confirmation. */
 export async function resetDatabaseFile(): Promise<void> {
+  opened = null;
   await SQLite.deleteDatabaseAsync(DB_NAME).catch((e) => log.warn('deleteDatabaseAsync failed', e));
   await deleteDatabaseKey();
 }

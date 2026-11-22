@@ -13,18 +13,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
-      - name: Typecheck
-        run: npm run typecheck
-      - name: Lint
-        run: npm run lint
-      - name: Unit tests
-        run: npm test
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Typecheck, lint, test
+        run: pnpm turbo run typecheck lint test
       - name: Bundle (Android, Hermes)
+        working-directory: apps/mobile
         run: npx expo export --platform android --output-dir "$RUNNER_TEMP/export"
       - name: Audit production dependencies
-        run: npm audit --omit=dev --audit-level=critical
+        run: pnpm audit --prod --audit-level critical

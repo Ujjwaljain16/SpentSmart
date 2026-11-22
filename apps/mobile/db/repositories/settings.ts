@@ -1,0 +1,95 @@
+import { SqlExecutor } from '../driver';
+import { RepoDeps } from './deps';
+
+/** Every persisted setting, with its type and default. */
+export interface SettingsShape {
+  onboardingComplete: boolean;
+  profileName: string;
+  avatarId: string;
+  themeMode: 'light' | 'dark' | 'system';
+  bioLockEnabled: boolean;
+  /** Seconds the app may stay in the background before it locks (0 = lock immediately). */
+  lockTimeoutSeconds: number;
+  privacyModeEnabled: boolean;
+  remindersEnabled: boolean;
+  /** Package name of the last UPI app used. */
+  preferredUpiApp: string;
+  /** The user's own UPI ID (for receiving). */
+  myVpa: string;
+  myPayName: string;
+  /** Day of the month income usually arrives (1-31); 0 when not set. */
+  payday: number;
+  /** The assistant is a lab feature, off until the user turns it on. */
+  assistantEnabled: boolean;
+  /** Gemini model for the bring-your-own-key assistant. The key itself lives in the Keystore, not here. */
+  geminiModel: string;
+  /** Send payee names and notes to the model too. Off: figures only. */
+  assistantShareDetails: boolean;
+}
+
+export const SETTINGS_DEFAULTS: SettingsShape = {
+  onboardingComplete: false,
+  profileName: '',
+  avatarId: 'person',
+  themeMode: 'system',
+  bioLockEnabled: false,
+  lockTimeoutSeconds: 120,
+  privacyModeEnabled: false,
+  remindersEnabled: false,
+  preferredUpiApp: '',
+  myVpa: '',
+  myPayName: '',
+  payday: 0,
+  assistantEnabled: false,
+  geminiModel: 'gemini-3.5-flash-lite',
+  assistantShareDetails: false,
+};
+
+export type SettingKey = keyof SettingsShape;
+
+function decode<K extends SettingKey>(key: K, raw: string | undefined): SettingsShape[K] {
+  const fallback = SETTINGS_DEFAULTS[key];
+  if (raw === undefined) return fallback;
+  switch (typeof fallback) {
+    case 'boolean':
+      return (raw === 'true') as SettingsShape[K];
+    case 'number': {
+      const n = Number(raw);
+      return (Number.isFinite(n) ? n : fallback) as SettingsShape[K];
+    }
+    default:
+      if (key === 'themeMode') {
+        return (raw === 'light' || raw === 'dark' || raw === 'system' ? raw : fallback) as SettingsShape[K];
+      }
+      return raw as SettingsShape[K];
+  }
+}
+
+export function createSettingsRepo(db: SqlExecutor, deps: RepoDeps) {
+  return {
+    async loadAll(): Promise<SettingsShape> {
+      const rows = await db.all<{ key: string; value: string }>('SELECT key, value FROM settings');
+      const map = new Map(rows.map((r) => [r.key, r.value]));
+      const out = { ...SETTINGS_DEFAULTS } as Record<string, unknown>;
+      for (const key of Object.keys(SETTINGS_DEFAULTS) as SettingKey[]) {
+        out[key] = decode(key, map.get(key));
+      }
+      return out as unknown as SettingsShape;
+    },
+
+    async set<K extends SettingKey>(key: K, value: SettingsShape[K]): Promise<void> {
+      await db.run(
+        'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+        [key, String(value)],
+      );
+      deps.notify();
+    },
+
+    async removeAll(): Promise<void> {
+      await db.run('DELETE FROM settings');
+      deps.notify();
+    },
+  };
+}
+
+export type SettingsRepo = ReturnType<typeof createSettingsRepo>;

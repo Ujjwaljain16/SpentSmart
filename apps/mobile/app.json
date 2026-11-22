@@ -1,0 +1,121 @@
+{
+  "expo": {
+    "name": "SpentSmart",
+    "slug": "spentsmart",
+    "version": "2.2.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "spentsmart",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "platforms": [
+      "android"
+    ],
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0A0A0A",
+        "foregroundImage": "./assets/images/android-icon-foreground.png"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "allowBackup": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.READ_CONTACTS",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "com.ujjwaljain.spentsmart",
+      "blockedPermissions": [
+        "android.permission.WRITE_CONTACTS",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#0A0A0A",
+          "dark": {
+            "backgroundColor": "#0A0A0A"
+          }
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "SpentSmart uses the camera only to scan UPI QR codes."
+        }
+      ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "SpentSmart reads only the contact you pick, to fill in a name."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "savePhotosPermission": "SpentSmart saves QR codes you create to your gallery.",
+          "granularPermissions": [
+            "photo"
+          ]
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#14B8A6"
+        }
+      ],
+      [
+        "expo-sqlite",
+        {
+          "useSQLCipher": true
+        }
+      ],
+      "expo-secure-store",
+      "./modules/upi-intent/app.plugin.js",
+      "./plugins/with-local-cleartext",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "SpentSmart uses the microphone only while you dictate a transaction.",
+          "speechRecognitionPermission": "SpentSmart turns what you say into a transaction.",
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox",
+            "com.google.android.as"
+          ]
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "SpentSmart reads a receipt photo you choose; the photo isn't kept.",
+          "cameraPermission": "SpentSmart uses the camera to scan UPI QR codes and receipts."
+        }
+      ],
+      "expo-background-task",
+      "./plugins/with-mlkit-ocr-model"
+    ],
+    "updates": {
+      "url": "https://u.expo.dev/14d0fdab-c65f-4488-9356-a157d43b5c37",
+      "fallbackToCacheTimeout": 0
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "14d0fdab-c65f-4488-9356-a157d43b5c37"
+      }
+    },
+    "owner": "ujjwaljain1609s-organization",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    }
+  }
+}

@@ -1,0 +1,29 @@
+apply plugin: 'com.android.library'
+
+group = 'expo.modules.upiintent'
+version = '1.0.0'
+
+def expoModulesCorePlugin = new File(project(":expo-modules-core").projectDir.absolutePath, "ExpoModulesCorePlugin.gradle")
+apply from: expoModulesCorePlugin
+applyKotlinExpoModulesCorePlugin()
+useCoreDependencies()
+useExpoPublishing()
+
+// SDK levels follow the root project (managed by Expo) so this module never drifts from the app.
+useDefaultAndroidSdkVersions()
+
+android {
+  namespace "expo.modules.upiintent"
+  defaultConfig {
+    versionCode 1
+    versionName "1.0.0"
+  }
+  lintOptions {
+    abortOnError false
+  }
+}
+
+dependencies {
+  // Encoder only (no camera or scanning code), so the payment QR is drawn natively in a few milliseconds.
+  implementation 'com.google.zxing:core:3.5.3'
+}

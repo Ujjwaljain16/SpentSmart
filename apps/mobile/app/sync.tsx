@@ -12,6 +12,7 @@ import { useCloud } from '@/contexts/cloud-context';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { CLOUD_CONFIGURED, GOOGLE_WEB_CLIENT_ID, TEST_SIGN_IN_BUILD } from '@/lib/cloud-config';
 import { googleIdToken, googleSignOut } from '@/services/cloud/google';
+import { saveRecoveryKeyFile } from '@/services/cloud/recovery-file';
 import { log } from '@/lib/logger';
 import { routes } from '@/lib/routes';
 import { Device as CloudDevice } from '@/services/cloud/api-client';
@@ -141,6 +142,15 @@ export default function SyncScreen() {
                 {newRecoveryKey.split('-').join(' - ')}
               </Text>
               <Text style={[styles.body, { color: colors.textSecondary }]}>Keep it somewhere safe and offline. It’s shown only now.</Text>
+              <Button
+                label="Download as a file"
+                variant="secondary"
+                onPress={() =>
+                  void saveRecoveryKeyFile(newRecoveryKey)
+                    .then((saved) => saved && Alert.alert('Saved', 'Your recovery key was saved as a text file in the folder you picked.'))
+                    .catch(() => Alert.alert('Couldn’t save the file', 'Write the key down instead, or try another folder.'))
+                }
+              />
               <Button
                 label="I’ve saved it"
                 onPress={() => {

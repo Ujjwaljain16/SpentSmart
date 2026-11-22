@@ -313,6 +313,13 @@ export const MIGRATIONS: readonly Migration[] = [
         CREATE UNIQUE INDEX idx_captured_fingerprint ON captured_payments (fingerprint) WHERE fingerprint IS NOT NULL;
       `);
     },
+  },  {
+    version: 5,
+    async up(tx) {
+      // Automatic logging was removed: payment alerts weren't a dependable source (UPI apps stay silent for payments
+      // made inside them, and checkouts don't list other apps). Version 4 stays so phones that ran it still open.
+      await tx.exec('DROP TABLE IF EXISTS captured_payments;');
+    },
   },
 ];
 

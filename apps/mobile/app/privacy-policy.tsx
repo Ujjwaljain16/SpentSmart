@@ -16,7 +16,7 @@ const SECTIONS: readonly { title: string; body: readonly string[] }[] = [
   {
     title: 'In short',
     body: [
-      'SpentSmart keeps your financial data on your phone. Optional features that go further are off until you turn them on: Sync & backup (end-to-end encrypted, so we can’t read it), the Assistant, and automatic logging (which never leaves your phone).',
+      'SpentSmart keeps your financial data on your phone. Optional features that go further are off until you turn them on: Sync & backup (end-to-end encrypted, so we can’t read it) and the Assistant.',
     ],
   },
   {
@@ -46,16 +46,6 @@ const SECTIONS: readonly { title: string; body: readonly string[] }[] = [
     ],
   },
   {
-    title: 'Automatic logging (optional)',
-    body: [
-      '• Capture payments: with your permission, SpentSmart looks at notifications from UPI apps, bank apps and your SMS app only. Other apps’ notifications (chats, email, social) are ignored without being read.',
-      '• From those apps it keeps only completed payments, and from them only the amount, payee, time, reference and source app. Messages with a one-time password or other code are dropped before anything is saved.',
-      '• Captured payments stay on your phone, are never synced, and become transactions only when you add them. Turning it off discards anything not yet reviewed. You can revoke notification access in Android’s settings any time.',
-      '• Some builds can also read new incoming SMS for the same purpose, with the same rules. They ask for the SMS permission when you turn capture on, and never read your message inbox.',
-      '• Log payments from other apps (beta): when another app asks you to pay with UPI and you choose SpentSmart, it passes the request unchanged to your UPI app, where you pay with your PIN, and records the payee, amount and result. SpentSmart never handles money or your UPI PIN.',
-    ],
-  },
-  {
     title: 'Voice, receipts and statements',
     body: [
       '• Voice: Android’s speech recogniser turns your words into text, on the phone where supported, otherwise through Google’s speech service. SpentSmart doesn’t record or keep audio.',
@@ -70,11 +60,9 @@ const SECTIONS: readonly { title: string; body: readonly string[] }[] = [
       '• Microphone: only while you’re dictating.',
       '• Contacts (read): only the contact you pick as a payee.',
       '• Photos: saving your QR code; choosing a receipt uses Android’s photo picker.',
-      '• Notification access: only if you turn on Capture payments.',
-      '• Receive SMS (some builds): only if you turn on Capture payments; new messages only.',
       '• Notifications: only if you turn on reminders.',
       '• Internet: Sync & backup, the Assistant and app updates.',
-      'SpentSmart can’t read your SMS inbox. It doesn’t access your location, bank accounts or clipboard.',
+      'SpentSmart doesn’t access your SMS, location, bank accounts or clipboard.',
     ],
   },
   {

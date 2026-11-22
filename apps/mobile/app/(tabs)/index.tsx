@@ -30,13 +30,12 @@ export default function HomeScreen() {
   const { data, loading, refresh } = useLiveQuery(
     async (repos) => {
       const now = new Date();
-      const [insights, budgets, open, accounts, recent, captured] = await Promise.all([
+      const [insights, budgets, open, accounts, recent] = await Promise.all([
         repos.analytics.insights(period, now),
         repos.budgets.statuses(now),
         repos.attempts.listOpen(),
         repos.accounts.list(),
         repos.transactions.list({}, 5),
-        repos.captured.countNew(),
       ]);
       const overallBudget = budgets.find((b) => b.categoryKey === null) ?? null;
       // Balances only mean something once the user has entered at least one real starting balance; before that the
@@ -55,7 +54,7 @@ export default function HomeScreen() {
         .filter((b) => b.categoryKey !== null)
         .sort((a, b) => b.status.percent - a.status.percent)
         .slice(0, 3);
-      return { insights, overallBudget, categoryBudgets, openAttempts: open.length, captured, balancePaise, safe, recent: recent.items };
+      return { insights, overallBudget, categoryBudgets, openAttempts: open.length, balancePaise, safe, recent: recent.items };
     },
     [period, settings.payday],
   );
@@ -105,21 +104,6 @@ export default function HomeScreen() {
                 <Ionicons name="help-circle" size={22} color={colors.warning} />
                 <Text style={[styles.bannerText, { color: colors.text }]}>
                   {data.openAttempts} payment{data.openAttempts === 1 ? '' : 's'} waiting for confirmation
-                </Text>
-                <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
-              </TouchableOpacity>
-            ) : null}
-
-            {data && data.captured > 0 ? (
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel={`${data.captured} new payment${data.captured === 1 ? '' : 's'} captured. Review now`}
-                style={[styles.banner, { backgroundColor: colors.card, borderColor: colors.tint }]}
-                onPress={() => router.push(routes.captureInbox)}
-              >
-                <Ionicons name="flash" size={22} color={colors.tint} />
-                <Text style={[styles.bannerText, { color: colors.text }]}>
-                  {data.captured} new payment{data.captured === 1 ? '' : 's'} to add
                 </Text>
                 <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
               </TouchableOpacity>

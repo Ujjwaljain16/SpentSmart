@@ -2,7 +2,7 @@ import { DarkTheme, DefaultTheme, ThemeProvider as NavigationThemeProvider } fro
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect } from 'react';
-import { AppState, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import 'react-native-reanimated';
 // Records uncaught errors from the very start, so a crash during start-up is still kept for Diagnostics.
 import '@/lib/app-crash-log';
@@ -14,12 +14,11 @@ import { LockScreen } from '@/components/security/LockScreen';
 import { Colors } from '@/constants/theme';
 import { CategoriesProvider } from '@/contexts/categories-context';
 import { CloudProvider } from '@/contexts/cloud-context';
-import { DatabaseProvider, useRepos } from '@/contexts/database-context';
+import { DatabaseProvider } from '@/contexts/database-context';
 import { SecurityProvider, useSecurity } from '@/contexts/security-context';
 import { SettingsProvider, useSettings } from '@/contexts/settings-context';
 import { ThemeProvider, useColorScheme } from '@/contexts/theme-context';
 import { loadUpiIntent } from '@/modules/upi-intent';
-import { collectCaptured } from '@/services/payment-capture';
 import { syncReminders } from '@/services/reminders';
 
 export const unstable_settings = {
@@ -48,17 +47,6 @@ function RootNavigator() {
     void systemBars?.setSystemBarsDark(scheme === 'dark').catch(() => undefined);
   }, [scheme]);
 
-  // Payments captured while the app was closed are picked up whenever it comes to the front.
-  const repos = useRepos();
-  useEffect(() => {
-    if (!onboarded) return;
-    void collectCaptured(repos);
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') void collectCaptured(repos);
-    });
-    return () => sub.remove();
-  }, [repos, onboarded]);
-
   return (
     <NavigationThemeProvider value={navTheme(scheme)}>
       {/* The lock covers the app instead of replacing it, so unlocking returns to the exact screen and state. */}
@@ -70,7 +58,6 @@ function RootNavigator() {
             <Stack.Screen name="manual-entry" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
             <Stack.Screen name="payment" />
             <Stack.Screen name="recover-pending" />
-            <Stack.Screen name="capture-inbox" />
             <Stack.Screen name="receive" />
             <Stack.Screen name="category-manager" />
             <Stack.Screen name="analytics-detail" />

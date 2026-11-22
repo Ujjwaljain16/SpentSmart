@@ -31,42 +31,9 @@ export interface UpiIntentNativeModule {
   /** The subset of these packages that accept a shared image. */
   qrShareTargets(packageNames: string[]): Promise<string[]>;
 
-  /** Payment capture: our own switch, and whether Android has granted notification access. */
-  /** `available` is false in builds made without SPENTSMART_CAPTURE=1, which leave the listener out. */
-  captureStatus(): Promise<{ available: boolean; enabled: boolean; accessGranted: boolean }>;
-  /** Whether this build can read incoming SMS (built with SPENTSMART_SMS_CAPTURE=1), and whether it's allowed. */
-  smsCaptureStatus(): Promise<{ available: boolean; granted: boolean }>;
-  /** Turning capture off also discards anything captured but not yet read. */
-  setCaptureEnabled(enabled: boolean): Promise<boolean>;
-  openNotificationAccessSettings(): Promise<boolean>;
-  /** Payment notifications captured since the last call; the queue is emptied. */
-  drainCaptured(): Promise<CapturedNotification[]>;
-
-  /** Whether SpentSmart is offered as a UPI app, to log payments other apps start. */
-  proxyEnabled(): Promise<boolean>;
-  /** `targetPackage` is the UPI app requests are passed to; null shows a chooser. */
-  setProxy(enabled: boolean, targetPackage: string | null): Promise<boolean>;
-  /** Payments passed through since the last call; the queue is emptied. */
-  drainProxied(): Promise<ProxiedPayment[]>;
-
   /** Make the system navigation bar's buttons and background match a dark or light app theme. */
   setSystemBarsDark(dark: boolean): Promise<boolean>;
 
   /** Android's "Save as" screen for a text file. True once written, false if the user cancelled. */
   saveTextFile(fileName: string, content: string): Promise<boolean>;
-}
-
-export interface CapturedNotification {
-  app: string;
-  text: string;
-  at: number;
-  key?: string;
-}
-
-export interface ProxiedPayment {
-  uri: string | null;
-  resultCode: number;
-  response: string | null;
-  caller: string | null;
-  at: number;
 }

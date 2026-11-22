@@ -25,24 +25,6 @@
     </queries>
 
     <application>
-        <!-- The payment-capture listener is declared by app.plugin.js, only in builds made with SPENTSMART_CAPTURE=1. -->
-
-        <!-- Logs payments other apps start. Disabled until the user turns it on, so SpentSmart isn't offered as a UPI app. -->
-        <activity
-            android:name="expo.modules.upiintent.UpiProxyActivity"
-            android:enabled="false"
-            android:excludeFromRecents="true"
-            android:exported="true"
-            android:label="SpentSmart (logs, then opens your UPI app)"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar">
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="upi" android:host="pay" />
-            </intent-filter>
-        </activity>
-
         <service
             android:name="expo.modules.upiintent.QuickAddTileService"
             android:exported="true"

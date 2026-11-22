@@ -2,16 +2,13 @@ package expo.modules.upiintent
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.Uri
-import android.provider.Settings
 import android.util.Base64
-import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.FileProvider
 import androidx.core.view.WindowCompat
 import com.google.zxing.BarcodeFormat
@@ -212,73 +209,6 @@ class UpiIntentModule : Module() {
       }
     }
 
-    // Payment capture: our switch, plus whether Android has granted notification access.
-    AsyncFunction("captureStatus") {
-      val context = appContext.reactContext
-        ?: return@AsyncFunction mapOf("available" to false, "enabled" to false, "accessGranted" to false)
-      // The listener is only declared in capture builds (SPENTSMART_CAPTURE=1).
-      val available = try {
-        context.packageManager.getServiceInfo(ComponentName(context, PaymentNotificationListener::class.java), 0)
-        true
-      } catch (e: PackageManager.NameNotFoundException) {
-        false
-      }
-      mapOf(
-        "available" to available,
-        "enabled" to context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_CAPTURE_ENABLED, false),
-        "accessGranted" to NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName),
-      )
-    }
-
-    // Whether this build includes SMS capture (made with SPENTSMART_SMS_CAPTURE=1), and whether it's allowed.
-    AsyncFunction("smsCaptureStatus") {
-      val context = appContext.reactContext ?: return@AsyncFunction mapOf("available" to false, "granted" to false)
-      @Suppress("DEPRECATION")
-      val requested = context.packageManager.getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS).requestedPermissions
-      mapOf(
-        "available" to (requested?.contains(android.Manifest.permission.RECEIVE_SMS) == true),
-        "granted" to (context.checkSelfPermission(android.Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED),
-      )
-    }
-
-    AsyncFunction("setCaptureEnabled") { enabled: Boolean ->
-      val context = appContext.reactContext ?: return@AsyncFunction false
-      context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_CAPTURE_ENABLED, enabled).apply()
-      // Turning it off also forgets anything captured but not yet read.
-      if (!enabled) CaptureStore.drain(context, NOTIFICATION_QUEUE)
-      true
-    }
-
-    AsyncFunction("openNotificationAccessSettings") {
-      val context = appContext.reactContext ?: return@AsyncFunction false
-      context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-      true
-    }
-
-    AsyncFunction("drainCaptured") {
-      val context = appContext.reactContext ?: return@AsyncFunction emptyList<Map<String, Any?>>()
-      CaptureStore.drain(context, NOTIFICATION_QUEUE)
-    }
-
-    // The UPI proxy is a disabled component until the user switches it on; then other apps can offer SpentSmart.
-    AsyncFunction("proxyEnabled") {
-      val context = appContext.reactContext ?: return@AsyncFunction false
-      context.packageManager.getComponentEnabledSetting(proxyComponent(context)) == PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-    }
-
-    AsyncFunction("setProxy") { enabled: Boolean, targetPackage: String? ->
-      val context = appContext.reactContext ?: return@AsyncFunction false
-      context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY_PROXY_TARGET, targetPackage).apply()
-      val state = if (enabled) PackageManager.COMPONENT_ENABLED_STATE_ENABLED else PackageManager.COMPONENT_ENABLED_STATE_DISABLED
-      context.packageManager.setComponentEnabledSetting(proxyComponent(context), state, PackageManager.DONT_KILL_APP)
-      true
-    }
-
-    AsyncFunction("drainProxied") {
-      val context = appContext.reactContext ?: return@AsyncFunction emptyList<Map<String, Any?>>()
-      CaptureStore.drain(context, PROXY_QUEUE)
-    }
-
     OnActivityResult { _, payload ->
       if (payload.requestCode == REQUEST_SAVE_FILE) {
         val (promise, content) = pendingSave ?: return@OnActivityResult
@@ -308,8 +238,6 @@ class UpiIntentModule : Module() {
       )
     }
   }
-
-  private fun proxyComponent(context: Context) = ComponentName(context, UpiProxyActivity::class.java)
 
   @Volatile private var preparedUri: String? = null
   @Volatile private var preparedFile: File? = null

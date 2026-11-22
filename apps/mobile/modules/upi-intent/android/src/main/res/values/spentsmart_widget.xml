@@ -2,7 +2,6 @@
 <resources>
     <string name="spentsmart_tile_label">Add expense</string>
     <string name="spentsmart_widget_label">SpentSmart quick add</string>
-    <string name="spentsmart_capture_label">SpentSmart payment capture</string>
 
     <style name="SpentSmartWidgetButton">
         <item name="android:layout_width">0dp</item>

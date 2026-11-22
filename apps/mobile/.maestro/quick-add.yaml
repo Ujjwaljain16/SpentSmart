@@ -1,0 +1,15 @@
+appId: com.ujjwaljain.spentsmart
+name: Quick add a phrase and see it on Home
+---
+- runFlow: _onboard.yaml
+- tapOn: "Quick add a transaction by typing a phrase"
+- inputText: "swiggy 340 dinner #office"
+- assertVisible: "₹340"
+- assertVisible: "Swiggy"
+- assertVisible: "Food"
+- assertVisible: "#office"
+- tapOn: "Save"
+- scrollUntilVisible:
+    element: "Recent"
+- scrollUntilVisible:
+    element: "Swiggy.*"

@@ -18,6 +18,12 @@ const base: Transaction = {
   upiTxnId: 'T1',
   upiTxnRef: null,
   attemptId: null,
+  accountId: 'default-bank',
+  source: 'manual',
+  version: 1,
+  transferId: null,
+  transferRole: null,
+  tags: [],
 };
 
 describe('escapeHtml / safeColor', () => {
@@ -82,5 +88,22 @@ describe('report html', () => {
 
   it('handles an empty report', () => {
     expect(buildReportHtml({ title: 'x', generatedAt: new Date(), rows: [], categories: DEFAULT_CATEGORIES })).toContain('No transactions');
+  });
+
+  it('regression: refunds reduce spending and transfers are not spending', () => {
+    const html = buildReportHtml({
+      title: 'Mixed',
+      generatedAt: new Date(2026, 5, 17),
+      rows: [
+        { ...base, id: '1', amountPaise: 10_000 },
+        { ...base, id: '2', type: 'refund', amountPaise: 4_000 },
+        { ...base, id: '3', type: 'transfer', categoryKey: 'transfer', amountPaise: 50_000, transferId: 'x', transferRole: 'out' },
+        { ...base, id: '4', type: 'transfer', categoryKey: 'transfer', amountPaise: 50_000, transferId: 'x', transferRole: 'in' },
+      ],
+      categories: DEFAULT_CATEGORIES,
+    });
+    expect(html).toContain('<h3>Spent</h3><div class="v">₹60.00</div>');
+    expect(html).toContain('<h3>Received</h3><div class="v">₹0.00</div>');
+    expect(html).not.toContain('>Transfer</span></td><td class="amt">');
   });
 });

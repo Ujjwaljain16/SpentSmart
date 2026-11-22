@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_CATEGORIES } from '@spentsmart/finance/categories';
+import { runInsights } from '@spentsmart/finance/insights/run';
 import { NewTransaction } from '@spentsmart/finance/types';
 import { createNodeDriver, createTestContext } from '@/tests/helpers/node-driver';
 import { createSerializedDriver, SqlExecutor } from './driver';
@@ -78,6 +79,16 @@ describe('migrations', () => {
     await migrate(driver);
     await migrate(driver);
     expect((await driver.first<{ c: number }>('SELECT COUNT(*) AS c FROM categories'))!.c).toBe(DEFAULT_CATEGORIES.length);
+  });
+
+  it('a phone that ran the automatic-logging build (v4) upgrades and loses its capture table', async () => {
+    const { driver } = createNodeDriver();
+    expect(await migrate(driver, MIGRATIONS.filter((m) => m.version <= 4))).toBe(4);
+    await driver.run(
+      "INSERT INTO captured_payments (id, source, direction, amount_paise, occurred_at, status, created_at) VALUES ('c1', 'notification', 'debit', 100, 1, 'new', 1)",
+    );
+    expect(await migrate(driver)).toBe(LATEST_SCHEMA_VERSION);
+    expect(await driver.first("SELECT name FROM sqlite_master WHERE name = 'captured_payments'")).toBeNull();
   });
 
   it('refuses to open a database from a newer app version', async () => {
@@ -327,12 +338,10 @@ describe('settings repo', () => {
     const { repos } = await createTestContext();
     expect(await repos.settings.loadAll()).toEqual(SETTINGS_DEFAULTS);
     await repos.settings.set('bioLockEnabled', true);
-    await repos.settings.set('budgetPaise', 1_500_000);
     await repos.settings.set('themeMode', 'dark');
     await repos.settings.set('profileName', 'Asha');
     expect(await repos.settings.loadAll()).toMatchObject({
       bioLockEnabled: true,
-      budgetPaise: 1_500_000,
       themeMode: 'dark',
       profileName: 'Asha',
     });
@@ -342,10 +351,10 @@ describe('settings repo', () => {
 
   it('ignores corrupt stored values instead of crashing', async () => {
     const { repos, raw } = await createTestContext();
-    raw.prepare("INSERT INTO settings (key, value) VALUES ('themeMode', 'neon'), ('budgetPaise', 'abc')").run();
+    raw.prepare("INSERT INTO settings (key, value) VALUES ('themeMode', 'neon'), ('lockTimeoutSeconds', 'abc')").run();
     const s = await repos.settings.loadAll();
     expect(s.themeMode).toBe('system');
-    expect(s.budgetPaise).toBe(0);
+    expect(s.lockTimeoutSeconds).toBe(120);
   });
 });
 
@@ -403,6 +412,30 @@ describe('analytics repo', () => {
     const cmp = await repos.analytics.categoryComparison(c.key, NOW);
     expect(cmp).toMatchObject({ currentPaise: 300, previousPaise: 200, trend: { percent: 50, direction: 'up' } });
   });
+
+  it('feeds the insight detectors from stored rows, skipping deleted ones', async () => {
+    const { repos } = await createTestContext();
+    for (let m = 0; m < 5; m++) {
+      await repos.transactions.insert(tx({ payeeName: 'Netflix', amountPaise: 64_900, occurredAt: new Date(2026, m, 5, 10).getTime() }));
+    }
+    const deleted = await repos.transactions.insert(tx({ payeeName: 'Gone', occurredAt: at(3) }));
+    await repos.transactions.remove(deleted.id);
+
+    const rows = await repos.analytics.insightRows(new Date(2025, 0, 1).getTime(), NOW.getTime() + 1);
+    expect(rows).toHaveLength(5);
+    expect(rows[0]).toEqual({
+      id: expect.any(String),
+      type: 'expense',
+      amountPaise: 64_900,
+      occurredAt: new Date(2026, 0, 5, 10).getTime(),
+      payeeName: 'Netflix',
+      payeeVpa: null,
+      categoryKey: 'food',
+    });
+    const result = runInsights(rows, NOW.getTime());
+    expect(result.recurring).toEqual([expect.objectContaining({ payeeName: 'Netflix', cadence: 'monthly', active: true })]);
+    expect(result.recurringMonthlyPaise).toBe(64_900);
+  });
 });
 
 describe('erase everything', () => {
@@ -429,9 +462,9 @@ describe('scale', () => {
       const cats = ['food', 'utility', 'college', 'rent', 'other'];
       for (let i = 0; i < 100_000; i++) {
         await x.run(
-          `INSERT INTO transactions (id, amount_paise, type, category_key, payee_name, payee_vpa, payment_method, note, occurred_at, created_at, verified_by)
-           VALUES (?, ?, 'expense', ?, ?, ?, 'upi', 'bulk', ?, ?, 'manual')`,
-          [`id-${i}`, 100 + (i % 5000), cats[i % 5]!, `Merchant ${i % 400}`, `m${i % 400}@ybl`, base - i * 600_000, base],
+          `INSERT INTO transactions (id, amount_paise, type, category_key, payee_name, payee_vpa, payment_method, note, occurred_at, created_at, updated_at, verified_by, account_id, source)
+           VALUES (?, ?, 'expense', ?, ?, ?, 'upi', 'bulk', ?, ?, ?, 'manual', 'default-bank', 'manual')`,
+          [`id-${i}`, 100 + (i % 5000), cats[i % 5]!, `Merchant ${i % 400}`, `m${i % 400}@ybl`, base - i * 600_000, base, base],
         );
       }
     });
@@ -447,15 +480,23 @@ describe('scale', () => {
     const search = await time(() => repos.transactions.list({ search: 'merchant 399' }, 50));
     const summary = await time(() => repos.transactions.summarize({ categoryKey: 'food' }));
     const insights = await time(() => repos.analytics.insights('year', new Date(base)));
+    let detectorRows = 0;
+    const detectors = await time(async () => {
+      const rows = await repos.analytics.insightRows(base - 400 * DAY, base + 1);
+      detectorRows = rows.length;
+      runInsights(rows, base);
+    });
     // Generous ceilings (CI machines vary); typical local numbers are single-digit milliseconds.
     expect(page).toBeLessThan(100);
     expect(deep).toBeLessThan(100);
     expect(search).toBeLessThan(1500);
     expect(summary).toBeLessThan(500);
     expect(insights).toBeLessThan(1500);
+    expect(detectors).toBeLessThan(5000);
     console.info(
       `[scale] 100k rows: first page ${page.toFixed(1)}ms, deep page ${deep.toFixed(1)}ms, search ${search.toFixed(1)}ms, ` +
-        `summary ${summary.toFixed(1)}ms, year insights ${insights.toFixed(1)}ms`,
+        `summary ${summary.toFixed(1)}ms, year insights ${insights.toFixed(1)}ms, ` +
+        `detectors over ${detectorRows} rows ${detectors.toFixed(1)}ms`,
     );
   }, 120_000);
 });

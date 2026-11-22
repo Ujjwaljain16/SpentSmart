@@ -11,11 +11,12 @@ import { BorderRadius, FontSizes, MIN_TOUCH_TARGET, Spacing } from '@/constants/
 import { useRepos } from '@/contexts/database-context';
 import { DEFAULT_EXPENSE_CATEGORY_KEY, INCOME_CATEGORY_KEY } from '@spentsmart/finance/categories';
 import { parseRupees } from '@spentsmart/finance/money';
-import { PAYMENT_METHODS, PaymentMethod, TransactionType } from '@spentsmart/finance/types';
+import { PAYMENT_METHODS, PaymentMethod } from '@spentsmart/finance/types';
 import { isValidVpa, normalizeVpa, sanitizeText } from '@spentsmart/finance/upi/vpa';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { cancelExternalTrip, expectExternalTrip } from '@/lib/external-trip';
 import { log } from '@/lib/logger';
+import { applyAmountEdit, groupAmountInput } from '@/lib/amount-input';
 import { routes } from '@/lib/routes';
 import { setPaymentDraft } from '@/lib/payment-draft-store';
 
@@ -43,7 +44,7 @@ export default function ManualEntryScreen() {
   const [payeeName, setPayeeName] = useState('');
   const [upiId, setUpiId] = useState('');
   const [note, setNote] = useState('');
-  const [type, setType] = useState<TransactionType>('expense');
+  const [type, setType] = useState<'income' | 'expense'>('expense');
   const [method, setMethod] = useState<PaymentMethod>('upi');
   const [categoryKey, setCategoryKey] = useState(DEFAULT_EXPENSE_CATEGORY_KEY);
   const [saving, setSaving] = useState(false);
@@ -145,8 +146,8 @@ export default function ManualEntryScreen() {
             <TextInput
               accessibilityLabel="Amount in rupees"
               style={[styles.amountInput, { color: colors.text }]}
-              value={amountText}
-              onChangeText={setAmountText}
+              value={groupAmountInput(amountText)}
+              onChangeText={(t) => setAmountText(applyAmountEdit(amountText, t))}
               placeholder="0"
               placeholderTextColor={colors.textSecondary}
               keyboardType="decimal-pad"

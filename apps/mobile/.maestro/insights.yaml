@@ -1,0 +1,10 @@
+appId: com.ujjwaljain.spentsmart
+name: Insights shows a month-end estimate with its reasoning
+---
+- runFlow: import-statement.yaml
+- tapOn: "Close"
+- tapOn: "Insights"
+- assertVisible: "Month-end estimate"
+- tapOn: "Why: month-end estimate"
+- assertVisible: ".*One-off payments this month.*counted once.*"
+- assertVisible: ".*Worked out on this phone.*"

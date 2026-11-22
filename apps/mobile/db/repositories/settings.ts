@@ -12,13 +12,19 @@ export interface SettingsShape {
   lockTimeoutSeconds: number;
   privacyModeEnabled: boolean;
   remindersEnabled: boolean;
-  /** Monthly budget in paise; 0 means "no budget". */
-  budgetPaise: number;
   /** Package name of the last UPI app used. */
   preferredUpiApp: string;
   /** The user's own UPI ID (for receiving). */
   myVpa: string;
   myPayName: string;
+  /** Day of the month income usually arrives (1-31); 0 when not set. */
+  payday: number;
+  /** The assistant is a lab feature, off until the user turns it on. */
+  assistantEnabled: boolean;
+  /** Gemini model for the bring-your-own-key assistant. The key itself lives in the Keystore, not here. */
+  geminiModel: string;
+  /** Send payee names and notes to the model too. Off: figures only. */
+  assistantShareDetails: boolean;
 }
 
 export const SETTINGS_DEFAULTS: SettingsShape = {
@@ -30,10 +36,13 @@ export const SETTINGS_DEFAULTS: SettingsShape = {
   lockTimeoutSeconds: 120,
   privacyModeEnabled: false,
   remindersEnabled: false,
-  budgetPaise: 0,
   preferredUpiApp: '',
   myVpa: '',
   myPayName: '',
+  payday: 0,
+  assistantEnabled: false,
+  geminiModel: 'gemini-3.5-flash-lite',
+  assistantShareDetails: false,
 };
 
 export type SettingKey = keyof SettingsShape;

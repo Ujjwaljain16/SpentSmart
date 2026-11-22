@@ -20,6 +20,18 @@ export interface UpiIntentNativeModule {
   payWithUpi(uri: string, packageName: string | null): Promise<PayWithUpiResult>;
   /** Open an app's launcher screen. Returns false if it is not installed. */
   launchApp(packageName: string): Promise<boolean>;
-  /** Share a PNG (base64, optionally a data URL) to one specific app. Returns false on failure. */
-  shareImage(packageName: string, base64Data: string): Promise<boolean>;
+  /** Draw the QR for a `upi://pay` URI ahead of time; a later shareQr/qrPng with the same URI reuses it. */
+  prepareQr(upiUri: string): Promise<boolean>;
+  /** Draw (or reuse) the QR natively and share it to one app. Returns false on failure. */
+  shareQr(packageName: string, upiUri: string): Promise<boolean>;
+  /** The QR as base64 PNG (no data-URL prefix), or null if it could not be drawn. */
+  qrPng(upiUri: string): Promise<string | null>;
+  /** The subset of these packages that accept a shared image. */
+  qrShareTargets(packageNames: string[]): Promise<string[]>;
+
+  /** Make the system navigation bar's buttons and background match a dark or light app theme. */
+  setSystemBarsDark(dark: boolean): Promise<boolean>;
+
+  /** Android's "Save as" screen for a text file. True once written, false if the user cancelled. */
+  saveTextFile(fileName: string, content: string): Promise<boolean>;
 }

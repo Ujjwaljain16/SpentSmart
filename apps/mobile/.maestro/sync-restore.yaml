@@ -1,0 +1,50 @@
+appId: com.ujjwaljain.spentsmart
+name: Back up on one phone, wipe it, restore with the recovery key
+# Needs the emulator build and the local API: pnpm --filter @spentsmart/api dev:local (fresh database).
+---
+- runFlow: _onboard.yaml
+- tapOn: "Quick add a transaction by typing a phrase"
+- inputText: "swiggy 340 dinner"
+- tapOn: "Save"
+- tapOn: "Settings"
+- scrollUntilVisible:
+    element: "Sync & backup"
+- tapOn: "Sync & backup"
+- assertVisible: "End-to-end encrypted"
+- tapOn: "Test account name"
+- inputText: "asha"
+- tapOn: "Sign in for testing"
+- assertVisible: "Create your recovery key"
+- tapOn: "Create recovery key"
+- assertVisible: "Write this down"
+- copyTextFrom:
+    text: "[0-9A-Z]{4} - [0-9A-Z]{4} - .*"
+- tapOn: "I’ve saved it"
+- extendedWaitUntil:
+    visible: "Synced"
+    timeout: 20000
+- assertVisible: ".*this phone.*"
+# A brand-new phone: everything on the device is gone, including the keys.
+- runFlow: _onboard.yaml
+- scrollUntilVisible:
+    element: "Recent"
+    optional: true
+- assertNotVisible: "Swiggy"
+- tapOn: "Settings"
+- scrollUntilVisible:
+    element: "Sync & backup"
+- tapOn: "Sync & backup"
+- tapOn: "Test account name"
+- inputText: "asha"
+- tapOn: "Sign in for testing"
+- assertVisible: "Restore your backup"
+- tapOn: "Recovery key"
+- inputText: ${maestro.copiedText}
+- tapOn: "Restore"
+- extendedWaitUntil:
+    visible: "Synced"
+    timeout: 20000
+- tapOn: "Go back"
+- tapOn: "Home"
+- scrollUntilVisible:
+    element: "Swiggy.*"

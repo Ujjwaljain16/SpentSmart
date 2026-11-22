@@ -26,6 +26,7 @@ export function createNodeExecutor(db: DatabaseSync): SqlExecutor {
 
 export function createNodeDriver(path = ':memory:'): { driver: SqlDriver; raw: DatabaseSync } {
   const raw = new DatabaseSync(path);
+  raw.exec('PRAGMA foreign_keys = ON');
   return { driver: createSerializedDriver(createNodeExecutor(raw)), raw };
 }
 

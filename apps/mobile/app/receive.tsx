@@ -15,6 +15,7 @@ import { buildPayUri } from '@spentsmart/finance/upi/build';
 import { isValidVpa, normalizeVpa, sanitizeText } from '@spentsmart/finance/upi/vpa';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { log } from '@/lib/logger';
+import { applyAmountEdit, groupAmountInput } from '@/lib/amount-input';
 import { routes } from '@/lib/routes';
 
 export default function ReceiveScreen() {
@@ -112,7 +113,7 @@ export default function ReceiveScreen() {
                 <Text style={[styles.label, { color: colors.textSecondary }]}>Amount to request (optional)</Text>
                 <View style={styles.amountRow}>
                   <Text style={[styles.currency, { color: colors.text }]}>₹</Text>
-                  <TextInput accessibilityLabel="Amount to request in rupees" style={[styles.amountInput, { color: colors.text }]} value={amountText} onChangeText={setAmountText} placeholder="0" placeholderTextColor={colors.textSecondary} keyboardType="decimal-pad" />
+                  <TextInput accessibilityLabel="Amount to request in rupees" style={[styles.amountInput, { color: colors.text }]} value={groupAmountInput(amountText)} onChangeText={(t) => setAmountText(applyAmountEdit(amountText, t))} placeholder="0" placeholderTextColor={colors.textSecondary} keyboardType="decimal-pad" />
                 </View>
                 {amountInvalid ? <Text style={{ color: colors.error, fontSize: FontSizes.xs }}>Enter an amount like 250 or 250.50</Text> : null}
               </View>

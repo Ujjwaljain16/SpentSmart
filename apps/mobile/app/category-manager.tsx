@@ -8,7 +8,7 @@ import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { BorderRadius, FontSizes, MIN_TOUCH_TARGET, Spacing } from '@/constants/theme';
 import { useCategories } from '@/contexts/categories-context';
 import { useRepos } from '@/contexts/database-context';
-import { CATEGORY_COLORS, CATEGORY_ICONS, isKnownIcon } from '@spentsmart/finance/categories';
+import { CATEGORY_COLORS, CATEGORY_ICONS, TRANSFER_CATEGORY_KEY, isKnownIcon } from '@spentsmart/finance/categories';
 import { Category } from '@spentsmart/finance/types';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { log } from '@/lib/logger';
@@ -19,7 +19,8 @@ export default function CategoryManagerScreen() {
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const repos = useRepos();
-  const { categories } = useCategories();
+  const { categories: all } = useCategories();
+  const categories = all.filter((c) => c.key !== TRANSFER_CATEGORY_KEY);
 
   const [showAdd, setShowAdd] = useState(false);
   const [label, setLabel] = useState('');

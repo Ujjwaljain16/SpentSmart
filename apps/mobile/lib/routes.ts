@@ -14,6 +14,7 @@ export const routes = {
   receive: '/receive' as Href,
   recoverPending: '/recover-pending' as Href,
   captureInbox: '/capture-inbox' as Href,
+  privacyPolicy: '/privacy-policy' as Href,
   categoryManager: '/category-manager' as Href,
   privacyDashboard: '/privacy-dashboard' as Href,
   editProfile: '/edit-profile' as Href,

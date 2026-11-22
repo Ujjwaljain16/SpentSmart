@@ -6,7 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, AppState, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ISSUES_URL, PRIVACY_POLICY_URL } from '@/constants/app';
+import { ISSUES_URL } from '@/constants/app';
 import { GPAY_PACKAGE } from '@/constants/upi-apps';
 import { BorderRadius, FontSizes, MIN_TOUCH_TARGET, Spacing } from '@/constants/theme';
 import { useRepos } from '@/contexts/database-context';
@@ -466,7 +466,7 @@ export default function SettingsScreen() {
         <Section title="ABOUT">
           <Row icon="information-circle-outline" title="Version" right={<Text style={{ color: colors.textSecondary, fontSize: FontSizes.md }}>{appVersion}</Text>} />
           <Divider />
-          <Row icon="document-outline" title="Privacy policy" subtitle="Opens in your browser" onPress={() => void openURL(PRIVACY_POLICY_URL)} />
+          <Row icon="document-outline" title="Privacy policy" subtitle="What SpentSmart keeps, and where" onPress={() => router.push(routes.privacyPolicy)} />
           <Divider />
           <Row icon="bug-outline" title="Diagnostics" subtitle="Recent warnings, with UPI IDs and amounts removed" onPress={showDiagnostics} />
           <Divider />

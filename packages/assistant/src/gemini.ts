@@ -15,9 +15,10 @@ export const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta
 
 /** Stable models on Gemini's free tier (Google's model and pricing pages, Nov 2026). The first is the default. */
 export const GEMINI_MODELS = [
-  { id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite', note: 'Fastest, highest free limits' },
-  { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', note: 'Balanced' },
-  { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash', note: 'Smartest free model, lowest free limits' },
+  // Each runs at the least thinking it allows: the tools do the arithmetic, and default thinking made answers slow.
+  { id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite', note: 'Fastest, highest free limits', thinkingLevel: 'minimal' },
+  { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', note: 'Balanced', thinkingLevel: 'minimal' },
+  { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash', note: 'Smartest free model, lowest free limits', thinkingLevel: 'low' },
 ] as const;
 export const DEFAULT_GEMINI_MODEL = GEMINI_MODELS[0].id;
 
@@ -34,6 +35,9 @@ export interface GeminiContent {
   parts: GeminiPart[];
 }
 
+type Sleep = (ms: number) => Promise<void>;
+const realSleep: Sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 type Fetch = (url: string, init: { method: string; headers: Record<string, string>; body?: string }) => Promise<{
   ok: boolean;
   status: number;
@@ -43,7 +47,7 @@ type Fetch = (url: string, init: { method: string; headers: Record<string, strin
 export class GeminiError extends Error {
   constructor(
     message: string,
-    readonly kind: 'key' | 'quota' | 'model' | 'blocked' | 'network' | 'other',
+    readonly kind: 'key' | 'quota' | 'model' | 'busy' | 'blocked' | 'network' | 'other',
   ) {
     super(message);
   }
@@ -79,10 +83,27 @@ function errorFor(status: number, body: unknown): GeminiError {
   if (status === 401 || status === 403) return new GeminiError('Google refused the Gemini API key. Check it in Settings → Assistant.', 'key');
   if (status === 404) return new GeminiError('That Gemini model isn’t available to your key. Pick another in Settings → Assistant.', 'model');
   if (status === 429) return new GeminiError('Your Gemini key hit its rate limit. Wait a minute (free keys also have a daily cap) and try again.', 'quota');
+  if (status === 500 || status === 503) return new GeminiError('Gemini is overloaded right now (that’s on Google’s side). Try again in a minute, or pick another model in Settings → Assistant.', 'busy');
   return new GeminiError(`Gemini didn’t answer (${status}${detail ? `: ${detail.slice(0, 120)}` : ''}).`, 'other');
 }
 
-async function generate(opts: { apiKey: string; model: string; contents: GeminiContent[]; system: string; fetchImpl: Fetch }) {
+/** Waits before each retry of an overloaded model. Free-tier 503s usually clear within a few seconds. */
+const RETRY_DELAYS_MS = [1000, 2500, 5000];
+
+async function generate(opts: { apiKey: string; model: string; contents: GeminiContent[]; system: string; fetchImpl: Fetch; sleep: Sleep }) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await generateOnce(opts);
+    } catch (e) {
+      const delay = RETRY_DELAYS_MS[attempt];
+      if (!(e instanceof GeminiError) || e.kind !== 'busy' || delay === undefined) throw e;
+      await opts.sleep(delay);
+    }
+  }
+}
+
+async function generateOnce(opts: { apiKey: string; model: string; contents: GeminiContent[]; system: string; fetchImpl: Fetch }) {
+  const thinkingLevel = GEMINI_MODELS.find((m) => m.id === opts.model)?.thinkingLevel;
   let res: Awaited<ReturnType<Fetch>>;
   try {
     res = await opts.fetchImpl(`${GEMINI_ENDPOINT}/models/${encodeURIComponent(opts.model)}:generateContent`, {
@@ -92,7 +113,7 @@ async function generate(opts: { apiKey: string; model: string; contents: GeminiC
         systemInstruction: { parts: [{ text: opts.system }] },
         contents: opts.contents,
         tools: GEMINI_TOOLS,
-        generationConfig: { temperature: 0.2 },
+        generationConfig: { temperature: 0.2, ...(thinkingLevel ? { thinkingConfig: { thinkingLevel } } : {}) },
       }),
     });
   } catch {
@@ -130,6 +151,7 @@ export async function geminiConverse(opts: {
   shareDetails: boolean;
   fetchImpl: Fetch;
   maxSteps?: number;
+  sleep?: Sleep;
 }): Promise<GeminiResult> {
   const contents = [...opts.contents];
   const system = opts.shareDetails ? SYSTEM_PROMPT : `${SYSTEM_PROMPT}\n- ${MINIMISED_NOTE}`;
@@ -140,7 +162,7 @@ export async function geminiConverse(opts: {
   let pendingTools = false;
 
   for (let step = 0; step < (opts.maxSteps ?? MAX_STEPS); step++) {
-    const turn = await generate({ apiKey: opts.apiKey, model: opts.model, contents, system, fetchImpl: opts.fetchImpl });
+    const turn = await generate({ apiKey: opts.apiKey, model: opts.model, contents, system, fetchImpl: opts.fetchImpl, sleep: opts.sleep ?? realSleep });
     finishReason = turn.finishReason;
     contents.push(turn.content);
 

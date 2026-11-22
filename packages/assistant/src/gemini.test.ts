@@ -21,6 +21,7 @@ const model = (parts: unknown[], finishReason = 'STOP') => ({ body: { candidates
 const ask = (q: string): GeminiContent[] => [{ role: 'user', parts: [{ text: q }] }];
 const ledger = fixtureLedger();
 const base = { apiKey: 'test-key', model: 'gemini-3.5-flash-lite', ledger, now: EVAL_NOW };
+const sleep = async () => {};
 
 describe('Gemini tool declarations', () => {
   it('declares every tool without JSON-schema keywords Gemini rejects', () => {
@@ -100,12 +101,31 @@ describe('geminiConverse', () => {
     [403, { error: { message: 'Permission denied' } }, 'key'],
     [404, { error: { message: 'models/x is not found' } }, 'model'],
     [429, { error: { message: 'Resource exhausted' } }, 'quota'],
-    [500, { error: { message: 'Internal' } }, 'other'],
+    [500, { error: { message: 'Internal' } }, 'busy'],
+    [503, { error: { message: 'The model is overloaded. Please try again later.' } }, 'busy'],
   ])('turns HTTP %i into a clear error', async (status, body, kind) => {
-    const { fetchImpl } = fakeGemini([{ status, body }]);
-    const err = await geminiConverse({ ...base, contents: ask('x'), shareDetails: false, fetchImpl }).catch((e: unknown) => e);
+    const { fetchImpl } = fakeGemini([1, 2, 3, 4].map(() => ({ status, body })));
+    const err = await geminiConverse({ ...base, contents: ask('x'), shareDetails: false, fetchImpl, sleep }).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(GeminiError);
     expect((err as GeminiError).kind).toBe(kind);
+  });
+
+  it('retries an overloaded model before giving up', async () => {
+    const busy = { status: 503, body: { error: { message: 'The model is overloaded.' } } };
+    const waits: number[] = [];
+    const { fetchImpl, sent } = fakeGemini([busy, busy, model([{ text: 'Done.' }])]);
+    const res = await geminiConverse({ ...base, contents: ask('x'), shareDetails: false, fetchImpl, sleep: async (ms) => void waits.push(ms) });
+    expect(res.reply).toBe('Done.');
+    expect(sent).toHaveLength(3);
+    expect(waits).toEqual([1000, 2500]);
+  });
+
+  it('asks each model for the least thinking it allows, so answers come quickly', async () => {
+    for (const [id, level] of [['gemini-3.5-flash-lite', 'minimal'], ['gemini-3.6-flash', 'minimal'], ['gemini-3.8-flash', 'low']]) {
+      const { fetchImpl, sent } = fakeGemini([model([{ text: 'ok' }])]);
+      await geminiConverse({ ...base, model: id!, contents: ask('x'), shareDetails: false, fetchImpl });
+      expect(sent[0]!.body).toMatchObject({ generationConfig: { thinkingConfig: { thinkingLevel: level } } });
+    }
   });
 
   it('reports a blocked prompt plainly', async () => {

@@ -79,6 +79,8 @@ function payee(text: string, dir: CaptureDirection): { name: string | null; vpa:
   } else {
     add(/^(.+?)\s+sent you\b/i);
     add(new RegExp(String.raw`\bfrom\s+(?:vpa\s+)?(.+?)${STOP}`, 'i'));
+    // Bank transfers in: "credited ... by NEFT ACME CORP".
+    add(new RegExp(String.raw`\bby\s+(?:neft|imps|rtgs|upi)[\s/:-]+(.+?)${STOP}`, 'i'));
   }
   add(/\binfo[:\s]+upi\/[a-z0-9]+\/\d+\/([^/\n.]+)/i);
 
@@ -108,5 +110,7 @@ export function parsePaymentText(input: string): CapturedPayment | null {
   const { name, vpa } = payee(text, dir);
   const reference = REFERENCE.map((re) => re.exec(text)?.[1]).find(Boolean) ?? null;
   const via = /\batm\b|withdrawn/i.test(text) ? 'atm' : /\bcard\b/i.test(text) ? 'card' : /\bupi\b|@/i.test(text) || vpa ? 'upi' : null;
-  return { direction: dir, amountPaise: amount, payeeName: name, payeeVpa: vpa, reference, via };
+  // "at ATM MG ROAD" is where, not who; a cash withdrawal reads better by what it is.
+  const payeeName = via === 'atm' && dir === 'debit' ? 'ATM withdrawal' : name;
+  return { direction: dir, amountPaise: amount, payeeName, payeeVpa: vpa, reference, via };
 }

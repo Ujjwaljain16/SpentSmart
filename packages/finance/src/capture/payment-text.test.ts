@@ -38,12 +38,16 @@ describe('reading payments from notifications and SMS', () => {
     expect(p).toMatchObject({ direction: 'debit', amountPaise: 185000, payeeName: 'Zomato', via: 'card' });
   });
 
-  it('salary credit', () => {
-    expect(parsePaymentText('Rs.60000.00 credited to HDFC Bank A/c XX1234 on 01-11-26 by NEFT ACME CORP')).toMatchObject({ direction: 'credit', amountPaise: 6000000 });
+  it('salary credit names the payer from "by NEFT ..."', () => {
+    expect(parsePaymentText('Rs.60000.00 credited to HDFC Bank A/c XX1234 on 01-11-26 by NEFT ACME CORP')).toMatchObject({
+      direction: 'credit',
+      amountPaise: 6000000,
+      payeeName: 'Acme Corp',
+    });
   });
 
-  it('ATM withdrawal is marked so it can become a transfer to cash', () => {
-    expect(parsePaymentText('Rs.2000 withdrawn at ATM MG ROAD from A/c XX1234')).toMatchObject({ direction: 'debit', amountPaise: 200000, via: 'atm' });
+  it('ATM withdrawal is marked so it can become a transfer to cash, and named plainly', () => {
+    expect(parsePaymentText('Rs.2000 withdrawn at ATM MG ROAD from A/c XX1234')).toMatchObject({ direction: 'debit', amountPaise: 200000, via: 'atm', payeeName: 'ATM withdrawal' });
   });
 
   it.each([

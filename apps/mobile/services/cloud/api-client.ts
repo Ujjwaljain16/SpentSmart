@@ -140,7 +140,11 @@ export function createApiClient(opts: { baseUrl: string; store: SecretStore; fet
     devices: async () => (await authed<{ devices: Device[] }>('GET', '/v1/devices')).devices,
     removeDevice: (id: string) => authed<void>('DELETE', `/v1/devices/${encodeURIComponent(id)}`),
     assistantTurn: (messages: Anthropic.Beta.BetaMessageParam[]) =>
-      authed<{ content: Anthropic.Beta.BetaContentBlock[]; stop_reason: string | null }>('POST', '/v1/assistant/turn', { messages }),
+      authed<{ content: Anthropic.Beta.BetaContentBlock[]; stop_reason: string | null }>('POST', '/v1/assistant/turn', { messages }).catch((e: unknown) => {
+        // The server only has this route when the assistant is switched on there.
+        if (e instanceof ApiError && e.status === 404) throw new ApiError(404, 'assistant_off', 'The assistant isn’t switched on for this server yet.');
+        throw e;
+      }),
     async signOut(): Promise<void> {
       try {
         await authed<void>('POST', '/v1/auth/logout');

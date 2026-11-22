@@ -1,0 +1,33 @@
+appId: com.ujjwaljain.spentsmart
+name: Ask the assistant and confirm a proposed expense
+# Needs the emulator build and the local API (fake model): pnpm --filter @spentsmart/api dev:local.
+---
+- runFlow: _onboard.yaml
+- tapOn: "Quick add a transaction by typing a phrase"
+- inputText: "swiggy 340 dinner"
+- tapOn: "Save"
+- tapOn: "Settings"
+- scrollUntilVisible:
+    element: "Sync & backup"
+- tapOn: "Sync & backup"
+- tapOn: "Test account name"
+- inputText: "ravi"
+- tapOn: "Sign in for testing"
+- tapOn: "Go back"
+- scrollUntilVisible:
+    element: "Assistant"
+- tapOn: "Assistant"
+- tapOn: "Home"
+- tapOn: "Ask the assistant"
+- tapOn: "How much did I spend this month?"
+- extendedWaitUntil:
+    visible: ".*₹340.*test model.*"
+    timeout: 20000
+- tapOn: "Ask a question"
+- inputText: "add 250 for lunch"
+- tapOn: "Send"
+- extendedWaitUntil:
+    visible: ".*Expense: ₹250.*"
+    timeout: 20000
+- tapOn: "Save"
+- assertVisible: "Saved"

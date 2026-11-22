@@ -9,11 +9,14 @@ import { BorderRadius, FontSizes, Spacing } from '@/constants/theme';
 import { useCategories } from '@/contexts/categories-context';
 import { Period, budgetUsage, dayBuckets, monthBuckets, weekBucketsOfMonth } from '@spentsmart/finance/periods';
 import { useLiveQuery } from '@/hooks/use-live-query';
+import { getDataVersion } from '@/db/events';
 import { runInsights } from '@spentsmart/finance/insights/run';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 
 const TITLES: Record<Period, string> = { week: 'Daily spending', month: 'Weekly spending', year: 'Monthly spending' };
 const BAR_AREA = 120;
+
+let insightsCache: { version: number; day: string; result: ReturnType<typeof runInsights> } | null = null;
 
 export default function ChartsScreen() {
   const colors = useThemeColors();
@@ -41,9 +44,16 @@ export default function ChartsScreen() {
 
   // About thirteen months: enough for yearly renewals to show up twice and for three earlier months of comparison.
   const { data: detected, refresh: refreshDetected } = useLiveQuery(async (repos) => {
+    // Detectors read about a year of rows; with large histories that takes seconds, so reuse the last result until
+    // the data changes (or the day does, since forecasts depend on today).
+    const version = getDataVersion();
+    const day = new Date().toDateString();
+    if (insightsCache && insightsCache.version === version && insightsCache.day === day) return insightsCache.result;
     const now = Date.now();
     const rows = await repos.analytics.insightRows(now - 400 * 24 * 60 * 60 * 1000, now + 1);
-    return runInsights(rows, now);
+    const result = runInsights(rows, now);
+    insightsCache = { version, day, result };
+    return result;
   });
 
   const onRefresh = async () => {

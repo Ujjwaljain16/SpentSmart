@@ -13,6 +13,8 @@ export type { RepoDeps } from './deps';
 
 export function createRepositories(db: SqlDriver, deps: RepoDeps) {
   return {
+    /** The underlying driver, for services that work across tables (sync). */
+    driver: db,
     transactions: createTransactionsRepo(db, deps),
     categories: createCategoriesRepo(db, deps),
     attempts: createAttemptsRepo(db, deps),
@@ -54,6 +56,10 @@ export function createRepositories(db: SqlDriver, deps: RepoDeps) {
       });
       await createCategoriesRepo(db, deps).resetToDefaults();
       await createAccountsRepo(db, deps).resetToDefaults();
+      // A wiped phone starts over with sync too; the deletes above must not reach the server as tombstones.
+      await db.transaction(async (tx) => {
+        for (const table of ['sync_outbox', 'sync_records', 'sync_conflicts', 'sync_meta']) await tx.run(`DELETE FROM ${table}`);
+      });
       deps.notify();
     },
   };

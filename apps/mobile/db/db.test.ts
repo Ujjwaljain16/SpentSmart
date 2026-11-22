@@ -81,6 +81,16 @@ describe('migrations', () => {
     expect((await driver.first<{ c: number }>('SELECT COUNT(*) AS c FROM categories'))!.c).toBe(DEFAULT_CATEGORIES.length);
   });
 
+  it('a phone that ran the automatic-logging build (v4) upgrades and loses its capture table', async () => {
+    const { driver } = createNodeDriver();
+    expect(await migrate(driver, MIGRATIONS.filter((m) => m.version <= 4))).toBe(4);
+    await driver.run(
+      "INSERT INTO captured_payments (id, source, direction, amount_paise, occurred_at, status, created_at) VALUES ('c1', 'notification', 'debit', 100, 1, 'new', 1)",
+    );
+    expect(await migrate(driver)).toBe(LATEST_SCHEMA_VERSION);
+    expect(await driver.first("SELECT name FROM sqlite_master WHERE name = 'captured_payments'")).toBeNull();
+  });
+
   it('refuses to open a database from a newer app version', async () => {
     const { driver } = createNodeDriver();
     await driver.exec(`PRAGMA user_version = ${LATEST_SCHEMA_VERSION + 5}`);

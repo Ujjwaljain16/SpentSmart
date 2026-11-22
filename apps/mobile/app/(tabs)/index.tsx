@@ -118,22 +118,13 @@ export default function HomeScreen() {
               />
             ) : null}
 
-            <BalanceCard
-              balancePaise={insights.balancePaise}
-              incomePaise={insights.incomePaise}
-              expensePaise={insights.expensePaise}
-              trend={insights.trend}
-              period={period}
-              onPeriodChange={setPeriod}
-              budget={usage && overall ? { budgetPaise: overall.status.availablePaise, spentPaise: overall.status.spentPaise, usage } : null}
-            />
-
             <View style={styles.quickRow}>
               {(
                 [
                   { label: 'Quick add', icon: 'flash-outline', tone: colors.tint, a11y: 'Quick add a transaction by typing a phrase', to: routes.quickAdd },
                   { label: 'Transfer', icon: 'swap-horizontal', tone: colors.textSecondary, a11y: 'Move money between your accounts', to: routes.transfer },
                   { label: 'Receive', icon: 'download-outline', tone: colors.success, a11y: 'Receive money', to: routes.receive },
+                  ...(settings.assistantEnabled ? [{ label: 'Ask', icon: 'sparkles-outline' as const, tone: colors.warning, a11y: 'Ask the assistant', to: routes.assistant }] : []),
                 ] as const
               ).map((q) => (
                 <TouchableOpacity
@@ -152,6 +143,16 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+
+            <BalanceCard
+              balancePaise={insights.balancePaise}
+              incomePaise={insights.incomePaise}
+              expensePaise={insights.expensePaise}
+              trend={insights.trend}
+              period={period}
+              onPeriodChange={setPeriod}
+              budget={usage && overall ? { budgetPaise: overall.status.availablePaise, spentPaise: overall.status.spentPaise, usage } : null}
+            />
 
             {data && data.categoryBudgets.length > 0 ? (
               <View style={[styles.section, { backgroundColor: colors.card }]}>

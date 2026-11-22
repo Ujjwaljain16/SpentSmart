@@ -13,10 +13,12 @@ export const routes = {
   manualEntry: '/manual-entry' as Href,
   receive: '/receive' as Href,
   recoverPending: '/recover-pending' as Href,
+  privacyPolicy: '/privacy-policy' as Href,
   categoryManager: '/category-manager' as Href,
   privacyDashboard: '/privacy-dashboard' as Href,
   editProfile: '/edit-profile' as Href,
   onboarding: '/onboarding/profile-setup' as Href,
+  onboardingSetup: '/onboarding/setup' as Href,
   /** The payment screen reads its draft from the draft store; params are the validated fallback. */
   payment: '/payment' as Href,
   paymentFor: (draft: PaymentDraft): Href => ({
@@ -44,5 +46,10 @@ export const routes = {
     params: categoryKey === undefined ? {} : categoryKey === null ? { overall: '1' } : { category: categoryKey },
   }),
   newGoal: '/goal-edit' as Href,
+  importStatement: '/import-statement' as Href,
+  sync: '/sync' as Href,
+  syncConflicts: '/sync-conflicts' as Href,
+  assistant: '/assistant' as Href,
+  assistantSettings: '/assistant-settings' as Href,
   editGoal: (id: string): Href => ({ pathname: '/goal-edit', params: { id } }),
 };

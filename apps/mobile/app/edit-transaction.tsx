@@ -14,6 +14,7 @@ import { PAYMENT_METHODS, PaymentMethod, Transaction } from '@spentsmart/finance
 import { sanitizeText } from '@spentsmart/finance/upi/vpa';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { log } from '@/lib/logger';
+import { applyAmountEdit, groupAmountInput } from '@/lib/amount-input';
 
 export default function EditTransactionScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -133,8 +134,8 @@ export default function EditTransactionScreen() {
           <TextInput
             accessibilityLabel="Amount in rupees"
             style={[styles.amountInput, { color: colors.text, borderColor: amount === null ? colors.error : colors.border }]}
-            value={amountText}
-            onChangeText={setAmountText}
+            value={groupAmountInput(amountText)}
+            onChangeText={(t) => setAmountText(applyAmountEdit(amountText, t))}
             keyboardType="decimal-pad"
             selectTextOnFocus
           />

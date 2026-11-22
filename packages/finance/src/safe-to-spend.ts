@@ -58,7 +58,8 @@ export function safeToSpend(input: SafeToSpendInput): SafeToSpend {
   }
   safe = Math.max(0, safe);
 
-  return { safePaise: safe, perDayPaise: Math.floor(safe / daysLeft), daysLeft, limitedBy, periodEnd };
+  // Whole rupees, rounded down so the daily figure never promises more than is there.
+  return { safePaise: safe, perDayPaise: Math.floor(safe / daysLeft / 100) * 100, daysLeft, limitedBy, periodEnd };
 }
 
 /**
@@ -70,5 +71,6 @@ export function goalMonthlyNeed(goal: { targetPaise: number; savedPaise: number;
   if (remaining === 0) return 0;
   if (goal.deadline === null) return null;
   const months = Math.max(1, differenceInCalendarMonths(new Date(goal.deadline), now) + 1);
-  return Math.ceil(remaining / months);
+  // Whole rupees, rounded up so following the advice reaches the goal.
+  return Math.ceil(remaining / months / 100) * 100;
 }

@@ -1,0 +1,14 @@
+appId: com.ujjwaljain.spentsmart
+name: Entering a real balance turns on balance-based safe to spend
+---
+- runFlow: _onboard.yaml
+- tapOn: "Set account balances"
+- tapOn: ".*Bank & UPI.*Edit"
+- tapOn: "Current balance in rupees"
+- inputText: "50000"
+- tapOn: "Save"
+- assertVisible: ".*Bank & UPI.*50,000.*"
+- tapOn: "Go back"
+- assertVisible: "Safe to spend today"
+- assertVisible: ".*in your accounts until.*"
+- assertVisible: "₹50,000"

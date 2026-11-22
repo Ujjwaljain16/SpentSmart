@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React from 'react';
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -7,6 +8,7 @@ import { ProfileForm } from '@/components/profile/ProfileForm';
 import { FontSizes, Spacing } from '@/constants/theme';
 import { useSettings } from '@/contexts/settings-context';
 import { useThemeColors } from '@/hooks/use-theme-colors';
+import { routes } from '@/lib/routes';
 
 export default function ProfileSetupScreen() {
   const colors = useThemeColors();
@@ -34,11 +36,11 @@ export default function ProfileSetupScreen() {
               try {
                 await setSetting('profileName', name);
                 await setSetting('avatarId', avatarId);
-                // Flipping this switches the navigator from onboarding to the app (see app/_layout.tsx).
-                await setSetting('onboardingComplete', true);
               } catch {
                 Alert.alert('Error', 'Your information could not be saved. Please try again.');
+                return;
               }
+              router.push(routes.onboardingSetup);
             }}
           />
         </ScrollView>

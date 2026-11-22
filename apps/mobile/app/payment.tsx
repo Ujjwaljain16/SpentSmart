@@ -43,6 +43,7 @@ export default function PaymentScreen() {
   const [categoryKey, setCategoryKey] = useState(draft?.categoryKey ?? 'food');
   const [apps, setApps] = useState<UpiAppChoice[] | null>(null);
   const [selectedApp, setSelectedApp] = useState<string | null>(null);
+  const [showOtherApps, setShowOtherApps] = useState(false);
   const [showQr, setShowQr] = useState(false);
   const [busy, setBusy] = useState(false);
   const [review, setReview] = useState<PaymentAttempt | null>(null);
@@ -76,7 +77,9 @@ export default function PaymentScreen() {
     listUpiApps().then((found) => {
       if (!alive) return;
       setApps(found);
-      const preferred = found.find((a) => a.packageName === settings.preferredUpiApp) ?? found.find((a) => a.packageName === GPAY_PACKAGE) ?? found[0];
+      // Google Pay is the only app that completes every payment end to end (it reads our QR for personal UPI IDs),
+      // so it's always the default; other apps are one tap away under "Try another UPI app".
+      const preferred = found.find((a) => a.packageName === GPAY_PACKAGE) ?? found.find((a) => a.packageName === settings.preferredUpiApp) ?? found[0];
       setSelectedApp(preferred?.packageName ?? null);
       void qrShareTargets(found.map((a) => a.packageName)).then((targets) => alive && setShareTargets(targets));
     });
@@ -316,6 +319,7 @@ export default function PaymentScreen() {
   }
 
   const selected = apps?.find((a) => a.packageName === selectedApp);
+  const hasGpay = apps?.some((a) => a.packageName === GPAY_PACKAGE) ?? false;
   const canEditAmount = draft.amountEditable;
 
   return (
@@ -376,23 +380,25 @@ export default function PaymentScreen() {
         ) : apps.length > 0 ? (
           <>
             <SlideToPay appName={selected?.name ?? 'UPI app'} disabled={!canPay || busy} resetToken={resetToken} onSuccess={() => void (directFirst ? startPayment({ packageName: selected?.packageName ?? null }) : selected && shareTargets.has(selected.packageName) ? payViaQrShare(selected.packageName) : payViaGalleryQr(selected?.packageName ?? null))} />
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.appRow} keyboardShouldPersistTaps="handled">
-              {apps.map((app) => {
-                const active = app.packageName === selectedApp;
-                return (
-                  <TouchableOpacity
-                    key={app.packageName}
-                    accessibilityRole="radio"
-                    accessibilityLabel={`Pay with ${app.name}`}
-                    accessibilityState={{ selected: active }}
-                    style={[styles.appChip, { backgroundColor: active ? colors.tint : colors.card, borderColor: active ? colors.tint : colors.border }]}
-                    onPress={() => setSelectedApp(app.packageName)}
-                  >
-                    <Text style={{ color: active ? colors.onTint : colors.text, fontSize: FontSizes.sm, fontWeight: '600' }}>{app.name}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
+            {showOtherApps || !hasGpay ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.appRow} keyboardShouldPersistTaps="handled">
+                {apps.map((app) => {
+                  const active = app.packageName === selectedApp;
+                  return (
+                    <TouchableOpacity
+                      key={app.packageName}
+                      accessibilityRole="radio"
+                      accessibilityLabel={`Pay with ${app.name}`}
+                      accessibilityState={{ selected: active }}
+                      style={[styles.appChip, { backgroundColor: active ? colors.tint : colors.card, borderColor: active ? colors.tint : colors.border }]}
+                      onPress={() => setSelectedApp(app.packageName)}
+                    >
+                      <Text style={{ color: active ? colors.onTint : colors.text, fontSize: FontSizes.sm, fontWeight: '600' }}>{app.name}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            ) : null}
           </>
         ) : (
           <Button label="Choose a UPI app" disabled={!canPay || busy} loading={busy} onPress={() => void (directFirst ? startPayment({ packageName: null }) : payViaGalleryQr(null))} />
@@ -420,12 +426,15 @@ export default function PaymentScreen() {
             />
           ) : null}
         </View>
-        {apps !== null && apps.length > 0 ? (
+        {hasGpay && apps !== null && apps.length > 1 ? (
           <Button
-            label="Use another UPI app…"
+            label={showOtherApps ? 'Back to Google Pay' : 'Try another UPI app'}
             variant="ghost"
-            disabled={!canPay || busy}
-            onPress={() => void (directFirst ? startPayment({ packageName: null }) : payViaGalleryQr(null))}
+            disabled={busy}
+            onPress={() => {
+              if (showOtherApps) setSelectedApp(GPAY_PACKAGE);
+              setShowOtherApps((v) => !v);
+            }}
           />
         ) : null}
       </View>

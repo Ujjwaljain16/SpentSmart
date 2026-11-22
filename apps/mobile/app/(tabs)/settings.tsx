@@ -7,6 +7,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, AppState, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ISSUES_URL, PRIVACY_POLICY_URL } from '@/constants/app';
+import { GPAY_PACKAGE } from '@/constants/upi-apps';
 import { BorderRadius, FontSizes, MIN_TOUCH_TARGET, Spacing } from '@/constants/theme';
 import { useRepos } from '@/contexts/database-context';
 import { useSecurity } from '@/contexts/security-context';
@@ -138,7 +139,7 @@ export default function SettingsScreen() {
           text: 'Turn on',
           onPress: () =>
             void (async () => {
-              await setProxy(true, settings.preferredUpiApp || null);
+              await setProxy(true, GPAY_PACKAGE);
               await refreshCapture();
             })(),
         },

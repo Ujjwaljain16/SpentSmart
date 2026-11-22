@@ -58,9 +58,9 @@ describe('safeToSpend', () => {
   });
 
   it('on the last day of the month counts one day', () => {
-    const r = safeToSpend({ balancePaise: 999, budgetRemainingPaise: null, now: new Date(2026, 10, 30, 23, 59) });
+    const r = safeToSpend({ balancePaise: 999_99, budgetRemainingPaise: null, now: new Date(2026, 10, 30, 23, 59) });
     expect(r.daysLeft).toBe(1);
-    expect(r.perDayPaise).toBe(999);
+    expect(r.perDayPaise).toBe(999_00);
   });
 
   it('rounds the daily figure down so it never promises more than is there', () => {
@@ -81,7 +81,8 @@ describe('goalMonthlyNeed', () => {
     expect(goalMonthlyNeed({ targetPaise: 100, savedPaise: 200, deadline: null }, NOW)).toBe(0);
     expect(goalMonthlyNeed({ targetPaise: 100, savedPaise: 0, deadline: null }, NOW)).toBeNull();
   });
-  it('rounds up to whole paise', () => {
-    expect(goalMonthlyNeed({ targetPaise: 100, savedPaise: 0, deadline: new Date(2027, 0, 1).getTime() }, NOW)).toBe(34);
+  it('rounds up to whole rupees', () => {
+    // ₹1,000 over Nov, Dec and Jan is ₹333.33 a month; ₹334 gets there.
+    expect(goalMonthlyNeed({ targetPaise: 1_000_00, savedPaise: 0, deadline: new Date(2027, 0, 1).getTime() }, NOW)).toBe(334_00);
   });
 });

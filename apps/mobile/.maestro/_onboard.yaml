@@ -5,6 +5,16 @@ appId: com.ujjwaljain.spentsmart
     clearState: true
 - tapOn: "Display name"
 - inputText: "Maestro"
-- hideKeyboard
+- tapOn: "Avatar rocket"
 - tapOn: "Continue"
+# Payday, budget and app lock are optional; skip all three (builds before onboarding v2 don't have them).
+- runFlow:
+    when:
+      visible: "When do you get paid?"
+    commands:
+      - tapOn: "Skip"
+      - assertVisible: "Set a monthly budget?"
+      - tapOn: "Skip"
+      - assertVisible: "Lock the app?"
+      - tapOn: "Skip"
 - assertVisible: "hey, maestro"

@@ -4,15 +4,21 @@ import { StatusBar } from 'expo-status-bar';
 import React, { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import 'react-native-reanimated';
+// Records uncaught errors from the very start, so a crash during start-up is still kept for Diagnostics.
+import '@/lib/app-crash-log';
+// Registers the background sync task before anything renders; Android may launch the app only to run it.
+import '@/services/cloud/background-sync';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { GlobalErrorBoundary } from '@/components/GlobalErrorBoundary';
 import { LockScreen } from '@/components/security/LockScreen';
 import { Colors } from '@/constants/theme';
 import { CategoriesProvider } from '@/contexts/categories-context';
+import { CloudProvider } from '@/contexts/cloud-context';
 import { DatabaseProvider } from '@/contexts/database-context';
 import { SecurityProvider, useSecurity } from '@/contexts/security-context';
 import { SettingsProvider, useSettings } from '@/contexts/settings-context';
 import { ThemeProvider, useColorScheme } from '@/contexts/theme-context';
+import { loadUpiIntent } from '@/modules/upi-intent';
 import { syncReminders } from '@/services/reminders';
 
 export const unstable_settings = {
@@ -25,6 +31,8 @@ const navTheme = (scheme: 'light' | 'dark') => {
   return { ...base, colors: { ...base.colors, background: c.background, card: c.surface, text: c.text, border: c.border, primary: c.tint } };
 };
 
+const systemBars = loadUpiIntent();
+
 function RootNavigator() {
   const scheme = useColorScheme();
   const { isUnlocked } = useSecurity();
@@ -34,6 +42,10 @@ function RootNavigator() {
   useEffect(() => {
     void syncReminders(settings.remindersEnabled);
   }, [settings.remindersEnabled]);
+
+  useEffect(() => {
+    void systemBars?.setSystemBarsDark(scheme === 'dark').catch(() => undefined);
+  }, [scheme]);
 
   return (
     <NavigationThemeProvider value={navTheme(scheme)}>
@@ -52,12 +64,19 @@ function RootNavigator() {
             <Stack.Screen name="edit-transaction" />
             <Stack.Screen name="edit-profile" />
             <Stack.Screen name="privacy-dashboard" />
-            <Stack.Screen name="quick-add" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="privacy-policy" />
+            {/* One quick add at a time: the widget's Add and Speak buttons open it with different params. */}
+            <Stack.Screen name="quick-add" getId={() => 'quick-add'} options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
             <Stack.Screen name="transfer" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
             <Stack.Screen name="accounts" />
             <Stack.Screen name="account-edit" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
             <Stack.Screen name="budget-edit" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
             <Stack.Screen name="goal-edit" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="import-statement" />
+            <Stack.Screen name="sync" />
+            <Stack.Screen name="sync-conflicts" />
+            <Stack.Screen name="assistant" />
+            <Stack.Screen name="assistant-settings" />
           </Stack.Protected>
           <Stack.Protected guard={!onboarded}>
             <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
@@ -83,7 +102,9 @@ export default function RootLayout() {
             <ThemeProvider>
               <SecurityProvider>
                 <CategoriesProvider>
-                  <RootNavigator />
+                  <CloudProvider>
+                    <RootNavigator />
+                  </CloudProvider>
                 </CategoriesProvider>
               </SecurityProvider>
             </ThemeProvider>

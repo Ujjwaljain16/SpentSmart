@@ -1,0 +1,26 @@
+{
+  "name": "@spentsmart/assistant",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Assistant tools over the finance engine, the tool loop, and the eval set",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "eval:live": "tsx scripts/run-live-eval.mts",
+    "eval:gemini": "tsx scripts/run-gemini-eval.mts"
+  },
+  "dependencies": {
+    "@spentsmart/finance": "workspace:*",
+    "date-fns": "^4.1.0"
+  },
+  "devDependencies": {
+    "@anthropic-ai/sdk": "^1.12.0",
+    "@types/node": "^22.20.5",
+    "tsx": "^4.23.15",
+    "typescript": "~5.9.3",
+    "vitest": "^5.1.1"
+  }
+}

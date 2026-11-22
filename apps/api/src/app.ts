@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import rateLimit from '@fastify/rate-limit';
 import {
   googleSignInRequest,
+  testSignInRequest,
   keyEnvelopeRequest,
   pullQuery,
   pushRequest,
@@ -10,6 +11,7 @@ import {
 } from '@spentsmart/sync-core/contracts';
 import Fastify, { FastifyRequest } from 'fastify';
 import { ZodError, ZodTypeAny, z } from 'zod';
+import { CreateTurn, UpstreamError, perUserLimit, turnRequest } from './assistant';
 import { GoogleVerifier, InvalidGoogleTokenError } from './auth/google';
 import { AuthError, Session, issueRefreshToken, rotateRefreshToken, signAccessToken, verifyAccessToken } from './auth/tokens';
 import { Config } from './config';
@@ -23,6 +25,8 @@ export interface AppDeps {
   /** Requests per minute per client, overall and for sign-in routes. Lowered in tests. */
   rateLimits?: { global: number; auth: number };
   logger?: boolean;
+  /** Model access for the assistant. Without it (the default) the assistant routes don't exist. */
+  assistant?: { createTurn: CreateTurn; turnsPerMinute?: number };
 }
 
 declare module 'fastify' {
@@ -31,7 +35,7 @@ declare module 'fastify' {
   }
 }
 
-export async function buildApp({ db, config, verifyGoogle, rateLimits = { global: 300, auth: 20 }, logger = false }: AppDeps) {
+export async function buildApp({ db, config, verifyGoogle, rateLimits = { global: 300, auth: 20 }, logger = false, assistant }: AppDeps) {
   const app = Fastify({
     logger: logger ? { redact: ['req.headers.authorization', 'req.body.idToken', 'req.body.refreshToken'] } : false,
     bodyLimit: 2 * 1024 * 1024,
@@ -44,6 +48,7 @@ export async function buildApp({ db, config, verifyGoogle, rateLimits = { global
   app.setErrorHandler((error, _req, reply) => {
     if (error instanceof ZodError) return reply.status(400).send({ error: 'invalid_request', issues: error.issues.map((i) => i.path.join('.')) });
     if (error instanceof AuthError || error instanceof InvalidGoogleTokenError) return reply.status(401).send({ error: 'unauthorized' });
+    if (error instanceof UpstreamError) return reply.status(error.status).send({ error: 'assistant_unavailable', message: error.message });
     const status = (error as { statusCode?: number }).statusCode;
     if (status === 429) return reply.status(429).send({ error: 'rate_limited' });
     if (status && status >= 400 && status < 500) return reply.status(status).send({ error: 'bad_request' });
@@ -77,11 +82,9 @@ export async function buildApp({ db, config, verifyGoogle, rateLimits = { global
 
   app.get('/healthz', async () => ({ ok: true }));
 
-  app.post('/v1/auth/google', authLimit, async (req) => {
-    const body = parse(googleSignInRequest, req.body);
-    const identity = await verifyGoogle(body.idToken);
-    // Sign-in runs before we know the user, so it is the one place that looks users up without the RLS role.
-    const session = await db.transaction(async (tx) => {
+  /** Find or create the user for an identity and register a new device for them. */
+  async function signInAs(identity: { sub: string; email: string | null }, deviceName: string): Promise<Session> {
+    return db.transaction(async (tx) => {
       const existing = await tx.query<{ id: string }>('SELECT id FROM users WHERE google_sub = $1', [identity.sub]);
       let userId = existing.rows[0]?.id;
       if (!userId) {
@@ -91,9 +94,26 @@ export async function buildApp({ db, config, verifyGoogle, rateLimits = { global
         await tx.query('UPDATE users SET email = $2 WHERE id = $1', [userId, identity.email]);
       }
       const deviceId = randomUUID();
-      await tx.query('INSERT INTO devices (id, user_id, name) VALUES ($1, $2, $3)', [deviceId, userId, body.deviceName]);
+      await tx.query('INSERT INTO devices (id, user_id, name) VALUES ($1, $2, $3)', [deviceId, userId, deviceName]);
       return { userId, deviceId };
     });
+  }
+
+  app.get('/v1/config', async () => ({ testSignIn: config.testSignIn === true, assistant: assistant !== undefined }));
+
+  if (config.testSignIn) {
+    // Local testing only (see Config.testSignIn). Test users live in their own "test:" namespace.
+    app.post('/v1/auth/test', authLimit, async (req) => {
+      const body = parse(testSignInRequest, req.body);
+      return tokensFor(await signInAs({ sub: `test:${body.name.toLowerCase()}`, email: null }, body.deviceName));
+    });
+  }
+
+  app.post('/v1/auth/google', authLimit, async (req) => {
+    const body = parse(googleSignInRequest, req.body);
+    const identity = await verifyGoogle(body.idToken);
+    // Sign-in runs before we know the user, so it is the one place that looks users up without the RLS role.
+    const session = await signInAs(identity, body.deviceName);
     return tokensFor(session);
   });
 
@@ -159,6 +179,17 @@ export async function buildApp({ db, config, verifyGoogle, rateLimits = { global
       }).catch(() => ({ rows: [] as unknown[] }));
       return reply.status(rows.length > 0 ? 204 : 404).send();
     });
+
+    if (assistant) {
+      const allow = perUserLimit(assistant.turnsPerMinute ?? 30, 60_000);
+      // One model turn. The phone runs the tools and sends the results back in the next call; conversations are not
+      // stored here, and request bodies are never logged.
+      authed.post('/v1/assistant/turn', async (req, reply) => {
+        if (!allow(req.session.userId)) return reply.status(429).send({ error: 'rate_limited' });
+        const { messages } = parse(turnRequest, req.body);
+        return assistant.createTurn(messages as never);
+      });
+    }
 
     // Deletes the user row; every other table cascades from it.
     authed.delete('/v1/account', async (req, reply) => {

@@ -9,10 +9,14 @@
     "start": "tsx src/server.ts",
     "migrate": "tsx src/migrate-cli.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "dev:local": "tsx src/local.ts",
+    "dev:neon": "tsx src/neon.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.12.0",
     "@fastify/rate-limit": "^10.3.0",
+    "@spentsmart/assistant": "workspace:*",
     "@spentsmart/sync-core": "workspace:*",
     "fastify": "^5.12.8",
     "jose": "^6.2.18",

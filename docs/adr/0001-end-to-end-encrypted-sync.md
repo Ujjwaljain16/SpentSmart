@@ -1,6 +1,6 @@
 # 0001 — End-to-end encrypted sync
 
-Status: accepted (21 Nov 2026)
+Status: accepted (21 Nov 2026). Implemented and live since 22 Nov 2026 (API on Render, Postgres on Neon, both in Singapore), verified end to end: sign-in, first sync, ciphertext-only storage, wipe → restore with the recovery key, device sign-out, backup deletion.
 
 ## Context
 

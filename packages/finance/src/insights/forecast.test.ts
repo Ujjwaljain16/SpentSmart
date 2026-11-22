@@ -82,6 +82,31 @@ describe('forecastMonth', () => {
     expect(f.lowPaise).toBe(f.highPaise);
   });
 
+  it('regression: a one-off big payment is counted once, not spread over the days left', () => {
+    // What the emulator showed after importing a statement with no earlier history: rent of ₹15,000 was treated as
+    // day-to-day spending and projected ₹944/day, an estimate of ₹28,341.43.
+    const now = at(2026, 11, 21);
+    const rows = [
+      tx([2026, 11, 1], 60_000, 'Acme', { type: 'income' }),
+      tx([2026, 11, 2], 340, 'Swiggy'),
+      tx([2026, 11, 3], 15_000, 'Landlord Sharma'),
+      tx([2026, 11, 5], 649, 'Netflix'),
+      tx([2026, 11, 7], 1_850, 'BigBasket'),
+      tx([2026, 11, 10], 2_000, 'ATM'),
+    ];
+    const f = forecastMonth(rows, detectRecurring(rows, now), now);
+    // Day-to-day: ₹4,839 over 21 days = ₹230.43/day; 9 days left ≈ ₹2,074 more.
+    expect(f.spentPaise).toBe(19_839_00);
+    expect(f.likelyPaise).toBe(21_913_00);
+    expect(f.evidence.formula).toContain('One-off payments this month (₹15,000) are counted once');
+    expect(f.evidence.formula).not.toContain('upcoming bill');
+  });
+
+  it('estimates are whole rupees', () => {
+    const f = run(daily(2026, 11, 20, 10_001));
+    for (const v of [f.lowPaise, f.likelyPaise, f.highPaise]) expect(v % 100).toBe(0);
+  });
+
   it('an empty month forecasts zero', () => {
     const f = run([]);
     expect([f.lowPaise, f.likelyPaise, f.highPaise]).toEqual([0, 0, 0]);

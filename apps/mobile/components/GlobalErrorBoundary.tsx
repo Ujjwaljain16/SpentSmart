@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Updates from 'expo-updates';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { crashLog } from '@/lib/app-crash-log';
 import { log } from '@/lib/logger';
 
 interface Props {
@@ -27,6 +28,7 @@ export class GlobalErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
+    crashLog.record(error, true);
     log.error('Uncaught render error', `${error.name}: ${error.message}\n${info.componentStack ?? ''}`);
   }
 

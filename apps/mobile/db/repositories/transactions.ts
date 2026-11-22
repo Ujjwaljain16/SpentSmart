@@ -87,6 +87,9 @@ export interface TransactionFilter {
   since?: number | null;
   /** Exclusive upper bound on occurredAt. */
   until?: number | null;
+  /** Inclusive bounds on the amount in paise. */
+  minPaise?: number | null;
+  maxPaise?: number | null;
 }
 
 export interface TransactionCursor {
@@ -172,6 +175,14 @@ function buildWhere(filter: TransactionFilter): { clauses: string[]; params: Sql
     clauses.push('t.occurred_at < ?');
     params.push(filter.until);
   }
+  if (filter.minPaise != null) {
+    clauses.push('t.amount_paise >= ?');
+    params.push(filter.minPaise);
+  }
+  if (filter.maxPaise != null) {
+    clauses.push('t.amount_paise <= ?');
+    params.push(filter.maxPaise);
+  }
   const search = filter.search?.trim();
   if (search) {
     const like = `%${escapeLike(search.toLowerCase())}%`;
@@ -239,6 +250,88 @@ export function createTransactionsRepo(db: AnyExecutor, deps: RepoDeps) {
     ]);
   }
 
+  /** Both legs of one transfer inside an open transaction. Returns the out and in leg ids. */
+  async function transferIn(tx: SqlExecutor, input: NewTransfer, transferId: string): Promise<string[]> {
+    if (!isValidPaise(input.amountPaise)) throw new ValidationError('Invalid amount.');
+    if (input.fromAccountId === input.toAccountId) throw new ValidationError('Choose two different accounts.');
+    await assertAccount(tx, input.fromAccountId);
+    await assertAccount(tx, input.toAccountId);
+    const names = await tx.all<{ id: string; name: string }>('SELECT id, name FROM accounts WHERE id IN (?, ?)', [
+      input.fromAccountId,
+      input.toAccountId,
+    ]);
+    const nameOf = (id: string) => names.find((n) => n.id === id)?.name ?? 'account';
+    const t = now();
+    const legs: Array<{ id: string; role: TransferRole; account: string; label: string }> = [
+      { id: newId(), role: 'out', account: input.fromAccountId, label: `To ${nameOf(input.toAccountId)}` },
+      { id: newId(), role: 'in', account: input.toAccountId, label: `From ${nameOf(input.fromAccountId)}` },
+    ];
+    for (const leg of legs) {
+      await tx.run(
+        `INSERT INTO transactions
+           (id, amount_paise, type, category_key, payee_name, payment_method, note, occurred_at, created_at, updated_at,
+            verified_by, account_id, source, version, transfer_id, transfer_role)
+         VALUES (?, ?, 'transfer', ?, ?, 'bank', ?, ?, ?, ?, 'manual', ?, 'manual', 1, ?, ?)`,
+        [
+          leg.id,
+          input.amountPaise,
+          TRANSFER_CATEGORY_KEY,
+          leg.label,
+          input.note?.trim().slice(0, MAX_TEXT) || null,
+          input.occurredAt ?? t,
+          t,
+          t,
+          leg.account,
+          transferId,
+          leg.role,
+        ],
+      );
+    }
+    return legs.map((l) => l.id);
+  }
+
+  /** One insert inside an open transaction; idempotent on attempt id. */
+  async function insertIn(tx: SqlExecutor, input: NewTransaction): Promise<{ id: string; created: boolean }> {
+    validateNew(input);
+    const tags = cleanTags(input.tags);
+    const accountId = input.accountId ?? (input.paymentMethod === 'cash' ? DEFAULT_CASH_ACCOUNT_ID : DEFAULT_BANK_ACCOUNT_ID);
+
+    if (input.attemptId) {
+      const existing = await tx.first<{ id: string }>('SELECT id FROM transactions WHERE attempt_id = ?', [input.attemptId]);
+      if (existing) return { id: existing.id, created: false };
+    }
+    await assertAccount(tx, accountId);
+    const id = newId();
+    const t = now();
+    await tx.run(
+      `INSERT INTO transactions
+         (id, amount_paise, type, category_key, payee_name, payee_vpa, payment_method, note, occurred_at, created_at,
+          updated_at, verified_by, upi_txn_id, upi_txn_ref, attempt_id, account_id, source, version)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [
+        id,
+        input.amountPaise,
+        input.type,
+        input.categoryKey,
+        input.payeeName.trim().slice(0, MAX_TEXT),
+        input.payeeVpa ?? null,
+        input.paymentMethod,
+        input.note?.trim().slice(0, MAX_TEXT) || null,
+        input.occurredAt ?? t,
+        t,
+        t,
+        input.verifiedBy,
+        input.upiTxnId ?? null,
+        input.upiTxnRef ?? null,
+        input.attemptId ?? null,
+        accountId,
+        input.source ?? (input.attemptId ? 'scan' : 'manual'),
+      ],
+    );
+    await writeTags(tx, id, tags);
+    return { id, created: true };
+  }
+
   return {
     getById,
 
@@ -247,46 +340,7 @@ export function createTransactionsRepo(db: AnyExecutor, deps: RepoDeps) {
      * the same payment attempt returns the existing row instead of creating a duplicate.
      */
     async insert(input: NewTransaction): Promise<Transaction> {
-      validateNew(input);
-      const tags = cleanTags(input.tags);
-      const accountId = input.accountId ?? (input.paymentMethod === 'cash' ? DEFAULT_CASH_ACCOUNT_ID : DEFAULT_BANK_ACCOUNT_ID);
-
-      const result = await atomically(db, async (tx) => {
-        if (input.attemptId) {
-          const existing = await tx.first<{ id: string }>('SELECT id FROM transactions WHERE attempt_id = ?', [input.attemptId]);
-          if (existing) return { id: existing.id, created: false };
-        }
-        await assertAccount(tx, accountId);
-        const id = newId();
-        const t = now();
-        await tx.run(
-          `INSERT INTO transactions
-             (id, amount_paise, type, category_key, payee_name, payee_vpa, payment_method, note, occurred_at, created_at,
-              updated_at, verified_by, upi_txn_id, upi_txn_ref, attempt_id, account_id, source, version)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-          [
-            id,
-            input.amountPaise,
-            input.type,
-            input.categoryKey,
-            input.payeeName.trim().slice(0, MAX_TEXT),
-            input.payeeVpa ?? null,
-            input.paymentMethod,
-            input.note?.trim().slice(0, MAX_TEXT) || null,
-            input.occurredAt ?? t,
-            t,
-            t,
-            input.verifiedBy,
-            input.upiTxnId ?? null,
-            input.upiTxnRef ?? null,
-            input.attemptId ?? null,
-            accountId,
-            input.source ?? (input.attemptId ? 'scan' : 'manual'),
-          ],
-        );
-        await writeTags(tx, id, tags);
-        return { id, created: true };
-      });
+      const result = await atomically(db, (tx) => insertIn(tx, input));
 
       const row = await readRow(db, result.id, true);
       if (!row) throw new Error('Failed to read back inserted transaction.');
@@ -295,47 +349,78 @@ export function createTransactionsRepo(db: AnyExecutor, deps: RepoDeps) {
     },
 
     /** Move money between two of the user's accounts. Stored as two linked rows; never counts as spending. */
-    async createTransfer(input: NewTransfer): Promise<{ transferId: string; out: Transaction; in: Transaction }> {
-      if (!isValidPaise(input.amountPaise)) throw new ValidationError('Invalid amount.');
-      if (input.fromAccountId === input.toAccountId) throw new ValidationError('Choose two different accounts.');
+    /** Many inserts (and transfers) as one all-or-nothing transaction, with a single change notification. */
+    async insertMany(inputs: readonly NewTransaction[], transfers: readonly NewTransfer[] = []): Promise<number> {
+      if (inputs.length === 0 && transfers.length === 0) return 0;
+      const created = await atomically(db, async (tx) => {
+        let n = 0;
+        // Rows tied to a payment attempt keep the idempotent one-by-one path; the rest go in multi-row statements.
+        // On the phone every statement is a trip between JavaScript and native code, so 100k imports would
+        // otherwise take minutes.
+        const plain = inputs.filter((i) => !i.attemptId);
+        for (const input of inputs) if (input.attemptId && (await insertIn(tx, input)).created) n++;
 
-      const transferId = newId();
-      const ids = await atomically(db, async (tx) => {
-        await assertAccount(tx, input.fromAccountId);
-        await assertAccount(tx, input.toAccountId);
-        const names = await tx.all<{ id: string; name: string }>('SELECT id, name FROM accounts WHERE id IN (?, ?)', [
-          input.fromAccountId,
-          input.toAccountId,
-        ]);
-        const nameOf = (id: string) => names.find((n) => n.id === id)?.name ?? 'account';
-        const t = now();
-        const legs: Array<{ id: string; role: TransferRole; account: string; label: string }> = [
-          { id: newId(), role: 'out', account: input.fromAccountId, label: `To ${nameOf(input.toAccountId)}` },
-          { id: newId(), role: 'in', account: input.toAccountId, label: `From ${nameOf(input.fromAccountId)}` },
-        ];
-        for (const leg of legs) {
+        const prepared = plain.map((input) => {
+          validateNew(input);
+          return { input, tags: cleanTags(input.tags), accountId: input.accountId ?? (input.paymentMethod === 'cash' ? DEFAULT_CASH_ACCOUNT_ID : DEFAULT_BANK_ACCOUNT_ID) };
+        });
+        for (const accountId of new Set(prepared.map((p) => p.accountId))) await assertAccount(tx, accountId);
+
+        const t0 = now();
+        const COLS = 17;
+        const CHUNK = 50; // 50 rows x 17 values stays under SQLite's 999-parameter limit on every Android version
+        for (let i = 0; i < prepared.length; i += CHUNK) {
+          const chunk = prepared.slice(i, i + CHUNK);
+          const values: SqlValue[] = [];
+          const ids: string[] = [];
+          for (const { input, accountId } of chunk) {
+            const id = newId();
+            ids.push(id);
+            values.push(
+              id,
+              input.amountPaise,
+              input.type,
+              input.categoryKey,
+              input.payeeName.trim().slice(0, MAX_TEXT),
+              input.payeeVpa ?? null,
+              input.paymentMethod,
+              input.note?.trim().slice(0, MAX_TEXT) || null,
+              input.occurredAt ?? t0,
+              t0,
+              t0,
+              input.verifiedBy,
+              input.upiTxnId ?? null,
+              input.upiTxnRef ?? null,
+              null,
+              accountId,
+              input.source ?? 'manual',
+            );
+          }
           await tx.run(
             `INSERT INTO transactions
-               (id, amount_paise, type, category_key, payee_name, payment_method, note, occurred_at, created_at, updated_at,
-                verified_by, account_id, source, version, transfer_id, transfer_role)
-             VALUES (?, ?, 'transfer', ?, ?, 'bank', ?, ?, ?, ?, 'manual', ?, 'manual', 1, ?, ?)`,
-            [
-              leg.id,
-              input.amountPaise,
-              TRANSFER_CATEGORY_KEY,
-              leg.label,
-              input.note?.trim().slice(0, MAX_TEXT) || null,
-              input.occurredAt ?? t,
-              t,
-              t,
-              leg.account,
-              transferId,
-              leg.role,
-            ],
+               (id, amount_paise, type, category_key, payee_name, payee_vpa, payment_method, note, occurred_at, created_at,
+                updated_at, verified_by, upi_txn_id, upi_txn_ref, attempt_id, account_id, source, version)
+             VALUES ${chunk.map(() => `(${new Array(COLS).fill('?').join(', ')}, 1)`).join(', ')}`,
+            values,
           );
+          for (let j = 0; j < chunk.length; j++) {
+            for (const tag of chunk[j]!.tags) await tx.run('INSERT INTO transaction_tags (transaction_id, tag) VALUES (?, ?)', [ids[j]!, tag]);
+          }
+          n += chunk.length;
         }
-        return legs.map((l) => l.id);
+        for (const t of transfers) {
+          await transferIn(tx, t, newId());
+          n++;
+        }
+        return n;
       });
+      notify();
+      return created;
+    },
+
+    async createTransfer(input: NewTransfer): Promise<{ transferId: string; out: Transaction; in: Transaction }> {
+      const transferId = newId();
+      const ids = await atomically(db, (tx) => transferIn(tx, input, transferId));
 
       notify();
       const [outRow, inRow] = await Promise.all([readRow(db, ids[0]!), readRow(db, ids[1]!)]);
@@ -475,6 +560,16 @@ export function createTransactionsRepo(db: AnyExecutor, deps: RepoDeps) {
         params,
       );
       return { count: row?.c ?? 0, netPaise: row?.net ?? 0 };
+    },
+
+    /** Tags on live transactions, most used first. */
+    async tags(limit = 30): Promise<string[]> {
+      const rows = await db.all<{ tag: string }>(
+        `SELECT g.tag FROM transaction_tags g JOIN transactions t ON t.id = g.transaction_id
+         WHERE t.deleted_at IS NULL GROUP BY g.tag ORDER BY COUNT(*) DESC, g.tag ASC LIMIT ?`,
+        [limit],
+      );
+      return rows.map((r) => r.tag);
     },
 
     async count(): Promise<number> {

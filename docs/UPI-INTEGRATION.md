@@ -1,8 +1,7 @@
 # UPI integration: what is possible without paying anyone
 
-Research notes behind `modules/upi-intent`, `domain/upi/*` and `services/payments/*`.
-Written 20 Oct 2026. Items marked **(verify on device)** could not be tested without a phone and a real
-UPI account, and are documented as assumptions.
+Research notes behind `modules/upi-intent`, `packages/finance/src/upi/*` and `apps/mobile/services/payments/*`.
+First written 20 Oct 2026; updated 22 Nov 2026 with a second round of phone tests.
 
 ## Question
 
@@ -17,7 +16,8 @@ payment happened, without SMS access, bank linking or a server. What is availabl
 | Explicit intent to one app (`ACTION_VIEW` + `setPackage`) | any payee | **No** (if started with `startActivity`) | Skips the chooser. |
 | Same intent via **`startActivityForResult`** | any payee | **Yes, when the UPI app returns one** | The NPCI linking spec defines the response (`txnId`, `responseCode`, `Status`, `txnRef`, `ApprovalRefNo`). NPCI also requires PSP apps to answer intent calls on the same phone. This is what the app now uses first. |
 | Save a QR to the gallery, user imports it with "scan from gallery" | any payee | No | To the UPI app this is an ordinary QR scan, so it is accepted for personal UPI IDs. **This is the main route for personal payees.** |
-| Share a QR image to Google Pay (`ACTION_SEND`) | – | – | **Tried and removed:** field test showed Google Pay just opens its home screen. |
+| Share a QR image to Google Pay (`ACTION_SEND`) | personal payees | No | **Works (Nov 2026):** Google Pay reads the shared image as a scanned QR and opens straight on the payment; the user only enters the PIN. (An October attempt with a JS-rendered QR only opened Google Pay's home screen.) |
+| Share a QR image to PhonePe | – | – | **Doesn't work:** PhonePe treats a shared image as a picture to send to a contact. |
 | Show a QR for the user to scan | any payee | No | Always available. |
 
 Google's own in-app payments guide documents exactly this pattern for Google Pay: build a `upi://pay` URI,
@@ -49,9 +49,24 @@ Paying a **personal** UPI ID by intent with `startActivityForResult`:
 * Sharing the QR image to Google Pay only opened Google Pay's home screen.
 * Saving the QR to the gallery and importing it in PhonePe/BHIM **worked**.
 
-Consequence: personal payees default to the gallery-QR route; direct intent stays the default for shops (merchant
-QRs), where it is the intended mechanism, and is offered as "Try direct" for personal payees. Merchant intents are
-**not yet field-tested**.
+* **No app lists SpentSmart as a UPI app at checkout.** Zomato, Zepto and similar show their own fixed set of
+  UPI apps, so an app that registers for `upi://pay` (tried as a "proxy" to log checkout payments) is never offered.
+
+## Field test (22 Nov 2026, Vivo phone)
+
+* **Shop QR (Zepto)** by intent: Google Pay and PhonePe opened on the payment and completed it. Direct intent stays
+  the route for merchants.
+* **Personal QR → Google Pay share:** works end to end, with only the PIN left to enter.
+* **Personal QR → other apps:** "QR saved to gallery", then scan from gallery in PhonePe/Paytm. Works.
+* **"Try direct" for personal IDs** failed in every app, so it was removed for personal payees.
+
+Consequences in the app:
+
+* Google Pay is always the default app. Others are one tap away under "Try another UPI app".
+* The one-tap QR share is allow-listed to Google Pay only. Checking whether an app *accepts* images isn't enough,
+  because PhonePe accepts them but sends them to a chat.
+* The QR is drawn natively with ZXing (error correction L, no ECI header, about 600 px) and prepared while the user is
+  still typing, so the tap only fires the share intent.
 
 ## Design decisions
 
@@ -68,7 +83,7 @@ QRs), where it is the intended mechanism, and is offered as "Try direct" for per
   snoozes it (fixes the previous redirect loop).
 * **Recording is idempotent** per attempt (`transactions.attempt_id` is unique), so confirming twice cannot
   double-count.
-* **Never alter signed QRs; never trust scanned text.** `domain/upi/parse.ts` validates VPA, amount and
+* **Never alter signed QRs; never trust scanned text.** `packages/finance/src/upi/parse.ts` validates VPA, amount and
   currency, keeps the exact raw query, and splits parameters on the *first* `=` (the old parser truncated
   signatures that end in `=`).
 * **No network.** The payment QR is drawn on the device. The old implementation sent the payee UPI ID and amount
@@ -78,7 +93,8 @@ QRs), where it is the intended mechanism, and is offered as "Try direct" for per
 
 | # | Scenario | Expect |
 |---|---|---|
-| 1 | Pay a friend's personal VPA with amount in Google Pay / PhonePe / Paytm / BHIM | Record whether each app accepts, declines or ignores `am`; whether a `response` comes back |
+| 1 | Pay a friend's personal VPA with Google Pay selected | Google Pay opens on the payment via the shared QR; PIN only |
+| 1b | Same with PhonePe / Paytm selected | QR saved to gallery; scan from gallery works |
 | 2 | Same, then tap **Retry without amount** after a decline | Payee prefilled, amount typed in UPI app, review sheet appears on return |
 | 3 | Static merchant QR with fixed amount | Amount locked, URI replayed unchanged |
 | 4 | Dynamic merchant QR (no amount) | Amount appended only if the QR is unsigned |

@@ -6,14 +6,16 @@ import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ISSUES_URL, PRIVACY_POLICY_URL } from '@/constants/app';
+import { ISSUES_URL } from '@/constants/app';
 import { BorderRadius, FontSizes, MIN_TOUCH_TARGET, Spacing } from '@/constants/theme';
 import { useRepos } from '@/contexts/database-context';
 import { useSecurity } from '@/contexts/security-context';
+import { useCloud } from '@/contexts/cloud-context';
 import { useSettings } from '@/contexts/settings-context';
 import { ThemeMode, useTheme } from '@/contexts/theme-context';
 import { useLiveQuery } from '@/hooks/use-live-query';
 import { useThemeColors } from '@/hooks/use-theme-colors';
+import { crashLog } from '@/lib/app-crash-log';
 import { getRecentLogs } from '@/lib/logger';
 import { routes } from '@/lib/routes';
 import { ExportScope, exportCsv, exportPdf } from '@/services/export';
@@ -42,6 +44,9 @@ export default function SettingsScreen() {
 
   const { data: counts } = useLiveQuery(async (r) => ({ transactions: await r.transactions.count(), categories: (await r.categories.list()).length }));
   const [busy, setBusy] = useState<string | null>(null);
+  const { status: cloudStatus } = useCloud();
+  const cloudSubtitle =
+    cloudStatus?.state === 'ready' ? 'On · end-to-end encrypted' : cloudStatus?.state === 'needs-key' ? 'Finish setting up' : 'Off · back up and use on another phone';
   const [paydayText, setPaydayText] = useState(settings.payday ? String(settings.payday) : '');
 
   useEffect(() => {
@@ -139,10 +144,37 @@ export default function SettingsScreen() {
           .map((l) => `${new Date(l.at).toLocaleTimeString()} ${l.level.toUpperCase()} ${l.message}`)
           .join('\n')
       : 'No warnings or errors recorded in this session.';
-    Alert.alert('Diagnostics (this session)', `${text}\n\nUPI IDs and amounts are removed from these messages. Nothing is sent anywhere.`);
+    const crashes = crashLog.list();
+    const crashText = crashes.length
+      ? `\n\nEarlier crashes (kept on this phone):\n${crashes
+          .slice(-5)
+          .map((c) => `${new Date(c.at).toLocaleString()} ${c.message.split('\n')[0]}`)
+          .join('\n')}`
+      : '';
+    Alert.alert('Diagnostics', `${text}${crashText}\n\nUPI IDs, amounts and emails are removed. Nothing is sent anywhere.`, [
+      ...(crashes.length ? [{ text: 'Clear crashes', onPress: () => crashLog.clear() }] : []),
+      { text: 'OK' },
+    ]);
   };
 
-  const Row = ({ icon, title, subtitle, right, onPress, danger }: { icon: keyof typeof Ionicons.glyphMap; title: string; subtitle?: string; right?: React.ReactNode; onPress?: () => void; danger?: boolean }) => {
+  const Row = ({
+    icon,
+    title,
+    subtitle,
+    right,
+    onPress,
+    danger,
+    toggle,
+  }: {
+    icon: keyof typeof Ionicons.glyphMap;
+    title: string;
+    subtitle?: string;
+    right?: React.ReactNode;
+    onPress?: () => void;
+    danger?: boolean;
+    /** A switch row: the whole row is the touch target and reads as one switch to TalkBack. */
+    toggle?: { value: boolean; onChange: (v: boolean) => void; disabled?: boolean };
+  }) => {
     const content = (
       <>
         <View style={[styles.iconBox, { backgroundColor: danger ? `${colors.error}33` : colors.surface }]}>
@@ -152,9 +184,30 @@ export default function SettingsScreen() {
           <Text style={[styles.rowTitle, { color: danger ? colors.error : colors.text }]}>{title}</Text>
           {subtitle ? <Text style={[styles.rowSub, { color: colors.textSecondary }]}>{subtitle}</Text> : null}
         </View>
-        {right ?? (onPress ? <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} /> : null)}
+        {toggle ? (
+          <View pointerEvents="none" importantForAccessibility="no-hide-descendants">
+            <Switch value={toggle.value} disabled={toggle.disabled} trackColor={{ true: colors.tint }} />
+          </View>
+        ) : (
+          right ?? (onPress ? <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} /> : null)
+        )}
       </>
     );
+    if (toggle) {
+      return (
+        <TouchableOpacity
+          accessibilityRole="switch"
+          accessibilityLabel={title}
+          accessibilityHint={subtitle}
+          accessibilityState={{ checked: toggle.value, disabled: !!toggle.disabled }}
+          disabled={toggle.disabled}
+          style={styles.row}
+          onPress={() => toggle.onChange(!toggle.value)}
+        >
+          {content}
+        </TouchableOpacity>
+      );
+    }
     return onPress ? (
       <TouchableOpacity accessibilityRole="button" accessibilityLabel={title} style={styles.row} onPress={onPress}>
         {content}
@@ -191,7 +244,7 @@ export default function SettingsScreen() {
             icon="finger-print"
             title="App lock"
             subtitle={canUseLock ? 'Require fingerprint, face or passcode' : 'Set up a screen lock on this device first'}
-            right={<Switch accessibilityLabel="App lock" value={isBioLockEnabled} onValueChange={toggleLock} disabled={!canUseLock && !isBioLockEnabled} trackColor={{ true: colors.tint }} />}
+            toggle={{ value: isBioLockEnabled, onChange: (v) => void toggleLock(v), disabled: !canUseLock && !isBioLockEnabled }}
           />
           {isBioLockEnabled && (
             <>
@@ -224,7 +277,7 @@ export default function SettingsScreen() {
             icon="eye-off-outline"
             title="Privacy mode"
             subtitle="Hide amounts everywhere in the app"
-            right={<Switch accessibilityLabel="Privacy mode" value={isPrivacyModeEnabled} onValueChange={(v) => void setPrivacyModeEnabled(v)} trackColor={{ true: colors.tint }} />}
+            toggle={{ value: isPrivacyModeEnabled, onChange: (v) => void setPrivacyModeEnabled(v) }}
           />
         </Section>
 
@@ -233,8 +286,25 @@ export default function SettingsScreen() {
             icon="notifications-outline"
             title="Daily reminders"
             subtitle="10:00 and 20:00, on this device only"
-            right={<Switch accessibilityLabel="Daily reminders" value={settings.remindersEnabled} onValueChange={(v) => void toggleReminders(v)} trackColor={{ true: colors.tint }} />}
+            toggle={{ value: settings.remindersEnabled, onChange: (v) => void toggleReminders(v) }}
           />
+        </Section>
+
+        <Section title="SYNC & LABS">
+          <Row icon="cloud-outline" title="Sync & backup" subtitle={cloudSubtitle} onPress={() => router.push(routes.sync)} />
+          <Divider />
+          <Row
+            icon="sparkles-outline"
+            title="Assistant (lab)"
+            subtitle="Ask questions about your money, with your own Gemini key"
+            toggle={{ value: settings.assistantEnabled, onChange: (v) => void setSetting('assistantEnabled', v) }}
+          />
+          {settings.assistantEnabled ? (
+            <>
+              <Divider />
+              <Row icon="key-outline" title="Assistant settings" subtitle="Gemini key, model, what it may see" onPress={() => router.push(routes.assistantSettings)} />
+            </>
+          ) : null}
         </Section>
 
         <Section title="MONEY">
@@ -267,6 +337,8 @@ export default function SettingsScreen() {
         </Section>
 
         <Section title="DATA">
+          <Row icon="cloud-download-outline" title="Import bank statement" subtitle="CSV from your bank or UPI app; duplicates are skipped" onPress={() => router.push(routes.importStatement)} />
+          <Divider />
           <Row
             icon="document-text-outline"
             title={busy === 'csv' ? 'Exporting…' : 'Export CSV'}
@@ -307,7 +379,7 @@ export default function SettingsScreen() {
         <Section title="ABOUT">
           <Row icon="information-circle-outline" title="Version" right={<Text style={{ color: colors.textSecondary, fontSize: FontSizes.md }}>{appVersion}</Text>} />
           <Divider />
-          <Row icon="document-outline" title="Privacy policy" subtitle="Opens in your browser" onPress={() => void openURL(PRIVACY_POLICY_URL)} />
+          <Row icon="document-outline" title="Privacy policy" subtitle="What SpentSmart keeps, and where" onPress={() => router.push(routes.privacyPolicy)} />
           <Divider />
           <Row icon="bug-outline" title="Diagnostics" subtitle="Recent warnings, with UPI IDs and amounts removed" onPress={showDiagnostics} />
           <Divider />

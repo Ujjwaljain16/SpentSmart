@@ -118,7 +118,7 @@ export function BalanceCard({ balancePaise, incomePaise, expensePaise, trend, pe
 const styles = StyleSheet.create({
   container: { borderRadius: BorderRadius.lg, borderWidth: 1, padding: Spacing.lg, marginBottom: Spacing.lg },
   periodRow: { flexDirection: 'row', marginBottom: Spacing.md, borderRadius: BorderRadius.md, padding: 4 },
-  periodButton: { flex: 1, minHeight: 36, justifyContent: 'center', borderRadius: BorderRadius.sm, alignItems: 'center' },
+  periodButton: { flex: 1, minHeight: 44, justifyContent: 'center', borderRadius: BorderRadius.sm, alignItems: 'center' },
   budget: { marginBottom: Spacing.lg },
   budgetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: Spacing.xs },
   budgetText: { fontSize: FontSizes.xs, fontWeight: '600' },
@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
   balanceSection: { alignItems: 'center', paddingVertical: Spacing.md },
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   periodLabel: { fontSize: FontSizes.sm },
-  eye: { padding: 10 },
+  eye: { padding: 10, minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   balance: { fontSize: 48, fontWeight: '800', marginBottom: Spacing.xs },
   trendRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   trendText: { fontSize: FontSizes.lg, fontWeight: '600' },

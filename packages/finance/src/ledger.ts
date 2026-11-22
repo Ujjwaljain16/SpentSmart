@@ -89,11 +89,13 @@ export function budgetStatus(input: {
   carriedPaise?: number;
   period: Range;
   now: number;
+  /** A better month-end estimate (see insights/budget-forecast); without it the pace so far is extended in a line. */
+  projectedPaise?: number;
 }): BudgetStatus {
   const carriedPaise = Math.max(0, input.carriedPaise ?? 0);
   const availablePaise = input.limitPaise + carriedPaise;
   const spentPaise = Math.max(0, input.spentPaise);
-  const projectedPaise = projectPeriodSpend(spentPaise, input.period, input.now);
+  const projectedPaise = Math.max(spentPaise, input.projectedPaise ?? projectPeriodSpend(spentPaise, input.period, input.now));
   return {
     limitPaise: input.limitPaise,
     carriedPaise,

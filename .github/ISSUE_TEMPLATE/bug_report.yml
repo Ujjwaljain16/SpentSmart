@@ -1,0 +1,29 @@
+name: Bug report
+description: Something doesn't work as expected
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open …
+        2. Tap …
+  - type: input
+    id: version
+    attributes:
+      label: App version and phone
+      placeholder: 2.2.0, vivo Y200 Pro, Android 16
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: Settings → Diagnostics. Amounts, UPI IDs and emails are already removed. Don't paste anything else personal.
+      render: text

@@ -142,7 +142,10 @@ export default function AssistantSettingsScreen() {
                   Lets the assistant name shops and people. Best with a paid key. Off: it sees amounts, categories and dates only.
                 </Text>
               </View>
-              <Switch value={settings.assistantShareDetails} trackColor={{ true: colors.tint }} pointerEvents="none" />
+              {/* pointerEvents on the Switch itself is ignored on Android: the native switch flips, then snaps back. */}
+              <View pointerEvents="none" importantForAccessibility="no-hide-descendants">
+                <Switch value={settings.assistantShareDetails} trackColor={{ true: colors.tint }} />
+              </View>
             </TouchableOpacity>
           </FormCard>
         </ScrollView>

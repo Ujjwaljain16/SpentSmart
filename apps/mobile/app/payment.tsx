@@ -407,14 +407,17 @@ export default function PaymentScreen() {
 
         <View style={styles.altRow}>
           <Button label="Show QR code" variant="secondary" onPress={() => setShowQr(true)} style={styles.flex} disabled={busy} />
-          <Button
-            label={directFirst ? 'Pay via QR' : 'Try direct'}
-            variant="secondary"
-            onPress={() => void (directFirst ? payViaGalleryQr(selected?.packageName ?? null) : startPayment({ packageName: selected?.packageName ?? null }))}
-            style={styles.flex}
-            disabled={!canPay || busy}
-            accessibilityLabel={directFirst ? 'Pay by saving a QR code to the gallery' : 'Try paying directly in the UPI app'}
-          />
+          {/* No direct option for personal UPI IDs: every UPI app tested refuses a payment started by another app. */}
+          {directFirst ? (
+            <Button
+              label="Pay via QR"
+              variant="secondary"
+              onPress={() => void payViaGalleryQr(selected?.packageName ?? null)}
+              style={styles.flex}
+              disabled={!canPay || busy}
+              accessibilityLabel="Pay by saving a QR code to the gallery"
+            />
+          ) : null}
         </View>
         {apps !== null && apps.length > 0 ? (
           <Button

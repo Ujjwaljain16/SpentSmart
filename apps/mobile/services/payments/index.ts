@@ -1,5 +1,5 @@
 import { Linking } from 'react-native';
-import { KNOWN_UPI_APPS, knownAppByPackage } from '@/constants/upi-apps';
+import { GPAY_PACKAGE, KNOWN_UPI_APPS, knownAppByPackage } from '@/constants/upi-apps';
 import { Repositories } from '@/db/repositories';
 import { PaymentAttempt } from '@/db/repositories/attempts';
 import { PaymentDraft } from '@spentsmart/finance/payment-draft';
@@ -167,11 +167,18 @@ export async function nativeQrPng(upiUri: string): Promise<string | null> {
   }
 }
 
-/** Which of these UPI apps accept a shared image, so they can take the QR in one tap. */
+/**
+ * Apps that read a shared image as a QR to pay. Accepting images isn't enough: PhonePe, for one, takes a shared
+ * image as a picture to send to a contact. Add an app here only after paying through it on a real phone.
+ */
+const QR_SHARE_APPS: readonly string[] = [GPAY_PACKAGE];
+
+/** Which of these UPI apps can take the QR in one tap (installed, known to read it, and accepting the share). */
 export async function qrShareTargets(packageNames: string[]): Promise<Set<string>> {
-  if (!native || packageNames.length === 0) return new Set();
+  const candidates = packageNames.filter((p) => QR_SHARE_APPS.includes(p));
+  if (!native || candidates.length === 0) return new Set();
   try {
-    return new Set(await native.qrShareTargets(packageNames));
+    return new Set(await native.qrShareTargets(candidates));
   } catch {
     return new Set();
   }
